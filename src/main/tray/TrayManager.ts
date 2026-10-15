@@ -1,11 +1,9 @@
-import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app, nativeTheme } from 'electron';
-import path from 'path';
-import fs from 'fs';
+import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app } from 'electron';
 import { Database } from '../db/Database';
 import { SingBoxManager } from '../core/SingBoxManager';
 import { SystemProxy } from '../system/SystemProxy';
 import { ConfigGenerator } from '../core/ConfigGenerator';
-import { stateTrayPng, stateIconPath } from '../branding';
+import { resourcePath, windowIconPath, trayIconPath } from '../branding';
 
 export class TrayManager {
   private static instance: TrayManager;
@@ -14,12 +12,9 @@ export class TrayManager {
 
   private constructor() {}
 
-  /** 任务栏窗口图标随代理状态切换(on/off);明暗变体跟随界面主题 */
+  /** 任务栏窗口图标随代理状态切换:开启 → light,关闭 → dark */
   private applyWindowIcon(on: boolean): void {
-    const settings = Database.getInstance().getSettings();
-    const theme = settings.theme || 'system';
-    const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
-    const p = stateIconPath(on, dark);
+    const p = windowIconPath(on);
     if (p && this.mainWindow && !this.mainWindow.isDestroyed()) {
       try {
         this.mainWindow.setIcon(p);
@@ -35,26 +30,16 @@ export class TrayManager {
   }
 
   private getTrayIcon(): NativeImage {
-    const candidates = [
-      path.join(process.resourcesPath || '', 'bin', 'tray-icon.png'),
-      path.join(process.resourcesPath || '', 'bin', 'icon.ico'),
-      path.join(path.dirname(process.execPath || ''), 'resources', 'bin', 'tray-icon.png'),
-      path.join(path.dirname(process.execPath || ''), 'resources', 'bin', 'icon.ico'),
-      path.join(__dirname, '../../bin/tray-icon.png'),
-      path.join(process.cwd(), 'bin', 'tray-icon.png'),
-    ];
-
-    for (const p of candidates) {
-      if (p && fs.existsSync(p)) {
-        try {
-          const img = nativeImage.createFromPath(p);
-          if (!img.isEmpty()) {
-            return img.resize({ width: 16, height: 16 });
-          }
-        } catch {}
-      }
+    // 初始状态未连接代理 → dark;找不到时回退应用主图标
+    const p = trayIconPath(false) ?? resourcePath('icon.ico');
+    if (p) {
+      try {
+        const img = nativeImage.createFromPath(p);
+        if (!img.isEmpty()) {
+          return img.resize({ width: 16, height: 16 });
+        }
+      } catch {}
     }
-
     return nativeImage.createEmpty();
   }
 
@@ -104,11 +89,9 @@ export class TrayManager {
       isRunning ? `BlueBird - 已连接: ${activeNode?.name || '未知'}` : 'BlueBird - 未连接'
     );
 
-    // 托盘图标随代理状态切换:on(已连接且代理开启)/ off(其余);明暗变体跟随界面主题
+    // 托盘图标随代理状态切换:开启代理 → light,关闭 → dark
     const proxyOn = isRunning && settings.systemProxyEnabled;
-    const theme = settings.theme || 'system';
-    const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
-    const statePng = stateTrayPng(proxyOn, dark);
+    const statePng = trayIconPath(proxyOn);
     if (statePng) {
       try {
         const img = nativeImage.createFromPath(statePng);

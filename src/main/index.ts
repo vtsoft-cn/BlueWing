@@ -22,6 +22,7 @@ import { UniversalSubscriptionParser } from './net/UniversalSubscriptionParser';
 import { TrayManager } from './tray/TrayManager';
 import { TrafficStats } from '../types';
 import { LogManager } from './log/LogManager';
+import { windowIconPath } from './branding';
 
 let mainWindow: BrowserWindow | null = null;
 let trafficTimer: NodeJS.Timeout | null = null;
@@ -206,25 +207,12 @@ function createWindow(): void {
   TrayManager.getInstance().init(mainWindow);
 }
 
-/** 任务栏图标随代理状态切换:开启代理 → on,关闭 → off */
+/** 任务栏图标随代理状态切换:开启代理 → light,关闭 → dark */
 function applyWindowIcon(on: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
-    // 深浅色变体跟随界面主题(跟随系统时用 nativeTheme 判定)
-    const theme = Database.getInstance().getSettings().theme || 'system';
-    const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
-    const name = (on ? 'on' : 'off') + '-' + (dark ? 'dark' : 'light') + '.ico';
-    const candidates = [
-      process.resourcesPath ? path.join(process.resourcesPath, 'bin', name) : '',
-      path.join(path.dirname(process.execPath || ''), 'resources', 'bin', name),
-      path.join(process.cwd(), 'bin', name),
-    ];
-    for (const c of candidates) {
-      if (c && fs.existsSync(c)) {
-        mainWindow.setIcon(nativeImage.createFromPath(c));
-        return;
-      }
-    }
+    const p = windowIconPath(on) ?? getWindowIcon();
+    if (p) mainWindow.setIcon(nativeImage.createFromPath(p));
   } catch {}
 }
 

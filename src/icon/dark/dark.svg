@@ -11,58 +11,57 @@
       <stop offset="100%" stop-color="#0EA5E9"/>
     </linearGradient>
     <filter id="softShadowOffL" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="12" stdDeviation="18"
+      <feDropShadow dx="0" dy="10" stdDeviation="14"
                     flood-color="#1E3A8A" flood-opacity="0.16"/>
     </filter>
     <filter id="globeShadowOffL" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="10" stdDeviation="16"
+      <feDropShadow dx="0" dy="8" stdDeviation="12"
                     flood-color="#1D4ED8" flood-opacity="0.20"/>
     </filter>
   </defs>
 
-  <!-- 轨道环 -->
-  <ellipse cx="512" cy="600" rx="290" ry="104"
-           fill="none" stroke="#60A5FA" stroke-width="8" opacity="0.5"
-           transform="rotate(-16 512 600)"/>
+  <!-- 轨道环：放大到 rx=400 -->
+  <ellipse cx="512" cy="640" rx="400" ry="144"
+           fill="none" stroke="#60A5FA" stroke-width="11" opacity="0.5"
+           transform="rotate(-16 512 640)"/>
 
-  <!-- 地球 -->
-  <circle cx="512" cy="600" r="152" fill="url(#globeOffLight)"
+  <!-- 地球：半径放大到 210 -->
+  <circle cx="512" cy="640" r="210" fill="url(#globeOffLight)"
           filter="url(#globeShadowOffL)"/>
-  <ellipse cx="440" cy="520" rx="70" ry="52"
+  <ellipse cx="412" cy="530" rx="96" ry="72"
            fill="#FFFFFF" opacity="0.30"
-           transform="rotate(-25 440 520)"/>
+           transform="rotate(-25 412 530)"/>
 
-  <!-- 节点：压暗一档的深蓝 -->
+  <!-- 节点：随比例外扩 -->
   <g fill="#1E3A8A">
-    <circle cx="262" cy="530" r="18"/>
-    <circle cx="782" cy="570" r="18"/>
-    <circle cx="632" cy="300" r="18"/>
-    <circle cx="368" cy="740" r="15"/>
-    <circle cx="692" cy="750" r="15"/>
+    <circle cx="168" cy="548" r="25"/>
+    <circle cx="856" cy="600" r="25"/>
+    <circle cx="676" cy="222" r="25"/>
+    <circle cx="312" cy="836" r="21"/>
+    <circle cx="748" cy="850" r="21"/>
   </g>
-  <!-- 节点高光 -->
   <g fill="#93C5FD" opacity="0.7">
-    <circle cx="256" cy="524" r="6"/>
-    <circle cx="776" cy="564" r="6"/>
-    <circle cx="626" cy="294" r="6"/>
+    <circle cx="160" cy="540" r="8"/>
+    <circle cx="848" cy="592" r="8"/>
+    <circle cx="668" cy="214" r="8"/>
   </g>
 
-  <!-- 鸟 -->
+  <!-- 鸟：整体放大上移 -->
   <g filter="url(#softShadowOffL)"
      fill="url(#birdOffLight)" stroke="url(#birdOffLight)"
-     stroke-width="40" stroke-linejoin="round">
-    <path d="M300 460
-             C 460 350, 640 250, 760 230
-             C 680 330, 600 420, 540 470
+     stroke-width="54" stroke-linejoin="round">
+    <path d="M196 430
+             C 400 290, 620 150, 790 118
+             C 690 260, 590 380, 512 448
              Z"/>
-    <path d="M300 460
-             C 420 510, 560 570, 660 620
-             C 600 550, 560 500, 540 470
+    <path d="M196 430
+             C 350 500, 520 580, 660 650
+             C 590 560, 540 500, 512 448
              Z"/>
   </g>
-  <path d="M420 400
-           C 520 330, 640 270, 720 250
-           C 660 320, 600 380, 560 420
+  <path d="M348 348
+           C 480 260, 640 180, 748 148
+           C 668 250, 590 340, 540 400
            Z"
         fill="#FFFFFF" opacity="0.18"/>
 </svg>

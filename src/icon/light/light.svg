@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="globeOffDark" cx="38%" cy="32%" r="75%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="60%" stop-color="#1D4ED8"/>
+      <stop offset="100%" stop-color="#0F2A6B"/>
+    </radialGradient>
+    <linearGradient id="birdOffDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E0F2FE"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <filter id="glowOffD" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <ellipse cx="512" cy="640" rx="400" ry="144"
+           fill="none" stroke="#38BDF8" stroke-width="11" opacity="0.4"
+           transform="rotate(-16 512 640)"/>
+
+  <circle cx="512" cy="640" r="210" fill="url(#globeOffDark)"/>
+  <ellipse cx="412" cy="530" rx="96" ry="72"
+           fill="#FFFFFF" opacity="0.18"
+           transform="rotate(-25 412 530)"/>
+
+  <g fill="#0EA5E9">
+    <circle cx="168" cy="548" r="25"/>
+    <circle cx="856" cy="600" r="25"/>
+    <circle cx="676" cy="222" r="25"/>
+    <circle cx="312" cy="836" r="21"/>
+    <circle cx="748" cy="850" r="21"/>
+  </g>
+  <g fill="#BAE6FD" opacity="0.75">
+    <circle cx="160" cy="540" r="8"/>
+    <circle cx="848" cy="592" r="8"/>
+    <circle cx="668" cy="214" r="8"/>
+  </g>
+
+  <g filter="url(#glowOffD)" fill="url(#birdOffDark)" stroke="url(#birdOffDark)"
+     stroke-width="54" stroke-linejoin="round">
+    <path d="M196 430
+             C 400 290, 620 150, 790 118
+             C 690 260, 590 380, 512 448
+             Z"/>
+    <path d="M196 430
+             C 350 500, 520 580, 660 650
+             C 590 560, 540 500, 512 448
+             Z"/>
+  </g>
+</svg>

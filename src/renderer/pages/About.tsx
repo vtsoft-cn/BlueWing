@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, CheckCircle } from 'lucide-react';
-import logoOffLight from '../assets/off-light.svg';
-import logoOffDark from '../assets/off-dark.svg';
+import logoDark from '../assets/dark.svg';
+import logoLight from '../assets/light.svg';
 
 interface AboutProps {
   theme: 'light' | 'dark';
@@ -11,7 +11,7 @@ interface AboutProps {
 export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
-  const [appVersion, setAppVersion] = useState('v1.0.4 正式版');
+  const [appVersion, setAppVersion] = useState('v1.0.0 正式版');
 
   useEffect(() => {
     if (window.electronAPI?.system?.getAppVersion) {
@@ -39,7 +39,7 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
         <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-sm text-center space-y-4 relative overflow-hidden">
           <div className="w-24 h-24 mx-auto">
             <img
-              src={theme === 'dark' ? logoOffDark : logoOffLight}
+              src={theme === 'dark' ? logoDark : logoLight}
               alt="青鸟 BlueBird Logo"
               draggable={false}
               className="w-full h-full object-contain"

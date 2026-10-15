@@ -12,10 +12,8 @@ import {
   Settings,
   Info,
 } from 'lucide-react';
-import logoOnDark from '../assets/on-dark.svg';
-import logoOnLight from '../assets/on-light.svg';
-import logoOffDark from '../assets/off-dark.svg';
-import logoOffLight from '../assets/off-light.svg';
+import logoDark from '../assets/dark.svg';
+import logoLight from '../assets/light.svg';
 
 export type NavTab =
   | 'dashboard'
@@ -67,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="space-y-4">
         <div className="flex items-center space-x-3 px-2 py-1">
           <img
-            src={isConnected ? (theme === 'dark' ? logoOnDark : logoOnLight) : theme === 'dark' ? logoOffDark : logoOffLight}
+            src={theme === 'dark' ? logoDark : logoLight}
             alt="青鸟 BlueBird"
             draggable={false}
             className="w-8 h-8 rounded-lg shadow-sm select-none"

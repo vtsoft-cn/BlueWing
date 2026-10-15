@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Minus, Square, Copy, X } from 'lucide-react';
-import logoOnDark from '../assets/on-dark.svg';
-import logoOnLight from '../assets/on-light.svg';
-import logoOffDark from '../assets/off-dark.svg';
-import logoOffLight from '../assets/off-light.svg';
+import logoDark from '../assets/dark.svg';
+import logoLight from '../assets/light.svg';
 
 interface TitleBarProps {
   theme: 'light' | 'dark';
@@ -13,7 +11,7 @@ interface TitleBarProps {
 
 export const TitleBar: React.FC<TitleBarProps> = ({ theme, coreState, activeNodeName }) => {
   const [isMaximized, setIsMaximized] = useState(false);
-  const [appVersion, setAppVersion] = useState('v1.0.4 正式版');
+  const [appVersion, setAppVersion] = useState('v1.0.0 正式版');
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -43,7 +41,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ theme, coreState, activeNode
       {/* Brand & App Info */}
       <div className="flex items-center space-x-2.5">
         <img
-          src={isConnected ? (theme === 'dark' ? logoOnDark : logoOnLight) : theme === 'dark' ? logoOffDark : logoOffLight}
+          src={theme === 'dark' ? logoDark : logoLight}
           alt="青鸟 BlueBird Logo"
           draggable={false}
           className="w-5 h-5 object-contain rounded-md shadow-sm pointer-events-none select-none"
