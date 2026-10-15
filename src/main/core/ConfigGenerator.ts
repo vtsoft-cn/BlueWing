@@ -73,9 +73,18 @@ export class ConfigGenerator {
     outbounds.push({ type: 'direct', tag: 'direct' });
     outbounds.push({ type: 'block', tag: 'block' });
 
-    // Node outbounds
+    // Node outbounds;WireGuard 自 sing-box 1.11 起走 endpoint 架构,不再是普通出站
     const nodeTags: string[] = [];
+    const endpoints: any[] = [];
     for (const node of nodes) {
+      if (node.type === 'wireguard') {
+        const ep = this.buildWireGuardEndpoint(node);
+        if (ep) {
+          endpoints.push(ep);
+          nodeTags.push(ep.tag);
+        }
+        continue;
+      }
       const nodeOutbound = this.buildNodeOutbound(node);
       if (nodeOutbound) {
         outbounds.push(nodeOutbound);
@@ -415,6 +424,9 @@ export class ConfigGenerator {
       route: routeConfig,
       http_clients,
     };
+    if (endpoints.length > 0) {
+      rootConfig.endpoints = endpoints;
+    }
 
     // Rule-set 磁盘缓存:首次成功下载后,后续启动直接命中缓存,
     // 规则源(jsdelivr)被间歇性重置时核心仍可正常启动(下载失败降级为后台重试)
@@ -616,6 +628,33 @@ export class ConfigGenerator {
     return undefined;
   }
 
+  /** WireGuard 自 sing-box 1.11 起采用 endpoint 架构(非普通出站),selector 仍按 tag 引用 */
+  private static buildWireGuardEndpoint(node: ProxyNode): any | null {
+    if (!node.privateKey || !node.peerPublicKey) {
+      console.warn(`[ConfigGenerator] WireGuard node "${node.name}" missing private/peer key, omitted safely.`);
+      return null;
+    }
+
+    const peer: any = {
+      address: node.server,
+      port: node.port,
+      public_key: node.peerPublicKey,
+      allowed_ips: ['0.0.0.0/0', '::/0'],
+    };
+    if (node.presharedKey) peer.pre_shared_key = node.presharedKey;
+
+    const endpoint: any = {
+      type: 'wireguard',
+      tag: `node-${node.id}`,
+      address: node.localAddress ? [node.localAddress] : ['10.0.0.2/32'],
+      private_key: node.privateKey,
+      peers: [peer],
+      mtu: node.mtu || 1420,
+    };
+    if (node.reserved) endpoint.reserved = node.reserved;
+    return endpoint;
+  }
+
   private static buildNodeOutbound(node: ProxyNode): any | null {
     if (node.rawOutbound) {
       return {
@@ -626,8 +665,7 @@ export class ConfigGenerator {
 
     const tag = `node-${node.id}`;
 
-    switch (node.type) {
-      case 'vless': {
+    switch (node.type) {      case 'vless': {
         const outbound: any = {
           type: 'vless',
           tag,
@@ -795,19 +833,20 @@ export class ConfigGenerator {
         };
       }
 
-      case 'wireguard': {
+      case 'naive': {
+        // NaiveProxy:真实 Chrome TLS 指纹(Cronet);核心需 with_naive_outbound 构建,并要求 libcronet.dll 随行
         return {
-          type: 'wireguard',
+          type: 'naive',
           tag,
           server: node.server,
           server_port: node.port,
-          system_interface: false,
-          local_address: node.localAddress ? [node.localAddress] : ['10.0.0.2/32'],
-          private_key: node.privateKey || '',
-          peer_public_key: node.peerPublicKey || '',
-          pre_shared_key: node.presharedKey || undefined,
-          mtu: node.mtu || 1420,
-          reserved: node.reserved || undefined,
+          username: node.username || node.uuid || '',
+          password: node.password || '',
+          tls: {
+            enabled: true,
+            server_name: node.sni || node.server,
+            insecure: node.insecure || false,
+          },
         };
       }
 

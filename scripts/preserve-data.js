@@ -29,8 +29,9 @@ function hasUserData(dir) {
 const mode = process.argv[2];
 
 if (mode === 'backup') {
-  // electron-builder 的 winCodeSign 缓存:已存在的提交目录会让下次构建的 rename 提交必败
-  // ("Unable to commit changes"),构建前清掉,让其走全新下载→解压→提交流程
+  // electron-builder 的 winCodeSign 缓存:只有当上次解压不完整(缺 rcedit-x64.exe,会导致
+  // rename 提交必败 "Unable to commit changes")时才清理;完整缓存保留,避免每次构建
+  // 都强制重新从 GitHub 下载(网络不通时构建直接失败)
   const winCodeSignDir = path.join(
     process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Local'),
     'electron-builder',
@@ -39,9 +40,10 @@ if (mode === 'backup') {
     'winCodeSign-2.6.0'
   );
   try {
-    if (fs.existsSync(winCodeSignDir)) {
+    const rcedit = path.join(winCodeSignDir, 'rcedit-x64.exe');
+    if (fs.existsSync(winCodeSignDir) && !fs.existsSync(rcedit)) {
       fs.rmSync(winCodeSignDir, { recursive: true, force: true });
-      console.log('[preserve-data] 已清理 winCodeSign 提交缓存(避免 rename 撞车)');
+      console.log('[preserve-data] 已清理不完整的 winCodeSign 缓存(避免 rename 撞车)');
     }
   } catch {}
 

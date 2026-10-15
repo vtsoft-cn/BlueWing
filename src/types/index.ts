@@ -10,7 +10,8 @@ export type ProxyType =
   | 'wireguard'
   | 'snell'
   | 'socks'
-  | 'http';
+  | 'http'
+  | 'naive';
 
 export interface ProxyNode {
   id: string;

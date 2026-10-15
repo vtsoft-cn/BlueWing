@@ -69,6 +69,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
     { id: 'wireguard', label: 'WireGuard' },
     { id: 'socks', label: 'SOCKS5' },
     { id: 'http', label: 'HTTP' },
+    { id: 'naive', label: 'NaiveProxy' },
   ];
 
   return (
@@ -190,7 +191,22 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
             </div>
           )}
 
-          {(formData.type === 'trojan' || formData.type === 'shadowsocks' || formData.type === 'hysteria2') && (
+          {formData.type === 'naive' && (
+            <div>
+              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                用户名 (Username)
+              </label>
+              <input
+                type="text"
+                value={formData.username || ''}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                placeholder="HTTP 认证用户名"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-mono"
+              />
+            </div>
+          )}
+
+          {(formData.type === 'trojan' || formData.type === 'shadowsocks' || formData.type === 'hysteria2' || formData.type === 'naive') && (
             <div>
               <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
                 认证密码 (Password / Secret)
@@ -205,7 +221,9 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
             </div>
           )}
 
-          {/* Transport */}
+          {/* Transport(naive/WireGuard 无传输层概念,隐藏) */}
+          {formData.type !== 'naive' && formData.type !== 'wireguard' && (
+          <>
           <div>
             <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
               传输协议 (Transport)
@@ -252,20 +270,23 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
               </div>
             </div>
           )}
+          </>
+          )}
 
           {/* TLS & Reality Settings */}
           <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">TLS 安全加密</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">TLS 安全加密{formData.type === 'naive' ? '(Naive 强制启用)' : ''}</span>
               <input
                 type="checkbox"
-                checked={formData.tls || false}
+                checked={formData.type === 'naive' ? true : formData.tls || false}
+                disabled={formData.type === 'naive'}
                 onChange={(e) => setFormData({ ...formData, tls: e.target.checked })}
                 className="w-4 h-4 rounded text-blue-600 focus:ring-0"
               />
             </div>
 
-            {formData.tls && (
+            {(formData.tls || formData.type === 'naive') && (
               <div className="space-y-3 pt-2">
                 <div>
                   <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">

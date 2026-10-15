@@ -110,6 +110,8 @@ export class UniversalSubscriptionParser {
           node = this.parseTuic(line);
         } else if (line.startsWith('wireguard://')) {
           node = this.parseWireguard(line);
+        } else if (line.startsWith('naive://')) {
+          node = this.parseNaive(line);
         }
 
         if (node && node.server) {
@@ -581,6 +583,27 @@ export class UniversalSubscriptionParser {
       insecure,
       alpn,
       obfs,
+    };
+  }
+
+  /** naive://username:password@host:port?sni=xx#name(NaiveProxy,基于 Cronet) */
+  public static parseNaive(uri: string): ProxyNode | null {
+    const url = new URL(uri.replace(/^naive:\/\//, 'http://'));
+    const rawTag = url.hash.replace(/^#/, '');
+    const name = this.safeDecodeUri(rawTag) || url.hostname;
+
+    return {
+      id: Math.random().toString(36).substring(2),
+      name,
+      type: 'naive',
+      server: url.hostname.replace(/^\[|\]$/g, ''),
+      port: Number(url.port) || 443,
+      groupId: 'default',
+      username: this.safeDecodeUri(url.username) || undefined,
+      uuid: this.safeDecodeUri(url.username) || undefined,
+      password: this.safeDecodeUri(url.password) || undefined,
+      sni: url.searchParams.get('sni') || url.searchParams.get('peer') || undefined,
+      insecure: url.searchParams.get('allowInsecure') === '1' || url.searchParams.get('insecure') === '1',
     };
   }
 

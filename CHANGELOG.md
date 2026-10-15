@@ -1,4 +1,25 @@
-# OwnBox PC 更新日志 (CHANGELOG)
+# BlueBird (OwnBox PC) 更新日志 (CHANGELOG)
+
+## [1.0.0] - 2026-10-15 (品牌重立 · 基线版本)
+
+### 🚀 核心与协议
+- **核心切换至官方 sing-box 1.14.3 稳定版**(全量构建标签,含 `with_naive_outbound`),替换自编译 1.15.0-alpha.6;
+- **NaiveProxy 协议全链路支持**:节点类型、配置生成(TLS 强制)、`naive://` 订阅链接解析、节点编辑表单、分享链接导出;运行时依赖 `libcronet.dll` 随安装包分发;
+- **修复 WireGuard 配置生成**:由 sing-box ≤1.10 旧版出站格式迁移至 1.11+ 的 endpoint 架构(旧格式在新旧核心均无法通过校验,属于既有缺陷);
+- 全部 12 种协议的生成配置经 1.14.3 `sing-box check` 实测校验通过(含 vless 三种传输、reality、hy1/hy2、tuic、wg、naive 等)。
+
+### 🎨 品牌与图标
+- 品牌重塑为「青鸟 BlueBird」;图标体系重构为 dark/light 双主题(多尺寸 ICO 16~256):界面 Logo 随主题切换,任务栏与托盘图标随代理状态切换(开=light,关=dark);
+- `src/icon/` 成为唯一图标源,构建链强制经 `scripts/sync-icons.mjs` 重新分发,杜绝打包携带过期图标。
+
+### 🛡 稳定性与数据安全
+- **数据目录统一治理**:备份/快照/日志/核心/代理状态全部改由 `Database.getDataDir()` 统一解析,修复测试进程向真实 `%APPDATA%\OwnBox` 泄漏写入的问题;旧目录测试残留数据已清理;
+- 测试隔离加固(初始化顺序、退出清理),`.gitignore` 覆盖 `temp_db_*`;
+- 项目仓库重建,以本版本为全新基线。
+
+---
+
+## 历史版本(OwnBox 时期)
 
 ## [1.0.4] - 2026-10-06 (正式版发布)
 

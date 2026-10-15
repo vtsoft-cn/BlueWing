@@ -312,6 +312,8 @@ export const Nodes: React.FC<NodesProps> = ({
       url = `hysteria2://${node.password}@${node.server}:${node.port}?sni=${node.sni || node.server}#${nameEnc}`;
     } else if (node.type === 'tuic') {
       url = `tuic://${node.uuid}:${node.password}@${node.server}:${node.port}?sni=${node.sni || node.server}#${nameEnc}`;
+    } else if (node.type === 'naive') {
+      url = `naive://${encodeURIComponent(node.username || '')}:${encodeURIComponent(node.password || '')}@${node.server}:${node.port}?sni=${node.sni || node.server}#${nameEnc}`;
     }
 
     if (url) {
