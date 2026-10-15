@@ -11,8 +11,7 @@ import { WindowsBackupCodec } from './WindowsBackupCodec';
 
 export class BackupSnapshot {
   private static getSnapshotDir(): string {
-    const ownBoxDir = process.env.OWNBOX_DATA_DIR || path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:' + path.sep, 'AppData', 'Roaming'), 'OwnBox');
-    const snapshotDir = path.join(ownBoxDir, 'snapshots');
+    const snapshotDir = path.join(Database.getInstance().getDataDir(), 'snapshots');
     if (!fs.existsSync(snapshotDir)) {
       fs.mkdirSync(snapshotDir, { recursive: true });
     }

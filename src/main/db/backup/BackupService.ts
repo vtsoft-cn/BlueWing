@@ -22,8 +22,7 @@ import {
 
 export class BackupService {
   private static getLocalBackupPath(): string {
-    const ownBoxDir = process.env.OWNBOX_DATA_DIR || path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:' + path.sep, 'AppData', 'Roaming'), 'OwnBox');
-    const dataDir = ownBoxDir;
+    const dataDir = Database.getInstance().getDataDir();
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }

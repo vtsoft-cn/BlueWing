@@ -18,6 +18,9 @@ import { ProxyNode, Subscription, RouteRule, AppSettings } from '../types';
 const TEST_DB_DIR = path.resolve(__dirname, 'temp_db_backup_test');
 Database.resetInstance();
 Database.getInstance(TEST_DB_DIR);
+process.on('exit', () => {
+  fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+});
 
 test('AndroidParcel: primitive read/write and alignment', () => {
   const p = new AndroidParcel();

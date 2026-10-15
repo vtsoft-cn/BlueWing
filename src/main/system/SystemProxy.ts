@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { LogManager } from '../log/LogManager';
+import { Database } from '../db/Database';
 
 export interface ProxySnapshot {
   enabled: boolean;
@@ -22,14 +23,7 @@ export class SystemProxy {
 
   private static getStateFilePath(): string {
     if (!this.stateFile) {
-      // 便携模式:主进程设置 OWNBOX_DATA_DIR(exe 同级 data/);未设置时回退 %APPDATA%\OwnBox
-      const ownBoxDir =
-        process.env.OWNBOX_DATA_DIR ||
-        path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'), 'OwnBox');
-      if (!fs.existsSync(ownBoxDir)) {
-        fs.mkdirSync(ownBoxDir, { recursive: true });
-      }
-      this.stateFile = path.join(ownBoxDir, 'proxy_ownership.json');
+      this.stateFile = path.join(Database.getInstance().getDataDir(), 'proxy_ownership.json');
     }
     return this.stateFile;
   }

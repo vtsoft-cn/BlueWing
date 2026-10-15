@@ -18,6 +18,7 @@ temp/
 # ---------- 运行时数据(不入库) ----------
 # 测试临时数据库
 .temp_db_*
+temp_db_*
 # 便携版用户数据备份(scripts/preserve-data.js 构建期间生成)
 .data-preserve/
 # 内置规则集运行时数据(随构建打包,不入库)

@@ -166,6 +166,11 @@ export class Database {
     Database.customDir = null;
   }
 
+  /** 数据目录唯一事实来源:备份/日志/核心等模块一律从这里取,禁止各自回退到 %APPDATA% */
+  public getDataDir(): string {
+    return this.dataDir;
+  }
+
   private load(): void {
     try {
       if (fs.existsSync(this.dbPath)) {

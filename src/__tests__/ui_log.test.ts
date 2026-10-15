@@ -9,11 +9,21 @@ import { ProxyNode } from '../types';
 
 const TEST_DB_DIR = path.resolve(__dirname, 'temp_db_ui_log_test');
 
+// 先于 LogManager 初始化测试库:LogManager 的日志目录取自 Database,
+// 若不先隔离,单例会回退到真实 %APPDATA%\OwnBox 造成测试数据泄漏
+Database.resetInstance();
+Database.getInstance(TEST_DB_DIR);
+process.on('exit', () => {
+  Database.resetInstance();
+  fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
+});
+
 function cleanTestDir(): void {
   Database.resetInstance();
   if (fs.existsSync(TEST_DB_DIR)) {
     fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
   }
+  Database.getInstance(TEST_DB_DIR);
 }
 
 describe('LogManager System', () => {

@@ -11,6 +11,11 @@ import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types'
 
 const execFileAsync = promisify(execFile);
 
+// 收尾清理:本文件部分用例使用临时测试库,退出时移除,避免残留
+process.on('exit', () => {
+  fs.rmSync(path.resolve(__dirname, 'temp_db_core_test'), { recursive: true, force: true });
+});
+
 const defaultSettings: AppSettings = {
   theme: 'system',
   language: 'zh-CN',

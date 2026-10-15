@@ -84,7 +84,7 @@ async function fetchSrs(
 ): Promise<Buffer> {
   const urlPath = `gh/MetaCubeX/meta-rules-dat@sing/geo/${relPath}`;
   const urls = MIRRORS.map((m) => `https://${m}/${urlPath}`);
-  const tmp = path.join(process.env.OWNBOX_DATA_DIR || '.', '.rule-dl.part');
+  const tmp = path.join(Database.getInstance().getDataDir(), '.rule-dl.part');
   const attempts: (() => Promise<AttemptResult>)[] = [];
   const errors: string[] = [];
 
@@ -140,9 +140,7 @@ export class RuleSetUpdater {
    */
   public static async updateAll(): Promise<RuleSetUpdateResult> {
     const db = Database.getInstance();
-    const dataDir =
-      process.env.OWNBOX_DATA_DIR ||
-      path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'), 'OwnBox');
+    const dataDir = db.getDataDir();
     const rulesDir = path.join(dataDir, 'rules');
     fs.mkdirSync(rulesDir, { recursive: true });
 

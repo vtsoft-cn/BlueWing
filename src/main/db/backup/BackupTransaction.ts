@@ -185,9 +185,7 @@ export class BackupTransaction {
       }
 
       // 3. Atomically write to disk via temporary file
-      const ownBoxDir = process.env.OWNBOX_DATA_DIR || path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:' + path.sep, 'AppData', 'Roaming'), 'OwnBox');
-      const dataDir = ownBoxDir;
-      const dbPath = path.join(dataDir, 'ownbox.json');
+      const dbPath = path.join(Database.getInstance().getDataDir(), 'ownbox.json');
       const tmpPath = `${dbPath}.tmp`;
       const bakPath = `${dbPath}.bak`;
 

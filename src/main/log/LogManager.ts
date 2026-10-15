@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { BrowserWindow, dialog } from 'electron';
 import { LogEntry } from '../../types';
+import { Database } from '../db/Database';
 
 export class LogManager {
   private static instance: LogManager;
@@ -20,11 +21,7 @@ export class LogManager {
   private flushTimer: NodeJS.Timeout | null = null;
 
   private constructor() {
-    // 便携模式:主进程设置 OWNBOX_DATA_DIR(exe 同级 data/);未设置时回退 %APPDATA%\OwnBox
-    const appData =
-      process.env.OWNBOX_DATA_DIR ||
-      path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'), 'OwnBox');
-    this.logDir = path.join(appData, 'logs');
+    this.logDir = path.join(Database.getInstance().getDataDir(), 'logs');
 
     try {
       if (!fs.existsSync(this.logDir)) {
