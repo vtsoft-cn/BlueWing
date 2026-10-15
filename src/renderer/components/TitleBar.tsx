@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Minus, Square, Copy, X } from 'lucide-react';
+import { Minus, X } from 'lucide-react';
 import logoDark from '../assets/dark.svg';
 import logoLight from '../assets/light.svg';
 
@@ -10,25 +10,17 @@ interface TitleBarProps {
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({ theme, coreState, activeNodeName }) => {
-  const [isMaximized, setIsMaximized] = useState(false);
   const [appVersion, setAppVersion] = useState('v1.0.0 正式版');
 
   useEffect(() => {
-    if (window.electronAPI) {
-      window.electronAPI.window.isMaximized().then(setIsMaximized);
-      if (window.electronAPI.system?.getAppVersion) {
-        window.electronAPI.system.getAppVersion().then((ver) => {
-          if (ver) setAppVersion(`v${ver} 正式版`);
-        });
-      }
+    if (window.electronAPI?.system?.getAppVersion) {
+      window.electronAPI.system.getAppVersion().then((ver) => {
+        if (ver) setAppVersion(`v${ver} 正式版`);
+      });
     }
   }, []);
 
   const handleMinimize = () => window.electronAPI?.window.minimize();
-  const handleMaximize = () => {
-    window.electronAPI?.window.maximize();
-    setIsMaximized(!isMaximized);
-  };
   const handleClose = () => window.electronAPI?.window.close();
 
   const isConnected = coreState === 'running';
@@ -75,21 +67,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({ theme, coreState, activeNode
       >
         <button
           onClick={handleMinimize}
-          className="h-full px-3.5 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-colors"
+          className="h-full px-3.5 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 active:bg-slate-300/60 dark:active:bg-slate-700/80 transition-colors"
           title="最小化"
         >
           <Minus className="w-3.5 h-3.5" />
         </button>
         <button
-          onClick={handleMaximize}
-          className="h-full px-3.5 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-colors"
-          title={isMaximized ? '还原' : '最大化'}
-        >
-          {isMaximized ? <Copy className="w-3 h-3" /> : <Square className="w-3 h-3" />}
-        </button>
-        <button
           onClick={handleClose}
-          className="h-full px-4 flex items-center justify-center text-slate-500 hover:text-white hover:bg-red-500 dark:hover:bg-red-600 transition-colors"
+          className="h-full px-4 flex items-center justify-center text-slate-500 hover:text-white hover:bg-red-500 dark:hover:bg-red-600 active:bg-red-600 dark:active:bg-red-700 transition-colors"
           title="关闭"
         >
           <X className="w-3.5 h-3.5" />

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle } from 'lucide-react';
 import logoDark from '../assets/dark.svg';
 import logoLight from '../assets/light.svg';
 
@@ -9,8 +8,6 @@ interface AboutProps {
 }
 
 export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState('v1.0.0 正式版');
 
   useEffect(() => {
@@ -20,17 +17,6 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
       });
     }
   }, []);
-
-  const handleCheckUpdate = async () => {
-    setIsCheckingUpdate(true);
-    setUpdateMsg(null);
-    try {
-      await new Promise((r) => setTimeout(r, 600));
-      setUpdateMsg(`当前已是最新版本 ${appVersion}`);
-    } finally {
-      setIsCheckingUpdate(false);
-    }
-  };
 
   return (
     <div className="min-h-full flex items-center justify-center p-2">
@@ -57,25 +43,6 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
               基于 Sing-box 官方原生核心打造的现代化通用代理工具链与网络调试客户端
             </p>
           </div>
-
-          {/* Action buttons */}
-          <div className="pt-2 flex items-center justify-center">
-            <button
-              onClick={handleCheckUpdate}
-              disabled={isCheckingUpdate}
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-              <span>{isCheckingUpdate ? '正在检查...' : '检查软件更新'}</span>
-            </button>
-          </div>
-
-          {updateMsg && (
-            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium flex items-center justify-center space-x-1">
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span>{updateMsg}</span>
-            </div>
-          )}
         </div>
 
         {/* Info Details Grid */}

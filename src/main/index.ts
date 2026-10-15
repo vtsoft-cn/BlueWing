@@ -155,6 +155,8 @@ function createWindow(): void {
     minWidth: 980,
     minHeight: 640,
     frame: false,
+    // 固定尺寸窗口:只保留最小化/关闭,不提供最大化
+    maximizable: false,
     show: false,
     backgroundColor: darkStart ? '#020617' : '#f8fafc',
     icon: iconPath,
@@ -467,15 +469,7 @@ ipcMain.handle('log:export', async () => {
 
 // Window controls
 ipcMain.on('window:minimize', () => mainWindow?.minimize());
-ipcMain.on('window:maximize', () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow?.maximize();
-  }
-});
 ipcMain.on('window:close', () => mainWindow?.close());
-ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() || false);
 ipcMain.handle('system:openExternal', (_, url: string) => {
   if (url && (url.startsWith('http:') || url.startsWith('https:'))) {
     shell.openExternal(url);
