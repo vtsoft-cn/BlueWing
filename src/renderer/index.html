@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>青鸟 BlueBird</title>
+    <script>
+      // 首帧主题:必须在任何内容绘制前同步应用,避免亮色闪烁。
+      // 首次启动(无存储)跟随系统;之后以上次使用的主题设置为初始值,后续由 App.tsx 实时跟随系统调整。
+      (function () {
+        try {
+          var theme = localStorage.getItem('ownbox:theme') || 'system';
+          var dark = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="overflow-hidden select-none bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

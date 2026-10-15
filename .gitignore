@@ -1,0 +1,31 @@
+# ---------- 依赖与构建产物 ----------
+node_modules/
+dist/
+release/
+.vite/
+*.tsbuildinfo
+
+# ---------- 日志 ----------
+*.log
+
+# ---------- 环境变量(防泄漏) ----------
+.env
+.env.*
+
+# ---------- 运行时数据(不入库) ----------
+# 测试临时数据库
+.temp_db_*
+# 便携版用户数据备份(scripts/preserve-data.js 构建期间生成)
+.data-preserve/
+# 内置规则集运行时数据(随构建打包,不入库)
+bin/rules/
+
+# ---------- 编辑器 / IDE ----------
+.vscode/
+.idea/
+*.swp
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+Desktop.ini
