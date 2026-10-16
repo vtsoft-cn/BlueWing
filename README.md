@@ -1,7 +1,7 @@
 # 青鸟 BlueBird (Windows PC 客户端)
 
 <p align="center">
-  <img src="src/renderer/assets/light.png" width="128" height="128" alt="BlueBird Logo">
+  <img src="src/images/png/app-light-off.png" width="128" height="128" alt="BlueBird Logo">
   <br>
   <b>基于 Sing-box 官方原生核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
   <br>
@@ -66,6 +66,8 @@
 | **Windows 安装版** | `BlueBird-Setup.exe` | 推荐普通用户使用，自动创建开始菜单与桌面快捷方式，支持卸载 |
 | **便携绿色版** | `release/win-unpacked/` 目录 | 解压即用，数据保存在 exe 同级 data/ 目录,适合移动硬盘随身携带 |
 
+> 💡 **数据说明**：安装版升级重装时会自动保留安装目录下的 `data/` 用户数据（配置、订阅、日志等），仅通过卸载程序正式卸载时才会随安装目录一并删除；便携版数据始终在 exe 同级 `data/` 目录，覆盖升级文件不受影响。
+
 ---
 
 ## 🛠 本地开发与构建 / Development & Build
@@ -89,7 +91,7 @@ npm run dev
 # 4. 运行全量单元与集成测试套件 (35 项测试)
 npm test
 
-# 5. 构建前端与主进程(自动从 src/icon 同步图标)
+# 5. 构建前端与主进程(自动从 src/images 分发图标)
 npm run build
 
 # 6. 打包生成 Windows 安装程序与免安装目录

@@ -3,7 +3,7 @@ import fs from 'fs';
 
 /**
  * 品牌图标定位。资源位于 resources/bin/(打包)或 <cwd>/bin(开发)。
- * 图标语义(src/icon 设计规范):
+ * 图标语义(src/images 设计规范):
  * - 界面 Logo(SVG)仅随主题切换
  * - 窗口/任务栏图标(app-*.ico)与托盘图标(tray-*.png)随 主题 × 代理状态 四变体切换
  */
