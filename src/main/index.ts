@@ -5,6 +5,7 @@ import http from 'http';
 import dns from 'dns';
 import { spawn } from 'child_process';
 import { Database } from './db/Database';
+import { resourcePath } from './branding';
 import { SingBoxManager } from './core/SingBoxManager';
 import { ConfigGenerator } from './core/ConfigGenerator';
 import { ProxySelectionService } from './core/ProxySelectionService';
@@ -117,15 +118,7 @@ async function warnAndExitIfForeignInstance(): Promise<void> {
 }
 
 function getWindowIcon(): string {
-  const candidates = [
-    path.join(process.resourcesPath || '', 'bin', 'icon.ico'),
-    path.join(path.dirname(process.execPath || ''), 'resources', 'bin', 'icon.ico'),
-    path.join(process.cwd(), 'bin', 'icon.ico'),
-  ];
-  for (const c of candidates) {
-    if (c && fs.existsSync(c)) return c;
-  }
-  return '';
+  return resourcePath('icon.ico') ?? '';
 }
 
 function createWindow(): void {

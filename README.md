@@ -1,7 +1,7 @@
 # 青鸟 BlueBird (Windows PC 客户端)
 
 <p align="center">
-  <img src="src/images/png/app-light-off.png" width="128" height="128" alt="BlueBird Logo">
+  <img src="src/images/png/app-light-on.png" width="128" height="128" alt="BlueBird Logo">
   <br>
   <b>基于 Sing-box 官方原生核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
   <br>
@@ -91,7 +91,7 @@ npm run dev
 # 4. 运行全量单元与集成测试套件 (35 项测试)
 npm test
 
-# 5. 构建前端与主进程(自动从 src/images 分发图标)
+# 5. 构建前端与主进程(图标直接使用 src/images,无构建期处理)
 npm run build
 
 # 6. 打包生成 Windows 安装程序与免安装目录

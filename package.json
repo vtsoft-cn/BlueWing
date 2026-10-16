@@ -10,8 +10,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "vite",
-    "sync-icons": "node scripts/sync-icons.mjs",
-    "build": "node scripts/sync-icons.mjs && tsc && vite build && tsc -p tsconfig.node.json",
+    "build": "tsc && vite build && tsc -p tsconfig.node.json",
     "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts",
     "dist": "node scripts/preserve-data.js backup && npm run build && electron-builder && node scripts/preserve-data.js restore",
     "dist:dir": "node scripts/preserve-data.js backup && npm run build && electron-builder --dir && node scripts/preserve-data.js restore"
@@ -58,6 +57,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "src/images",
+        "to": "images",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
@@ -69,16 +75,16 @@
           ]
         }
       ],
-      "icon": "bin/icon.ico",
+      "icon": "src/images/ico/icon.ico",
       "artifactName": "BlueBird-Setup.exe"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "bin/icon.ico",
-      "uninstallerIcon": "bin/icon.ico",
-      "installerHeaderIcon": "bin/icon.ico",
+      "installerIcon": "src/images/ico/icon.ico",
+      "uninstallerIcon": "src/images/ico/icon.ico",
+      "installerHeaderIcon": "src/images/ico/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "BlueBird",

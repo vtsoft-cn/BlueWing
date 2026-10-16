@@ -2,18 +2,17 @@ import path from 'path';
 import fs from 'fs';
 
 /**
- * 品牌图标定位。资源位于 resources/bin/(打包)或 <cwd>/bin(开发)。
- * 图标语义(src/images 设计规范):
- * - 界面 Logo(SVG)仅随主题切换
- * - 窗口/任务栏图标(app-*.ico)与托盘图标(tray-*.png)随 主题 × 代理状态 四变体切换
+ * 品牌图标定位。源文件即 src/images(开发),打包后位于 resources/images;
+ * 按扩展名进入 ico/ 或 png/ 子目录直接引用,不再经构建期分发或改名。
  */
 export type IconTheme = 'dark' | 'light';
 
 export function resourcePath(file: string): string | null {
+  const sub = file.toLowerCase().endsWith('.ico') ? 'ico' : 'png';
   const dirs = [
-    process.resourcesPath ? path.join(process.resourcesPath, 'bin') : '',
-    process.execPath ? path.join(path.dirname(process.execPath), 'resources', 'bin') : '',
-    path.join(process.cwd(), 'bin'),
+    process.resourcesPath ? path.join(process.resourcesPath, 'images', sub) : '',
+    process.execPath ? path.join(path.dirname(process.execPath), 'resources', 'images', sub) : '',
+    path.join(process.cwd(), 'src', 'images', sub),
   ];
   for (const dir of dirs) {
     if (!dir) continue;
