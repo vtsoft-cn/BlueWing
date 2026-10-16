@@ -1,7 +1,7 @@
 # 青鸟 BlueBird (Windows PC 客户端)
 
 <p align="center">
-  <img src="src/renderer/assets/light.svg" width="128" height="128" alt="BlueBird Logo">
+  <img src="src/renderer/assets/light.png" width="128" height="128" alt="BlueBird Logo">
   <br>
   <b>基于 Sing-box 官方原生核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
   <br>
