@@ -17,7 +17,7 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
           <div className="w-24 h-24 mx-auto">
             <img
               src={theme === 'dark' ? logoDark : logoLight}
-              alt="青鸟 BlueBird Logo"
+              alt="青翼连接 BlueWing Connect Logo"
               draggable={false}
               className="w-full h-full object-contain"
             />
@@ -25,7 +25,7 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
 
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center justify-center gap-2">
-              青鸟 BlueBird
+              青翼连接 BlueWing Connect
             </h2>
             <p className="text-xs text-slate-400 mt-1.5 max-w-md mx-auto">
               基于 Sing-box 官方原生核心打造的现代化通用代理工具链与网络调试客户端

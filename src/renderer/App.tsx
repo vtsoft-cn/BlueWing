@@ -27,7 +27,7 @@ import {
 // 首帧主题初始值:与 index.html 的早期脚本一致——优先取上次使用的主题设置,首次启动跟随系统
 const initialTheme: AppSettings['theme'] = (() => {
   try {
-    const t = localStorage.getItem('bluebird:theme');
+    const t = localStorage.getItem('bluewing:theme');
     if (t === 'dark' || t === 'light' || t === 'system') return t;
   } catch {}
   return 'system';
@@ -80,7 +80,7 @@ export const App: React.FC = () => {
       serverUrl: '',
       username: '',
       password: '',
-      remotePath: 'BlueBird',
+      remotePath: 'BlueWingConnect',
       autoSync: false,
     },
   });
@@ -180,7 +180,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     // 持久化主题设置,供下次启动的 index.html 早期脚本用作首帧初始值
     try {
-      localStorage.setItem('bluebird:theme', settings.theme);
+      localStorage.setItem('bluewing:theme', settings.theme);
     } catch {}
     document.documentElement.classList.toggle('dark', isDark);
   }, [isDark, settings.theme]);

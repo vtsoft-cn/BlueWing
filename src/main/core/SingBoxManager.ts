@@ -304,7 +304,7 @@ export class SingBoxManager extends EventEmitter {
         const isReady = await this.waitForReady(mixedPort, clashPort, 5000);
         if (isReady && this.process && !this.process.killed) {
           this.setState('running');
-          this.log('info', `BlueBird 核心引擎启动成功 (PID: ${this.process.pid}, 监听端口: ${mixedPort})`, 'core');
+          this.log('info', `青翼连接 核心引擎启动成功 (PID: ${this.process.pid}, 监听端口: ${mixedPort})`, 'core');
           return true;
         } else {
           this.log('error', 'Sing-box 核心就绪超时或中途异常退出', 'core');

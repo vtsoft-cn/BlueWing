@@ -30,7 +30,7 @@ export class LogManager {
       console.error('Failed to create logs directory:', e);
     }
 
-    this.logFilePath = path.join(this.logDir, 'bluebird.log');
+    this.logFilePath = path.join(this.logDir, 'bluewing.log');
 
     // 0. 清理旧轮转机制的历史归档文件(最多 5 份,向前兼容清理)
     this.cleanupLegacyArchives();
@@ -45,7 +45,7 @@ export class LogManager {
     this.flushTimer.unref();
 
     // Initial system start event
-    this.addLog('info', 'BlueBird 运行日志系统初始化完成', 'app');
+    this.addLog('info', '青翼连接 运行日志系统初始化完成', 'app');
   }
 
   public static getInstance(): LogManager {
@@ -60,7 +60,7 @@ export class LogManager {
   }
 
   /**
-   * Load existing lines from bluebird.log on app startup into the memory buffer
+   * Load existing lines from bluewing.log on app startup into the memory buffer
    */
   private loadHistoryFromDisk() {
     try {
@@ -249,7 +249,7 @@ export class LogManager {
   private cleanupLegacyArchives() {
     for (let i = 1; i <= 5; i++) {
       try {
-        const oldFile = path.join(this.logDir, `bluebird.${i}.log`);
+        const oldFile = path.join(this.logDir, `bluewing.${i}.log`);
         if (fs.existsSync(oldFile)) fs.rmSync(oldFile, { force: true });
       } catch {}
     }
@@ -281,10 +281,10 @@ export class LogManager {
       this.flushSync();
       const defaultFilename =
         suggestedName ||
-        `bluebird-log-${new Date().toISOString().slice(0, 10)}.log`;
+        `bluewing-log-${new Date().toISOString().slice(0, 10)}.log`;
 
       const options: Electron.SaveDialogOptions = {
-        title: '导出 BlueBird 运行日志',
+        title: '导出 青翼连接 运行日志',
         defaultPath: defaultFilename,
         filters: [
           { name: 'Log 文本文件 (*.log)', extensions: ['log', 'txt'] },

@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
-import {Check, Zap, Save} from 'lucide-react';
-import { DnsConfig } from '../../types';
+import {Check, Zap, Save, Plus, Trash2, FileCode2} from 'lucide-react';
+import { DnsConfig, HostsRecord } from '../../types';
+import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
+
+const DNS_PRESETS = [
+  { name: '阿里', primary: '223.5.5.5', secondary: '223.6.6.6' },
+  { name: '腾讯', primary: '119.29.29.29', secondary: '119.28.28.28' },
+  { name: 'Google', primary: '8.8.8.8', secondary: '8.8.4.4' },
+  { name: 'Cloudflare', primary: '1.1.1.1', secondary: '1.0.0.1' },
+];
 
 interface DNSProps {
   dns: DnsConfig;
@@ -8,17 +16,65 @@ interface DNSProps {
 }
 
 export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
-  const [formData, setFormData] = useState<DnsConfig>(dns);
+  const [formData, setFormData] = useState<DnsConfig>({ ...dns, hosts: Array.isArray(dns.hosts) ? dns.hosts : [] });
   const [testDomain, setTestDomain] = useState('www.google.com');
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [hostsError, setHostsError] = useState<string | null>(null);
+  // hosts 为可选字段,统一收敛为确定性数组供渲染与编辑使用
+  const hostsList = formData.hosts || [];
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    // Hosts 行校验:启用的行必须有合法域名与 IP,且同域名同记录类型不允许重复
+    const seen = new Set<string>();
+    for (const h of hostsList) {
+      if (!h.enabled) continue;
+      const domain = h.domain.trim().toLowerCase().replace(/\.$/, '');
+      const ip = h.ip.trim();
+      if (!domain && !ip) continue; // 两格都空的启用行视为未填写,忽略
+      if (!domain || !isValidDomain(domain)) {
+        setHostsError(`域名格式无效: "${domain || '(空)'}"`);
+        return;
+      }
+      if (!isValidIpLiteral(ip)) {
+        setHostsError(`IP 格式无效: "${ip || '(空)'}" (域名 ${domain})`);
+        return;
+      }
+      const key = `${domain}|${ip.includes(':') ? 'AAAA' : 'A'}`;
+      if (seen.has(key)) {
+        setHostsError(`重复映射: ${domain} -> ${ip}`);
+        return;
+      }
+      seen.add(key);
+    }
+    setHostsError(null);
     onSaveDns(formData);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2000);
+  };
+
+  // ---- 应用内 Hosts 映射 ----
+  const addHostsRow = () => {
+    const record: HostsRecord = {
+      id: `hosts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      domain: '',
+      ip: '',
+      enabled: true,
+    };
+    setFormData({ ...formData, hosts: [...hostsList, record] });
+  };
+
+  const updateHostsRow = (id: string, patch: Partial<HostsRecord>) => {
+    setFormData({
+      ...formData,
+      hosts: hostsList.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+    });
+  };
+
+  const removeHostsRow = (id: string) => {
+    setFormData({ ...formData, hosts: hostsList.filter((h) => h.id !== id) });
   };
 
   const handleTestDns = async () => {
@@ -163,22 +219,119 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
               className="w-4 h-4 rounded text-blue-600 focus:ring-0"
             />
           </div>
+        </div>
 
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end space-x-3">
-            {savedSuccess && (
-              <span className="text-xs text-emerald-500 font-medium flex items-center space-x-1">
-                <Check className="w-3.5 h-3.5" />
-                <span>保存成功</span>
-              </span>
-            )}
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25"
-            >
-              <Save className="w-4 h-4" />
-              <span>保存 DNS 配置</span>
-            </button>
+        {/* 2.5 应用内 Hosts 映射 */}
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-4 text-xs">
+          <div>
+            <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
+              <FileCode2 className="w-4 h-4 text-blue-500" />
+              <span>自定义域名解析 (应用内 Hosts)</span>
+            </h4>
+            <p className="text-xs text-slate-400 mt-1">
+              指定域名直接解析到指定 IP,仅在本应用内核心生效,
+              <span className="text-slate-500 dark:text-slate-300">完全不修改系统 hosts 文件</span>;
+              域名为精确匹配(与系统 hosts 语义一致),保存后核心运行期间立即生效。
+            </p>
           </div>
+
+          {hostsList.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-400 text-center">
+              暂无映射记录,点击下方按钮添加一条域名 → IP 映射
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="hidden sm:grid grid-cols-[auto_1fr_1fr_auto] gap-2 px-1 text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+                <span className="w-8 text-center">启用</span>
+                <span>域名 (精确匹配)</span>
+                <span>目标 IP (IPv4 / IPv6)</span>
+                <span className="w-8 text-center">操作</span>
+              </div>
+              {hostsList.map((h) => (
+                <div
+                  key={h.id}
+                  className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center"
+                >
+                  <input
+                    type="checkbox"
+                    checked={h.enabled}
+                    onChange={(e) => updateHostsRow(h.id, { enabled: e.target.checked })}
+                    className="w-4 h-4 mx-auto rounded text-blue-600 focus:ring-0"
+                  />
+                  <input
+                    type="text"
+                    value={h.domain}
+                    onChange={(e) => updateHostsRow(h.id, { domain: e.target.value })}
+                    placeholder="example.com"
+                    spellCheck={false}
+                    className={`w-full px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-blue-500 ${
+                      h.enabled && h.domain && !isValidDomain(h.domain)
+                        ? 'border-red-400 dark:border-red-500/60'
+                        : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                  />
+                  <input
+                    type="text"
+                    value={h.ip}
+                    onChange={(e) => updateHostsRow(h.id, { ip: e.target.value })}
+                    placeholder="10.0.0.5 或 fd00::5"
+                    spellCheck={false}
+                    className={`w-full px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-blue-500 ${
+                      h.enabled && h.ip && !isValidIpLiteral(h.ip)
+                        ? 'border-red-400 dark:border-red-500/60'
+                        : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeHostsRow(h.id)}
+                    className="w-8 h-8 mx-auto rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                    title="删除此映射"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {hostsError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px]">
+              {hostsError}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={addHostsRow}
+              className="px-4 py-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 text-slate-600 dark:text-slate-400 font-medium flex items-center space-x-1.5 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>添加映射</span>
+            </button>
+            <p className="text-[10px] text-slate-400 max-w-md">
+              生效范围: 经核心解析的域名(直连流量、TUN 劫持与系统代理下的本机解析);
+              走代理节点出流的域名由远端节点解析,不经过本地映射。
+            </p>
+          </div>
+        </div>
+
+        {/* 保存栏 */}
+        <div className="bg-white dark:bg-slate-900 p-4 px-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-end space-x-3">
+          {savedSuccess && (
+            <span className="text-xs text-emerald-500 font-medium flex items-center space-x-1">
+              <Check className="w-3.5 h-3.5" />
+              <span>保存成功</span>
+            </span>
+          )}
+          <button
+            type="submit"
+            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25"
+          >
+            <Save className="w-4 h-4" />
+            <span>保存 DNS 配置</span>
+          </button>
         </div>
       </form>
 

@@ -145,7 +145,7 @@ export const Settings: React.FC<SettingsProps> = ({
             <div className="flex items-center justify-between py-3">
               <div>
                 <h4 className="font-semibold text-slate-800 dark:text-slate-200">开机自动启动</h4>
-                <p className="text-[11px] text-slate-400">Windows 登录后自动在后台启动 BlueBird</p>
+                <p className="text-[11px] text-slate-400">Windows 登录后自动在后台启动 青翼连接</p>
               </div>
               <input
                 type="checkbox"

@@ -26,7 +26,7 @@ export class BackupService {
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
-    return path.join(dataDir, 'BlueBird_latest.bluebirdbackup');
+    return path.join(dataDir, 'BlueWing_latest.bluewingbackup');
   }
 
   /**
@@ -73,7 +73,7 @@ export class BackupService {
   }
 
   /**
-   * Exports native Windows backup file content (.bluebirdbackup).
+   * Exports native Windows backup file content (.bluewingbackup).
    */
   public static async exportWindowsBackup(
     categories: BackupCategories = { profiles: true, rules: true, settings: true }
@@ -107,7 +107,7 @@ export class BackupService {
   }
 
   /**
-   * Maintains local automatic overwrite backup: BlueBird_latest.bluebirdbackup and .bak.
+   * Maintains local automatic overwrite backup: BlueWing_latest.bluewingbackup and .bak.
    */
   public static async createLocalBackup(): Promise<{ success: boolean; filePath: string }> {
     const targetPath = this.getLocalBackupPath();
@@ -143,7 +143,7 @@ export class BackupService {
   public static async restoreLocalBackup(): Promise<BackupImportResult> {
     const targetPath = this.getLocalBackupPath();
     if (!fs.existsSync(targetPath)) {
-      throw new Error('未找到本地备份文件 (BlueBird_latest.bluebirdbackup)');
+      throw new Error('未找到本地备份文件 (BlueWing_latest.bluewingbackup)');
     }
     const content = fs.readFileSync(targetPath, 'utf8');
     return this.importWithTransaction(content, { profiles: true, rules: true, settings: true }, 'replace');
@@ -177,10 +177,10 @@ export class BackupService {
   public static parseRawContent(content: string | Buffer): RawParsedBackupData {
     const detection = BackupValidator.detectFormat(content);
 
-    if (detection.format === 'bluebird_android') {
+    if (detection.format === 'bluewing_android') {
       const decoded = AndroidBackupDecoder.decode(content);
       return {
-        format: 'bluebird_android',
+        format: 'bluewing_android',
         nodes: decoded.nodes,
         subscriptions: decoded.subscriptions,
         rules: decoded.rules,
@@ -191,11 +191,11 @@ export class BackupService {
       };
     }
 
-    if (detection.format === 'bluebird_windows') {
+    if (detection.format === 'bluewing_windows') {
       const contentStr = typeof content === 'string' ? content : content.toString('utf8');
       const decoded = WindowsBackupCodec.decode(contentStr);
       return {
-        format: 'bluebird_windows',
+        format: 'bluewing_windows',
         nodes: decoded.nodes || [],
         subscriptions: decoded.subscriptions || [],
         rules: decoded.routing?.rules || [],

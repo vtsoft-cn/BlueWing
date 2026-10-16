@@ -24,7 +24,7 @@ export class BackupSnapshot {
   public static createPreImportSnapshot(): string {
     const dir = this.getSnapshotDir();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const snapshotPath = path.join(dir, `BlueBird_pre_import_${timestamp}.bluebirdbackup`);
+    const snapshotPath = path.join(dir, `BlueWing_pre_import_${timestamp}.bluewingbackup`);
 
     const db = Database.getInstance();
     const backupJson = WindowsBackupCodec.encode(
@@ -43,7 +43,7 @@ export class BackupSnapshot {
     try {
       const files = fs
         .readdirSync(dir)
-        .filter((f) => f.startsWith('BlueBird_pre_import_') && f.endsWith('.bluebirdbackup'))
+        .filter((f) => f.startsWith('BlueWing_pre_import_') && f.endsWith('.bluewingbackup'))
         .map((f) => ({ name: f, path: path.join(dir, f), time: fs.statSync(path.join(dir, f)).mtimeMs }))
         .sort((a, b) => b.time - a.time);
 

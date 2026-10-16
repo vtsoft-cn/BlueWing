@@ -1,6 +1,6 @@
 # 第三方开源组件声明 (THIRD PARTY NOTICES)
 
-青鸟 BlueBird 客户端在开发过程中引用或集成了以下优秀的开源项目，特此致谢并保留各自的版权与许可声明：
+青翼连接 BlueWing Connect 客户端在开发过程中引用或集成了以下优秀的开源项目，特此致谢并保留各自的版权与许可声明：
 
 1. **Sing-box**
    - 官方主页: https://github.com/SagerNet/sing-box

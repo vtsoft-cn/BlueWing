@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>青鸟 BlueBird</title>
+    <title>青翼连接 BlueWing Connect</title>
     <script>
       // 首帧主题:必须在任何内容绘制前同步应用,避免亮色闪烁。
       // 首次启动(无存储)跟随系统;之后以上次使用的主题设置为初始值,后续由 App.tsx 实时跟随系统调整。
       (function () {
         try {
-          var theme = localStorage.getItem('bluebird:theme') || 'system';
+          var theme = localStorage.getItem('bluewing:theme') || 'system';
           var dark = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (dark) document.documentElement.classList.add('dark');
         } catch (e) {}

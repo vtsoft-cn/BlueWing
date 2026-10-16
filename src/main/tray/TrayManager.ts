@@ -1,9 +1,9 @@
-import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app, nativeTheme } from 'electron';
+import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app } from 'electron';
 import { Database } from '../db/Database';
 import { SingBoxManager } from '../core/SingBoxManager';
 import { SystemProxy } from '../system/SystemProxy';
 import { ConfigGenerator } from '../core/ConfigGenerator';
-import { resourcePath, trayIconPath, IconTheme } from '../branding';
+import { resourcePath, trayIconPath } from '../branding';
 
 export class TrayManager {
   private static instance: TrayManager;
@@ -11,14 +11,6 @@ export class TrayManager {
   private mainWindow: BrowserWindow | null = null;
 
   private constructor() {}
-
-  /** 图标主题:跟随界面设置,system 时用系统偏好判定 */
-  private iconTheme(): IconTheme {
-    const theme = Database.getInstance().getSettings().theme || 'system';
-    return theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors)
-      ? 'dark'
-      : 'light';
-  }
 
   public static getInstance(): TrayManager {
     if (!TrayManager.instance) {
@@ -28,8 +20,8 @@ export class TrayManager {
   }
 
   private getTrayIcon(): NativeImage {
-    // 初始未连接代理 → off;主题跟随界面;找不到时回退应用主图标
-    const p = trayIconPath(this.iconTheme(), false) ?? resourcePath('ico.ico');
+    // 初始未连接代理 → off;找不到时回退应用主图标
+    const p = trayIconPath(false) ?? resourcePath('ico.ico');
     if (p) {
       try {
         const img = nativeImage.createFromPath(p);
@@ -46,7 +38,7 @@ export class TrayManager {
 
     const icon = this.getTrayIcon();
     this.tray = new Tray(icon);
-    this.tray.setToolTip('BlueBird - 未连接');
+    this.tray.setToolTip('青翼连接 BlueWing Connect - 未连接');
 
     this.tray.on('click', () => {
       this.toggleWindow();
@@ -84,13 +76,14 @@ export class TrayManager {
     const isRunning = core.getState() === 'running';
 
     this.tray.setToolTip(
-      isRunning ? `BlueBird - 已连接: ${activeNode?.name || '未知'}` : 'BlueBird - 未连接'
+      isRunning
+        ? `青翼连接 BlueWing Connect - 已连接: ${activeNode?.name || '未知'}`
+        : '青翼连接 BlueWing Connect - 未连接'
     );
 
-    // 托盘图标:随 主题 × 代理状态 切换(主题在运行中改变时也会经此刷新)
+    // 托盘图标:随代理状态切换(连接 on / 断开 off)
     const proxyOn = isRunning && settings.systemProxyEnabled;
-    const theme = this.iconTheme();
-    const statePng = trayIconPath(theme, proxyOn);
+    const statePng = trayIconPath(proxyOn);
     if (statePng) {
       try {
         const img = nativeImage.createFromPath(statePng);
@@ -102,7 +95,7 @@ export class TrayManager {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: `BlueBird v${app.getVersion()} (${isRunning ? '● 已连接' : '○ 未连接'})`,
+        label: `青翼连接 BlueWing Connect v${app.getVersion()} (${isRunning ? '● 已连接' : '○ 未连接'})`,
         enabled: false,
       },
       { type: 'separator' },
@@ -215,7 +208,7 @@ export class TrayManager {
         },
       },
       {
-        label: '退出 BlueBird',
+        label: '退出 青翼连接',
         click: async () => {
           await core.stop();
           await SystemProxy.disable();

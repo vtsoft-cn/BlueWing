@@ -185,7 +185,7 @@ export class BackupTransaction {
       }
 
       // 3. Atomically write to disk via temporary file
-      const dbPath = path.join(Database.getInstance().getDataDir(), 'bluebird.json');
+      const dbPath = path.join(Database.getInstance().getDataDir(), 'bluewing.json');
       const tmpPath = `${dbPath}.tmp`;
       const bakPath = `${dbPath}.bak`;
 

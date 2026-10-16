@@ -49,21 +49,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, theme
   ];
 
   return (
-    <aside className="w-56 h-full flex flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-3 select-none flex-shrink-0">
-      {/* Top Branding(空白区域可拖动窗口,全局规则) */}
+    <aside className="w-56 h-full flex flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 p-3 select-none flex-shrink-0">
+      {/* Top Branding(左上角仅显示英文;显式拖动面,勿加 backdrop-filter) */}
       <div className="space-y-4">
-        <div className="flex items-center space-x-3 px-2 py-1">
+        <div className="drag-region flex items-center space-x-3 px-2 py-1">
           <img
             src={theme === 'dark' ? logoDark : logoLight}
-            alt="青鸟 BlueBird"
+            alt="BlueWing Connect"
             draggable={false}
             className="w-8 h-8 rounded-lg shadow-sm select-none"
           />
           <div>
             <h1 className="font-bold text-sm tracking-tight text-slate-800 dark:text-slate-100">
-              青鸟 BlueBird
+              BlueWing Connect
             </h1>
-            <p className="text-[11px] text-slate-400 font-normal">PC 代理工具链</p>
+            <p className="text-[11px] text-slate-400 font-normal">PC Proxy Toolchain</p>
           </div>
         </div>
 

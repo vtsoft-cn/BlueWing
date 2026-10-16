@@ -16,7 +16,7 @@ function copyDir(from, to) {
 
 function hasUserData(dir) {
   // 兼容更名前的旧数据文件名,构建保全期间两者都认
-  const db = ['bluebird.json', 'ownbox.json']
+  const db = ['bluewing.json']
     .map((f) => path.join(dir, f))
     .find((p) => fs.existsSync(p));
   if (!db) return false;

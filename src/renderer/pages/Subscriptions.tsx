@@ -247,7 +247,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
             暂无订阅链接
           </h4>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            添加机场或服务商提供的订阅链接，BlueBird 将自动下载所有节点并定期保持最新。
+            添加机场或服务商提供的订阅链接，青翼连接 将自动下载所有节点并定期保持最新。
           </p>
           <div className="pt-2">
             <button

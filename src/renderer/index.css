@@ -27,6 +27,13 @@ label,
   -webkit-app-region: no-drag;
 }
 
+/* 显式拖动面(页头/侧栏品牌区):
+   勿给这些元素加 backdrop-filter——合成层在内容滚动重建后会导致
+   drag 区域命中失效(Electron 已知问题),表现为"滚动后顶部拖不动窗口" */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
 /* 页面切换入场动画(配合 App 中 key={currentTab} 触发重放) */
 @keyframes page-enter {
   from {

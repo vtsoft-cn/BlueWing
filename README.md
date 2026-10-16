@@ -1,7 +1,7 @@
-# 青鸟 BlueBird (Windows PC 客户端)
+# 青翼连接 BlueWing Connect (Windows PC 客户端)
 
 <p align="center">
-  <img src="src/images/png/app-light.png" width="128" height="128" alt="BlueBird Logo">
+  <img src="src/images/png/app-light.png" width="128" height="128" alt="BlueWing Connect Logo">
   <br>
   <b>基于 Sing-box 官方原生核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
   <br>
@@ -17,7 +17,7 @@
 
 ## 📖 项目介绍 / Introduction
 
-**青鸟 BlueBird** 是专门面向 PC 桌面环境深度打造的原生通用网络代理与网络调试工具,针对桌面大屏操作与 Windows 平台特性进行了全新原生架构设计。
+**青翼连接 BlueWing Connect** 是专门面向 PC 桌面环境深度打造的原生通用网络代理与网络调试工具,针对桌面大屏操作与 Windows 平台特性进行了全新原生架构设计。
 
 软件基于官方原生 **Sing-box 1.14.3 稳定版**核心构建(全量构建标签,内置 NaiveProxy 支持),原生集成微软签名 **Wintun 0.14.1** 网卡驱动,全面支持 VLESS(含 Reality 伪装)、VMess、Trojan、Shadowsocks、Hysteria 1 / 2、TUIC、WireGuard、NaiveProxy、SOCKS5、HTTP 等全协议栈,提供毫秒级 TCP 握手测速、零断流节点热重载、Windows 进程应用级分流、防污染 FakeIP DNS 解析、WebDAV 云端多端同步与系统托盘快捷控制。
 
@@ -63,10 +63,10 @@
 
 | 安装包类型 | 文件名 | 适用场景 |
 | :--- | :--- | :--- |
-| **Windows 安装版** | `BlueBird-Setup.exe` | 推荐普通用户使用，自动创建开始菜单与桌面快捷方式，支持卸载 |
+| **Windows 安装版** | `BlueWingConnect-Setup.exe` | 推荐普通用户使用，自动创建开始菜单与桌面快捷方式，支持卸载 |
 | **便携绿色版** | `release/win-unpacked/` 目录 | 解压即用，数据保存在 exe 同级 data/ 目录,适合移动硬盘随身携带 |
 
-> 💡 **数据说明**：安装版升级重装时会自动保留安装目录下的 `data/` 用户数据（配置、订阅、日志等），即使 BlueBird 正在运行中直接覆盖升级同样安全（安装器会先自动结束运行中的程序再保全数据），仅通过卸载程序正式卸载时才会随安装目录一并删除；便携版数据始终在 exe 同级 `data/` 目录，覆盖升级文件不受影响。
+> 💡 **数据说明**：安装版升级重装时会自动保留安装目录下的 `data/` 用户数据（配置、订阅、日志等），即使 青翼连接 正在运行中直接覆盖升级同样安全（安装器会先自动结束运行中的程序再保全数据），仅通过卸载程序正式卸载时才会随安装目录一并删除；便携版数据始终在 exe 同级 `data/` 目录，覆盖升级文件不受影响。
 
 ---
 
@@ -98,6 +98,6 @@ npm run build
 npm run dist
 ```
 构建产物将保存在 `release/` 目录中：
-- `release/win-unpacked/BlueBird.exe`
-- `release/BlueBird-Setup.exe`
+- `release/win-unpacked/BlueWing Connect.exe`
+- `release/BlueWingConnect-Setup.exe`
 

@@ -36,7 +36,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
 }) => {
   const [testMode, setTestMode] = useState<'ping' | 'latency' | 'download' | 'full'>('ping');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
-    return (localStorage.getItem('bluebird_speedtest_view') as 'table' | 'cards') || 'cards';
+    return (localStorage.getItem('bluewing_speedtest_view') as 'table' | 'cards') || 'cards';
   });
   const [isRunning, setIsRunning] = useState(false);
   const stopRequestedRef = useRef(false);
@@ -72,7 +72,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
   const handleToggleView = (mode: 'table' | 'cards') => {
     setViewMode(mode);
     try {
-      localStorage.setItem('bluebird_speedtest_view', mode);
+      localStorage.setItem('bluewing_speedtest_view', mode);
     } catch {}
   };
 

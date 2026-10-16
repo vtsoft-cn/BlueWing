@@ -4,7 +4,7 @@ import { BackupService } from './backup/BackupService';
 import { WindowsBackupCodec } from './backup/WindowsBackupCodec';
 
 export class BackupMigrator {
-  public static exportBlueBirdBackup(
+  public static exportBlueWingBackup(
     nodes: ProxyNode[],
     subscriptions: Subscription[],
     rules: RouteRule[],

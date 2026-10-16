@@ -64,7 +64,7 @@ export const Backup: React.FC<BackupProps> = ({
       serverUrl: '',
       username: '',
       password: '',
-      remotePath: 'BlueBird',
+      remotePath: 'BlueWingConnect',
       autoSync: false,
     }
   );
@@ -133,13 +133,13 @@ export const Backup: React.FC<BackupProps> = ({
     }
   };
 
-  // 2. Action: 导出到文件 (Windows native .bluebirdbackup)
+  // 2. Action: 导出到文件 (Windows native .bluewingbackup)
   const handleExportWindows = async () => {
     if (!window.electronAPI?.backup) return;
     try {
       const data = await window.electronAPI.backup.exportData(exportCategories);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      downloadFile(data, `BlueBird_Win_Backup_${timestamp}.bluebirdbackup`);
+      downloadFile(data, `BlueWingConnect_Win_Backup_${timestamp}.bluewingbackup`);
       setActionNotice({
         type: 'success',
         message: 'Windows 桌面端备份文件已生成并下载。',
@@ -158,7 +158,7 @@ export const Backup: React.FC<BackupProps> = ({
     try {
       const data = await window.electronAPI.backup.exportAndroid(exportCategories);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      downloadFile(data, `BlueBird_backup_android_${timestamp}.json`);
+      downloadFile(data, `BlueWingConnect_backup_android_${timestamp}.json`);
       setActionNotice({
         type: 'success',
         message: 'Android 手机端兼容备份已成功生成！',
@@ -244,7 +244,7 @@ export const Backup: React.FC<BackupProps> = ({
     }
   };
 
-  // 6. Action: Local Overwrite Backup (BlueBird_latest.bluebirdbackup)
+  // 6. Action: Local Overwrite Backup (BlueWing_latest.bluewingbackup)
   const handleCreateLocalBackup = async () => {
     if (!window.electronAPI?.backup) return;
     try {
@@ -253,7 +253,7 @@ export const Backup: React.FC<BackupProps> = ({
         await loadLocalBackupInfo();
         setActionNotice({
           type: 'success',
-          message: '本地最新覆盖备份 (BlueBird_latest.bluebirdbackup) 已更新！',
+          message: '本地最新覆盖备份 (BlueWing_latest.bluewingbackup) 已更新！',
           details: '系统已原子写入最新快照并自动留存上一次状态为 .bak 备份。',
         });
       }
@@ -267,7 +267,7 @@ export const Backup: React.FC<BackupProps> = ({
 
   const handleRestoreLocalBackup = async () => {
     if (!window.electronAPI?.backup) return;
-    if (!(await confirmDialog({ title: '恢复本地备份', message: '确定要从本地最新备份 (BlueBird_latest.bluebirdbackup) 覆盖还原当前全部配置吗？', danger: true }))) return;
+    if (!(await confirmDialog({ title: '恢复本地备份', message: '确定要从本地最新备份 (BlueWing_latest.bluewingbackup) 覆盖还原当前全部配置吗？', danger: true }))) return;
 
     try {
       const res = await window.electronAPI.backup.restoreLocalBackup();
@@ -469,7 +469,7 @@ export const Backup: React.FC<BackupProps> = ({
                 <Download className="w-5 h-5" />
               </div>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                .bluebirdbackup
+                .bluewingbackup
               </span>
             </div>
             <div>
@@ -504,14 +504,14 @@ export const Backup: React.FC<BackupProps> = ({
                 从文件导入
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
-                导入 .bluebirdbackup 或通用备份文件，自动解析并弹窗确认变更明细。
+                导入 .bluewingbackup 或通用备份文件，自动解析并弹窗确认变更明细。
               </p>
               <label className="w-full py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center justify-center space-x-1.5 cursor-pointer transition-colors shadow-sm shadow-emerald-500/20">
                 <CloudUpload className="w-3.5 h-3.5" />
                 <span>选择备份文件</span>
                 <input
                   type="file"
-                  accept=".bluebirdbackup,.json,.zip"
+                  accept=".bluewingbackup,.json,.zip"
                   onChange={(e) => handleSelectImportFile(e, false)}
                   className="hidden"
                 />
@@ -584,7 +584,7 @@ export const Backup: React.FC<BackupProps> = ({
           <div>
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center space-x-2">
               <HardDrive className="w-4 h-4 text-indigo-500" />
-              <span>本地自动覆盖备份 (BlueBird_latest.bluebirdbackup)</span>
+              <span>本地自动覆盖备份 (BlueWing_latest.bluewingbackup)</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               系统独立维护本地最新状态快照与 .bak 双保险副本，与手动导出文件严格分离
@@ -706,7 +706,7 @@ export const Backup: React.FC<BackupProps> = ({
               type="text"
               value={webdavForm.remotePath}
               onChange={(e) => setWebdavForm({ ...webdavForm, remotePath: e.target.value })}
-              placeholder="BlueBird"
+              placeholder="BlueWingConnect"
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
             />
           </div>
@@ -801,9 +801,9 @@ export const Backup: React.FC<BackupProps> = ({
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     来源文件: <span className="font-mono">{pendingFileName}</span> (识别格式:{' '}
                     <span className="font-semibold text-blue-600 dark:text-blue-400">
-                      {previewResult.format === 'bluebird_android'
+                      {previewResult.format === 'bluewing_android'
                         ? 'Android 手机端备份'
-                        : previewResult.format === 'bluebird_windows'
+                        : previewResult.format === 'bluewing_windows'
                         ? 'Windows 桌面端备份'
                         : previewResult.format === 'singbox_config'
                         ? 'Sing-box 原生配置'

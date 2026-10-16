@@ -123,6 +123,15 @@ export interface DnsServerItem {
   detour?: string; // 'direct' or 'proxy'
 }
 
+/** 应用内 Hosts 映射:域名 -> 指定 IP,由核心 DNS 直接返回,不修改系统 hosts 文件 */
+export interface HostsRecord {
+  id: string;
+  domain: string; // e.g. example.com(精确匹配,与系统 hosts 语义一致)
+  ip: string; // IPv4 或 IPv6
+  enabled: boolean;
+  remark?: string;
+}
+
 export interface DnsConfig {
   mode: 'standard' | 'fakeip';
   remoteDns: string;
@@ -130,13 +139,15 @@ export interface DnsConfig {
   fakeIpRange: string;
   enableDnsRouting: boolean;
   servers: DnsServerItem[];
+  /** 应用内 Hosts 映射记录(旧数据缺省时视为空) */
+  hosts?: HostsRecord[];
 }
 
 export interface WebDAVConfig {
   serverUrl: string;
   username: string;
   password: string;
-  remotePath: string; // default: "BlueBird"
+  remotePath: string; // default: "BlueWingConnect"
   autoSync: boolean;
   lastSyncTime?: number;
 }
@@ -263,7 +274,7 @@ export interface BackupPreviewItem {
 
 export interface BackupPreviewResult {
   valid: boolean;
-  format: 'bluebird_windows' | 'bluebird_android' | 'singbox_config' | 'unknown';
+  format: 'bluewing_windows' | 'bluewing_android' | 'singbox_config' | 'unknown';
   categories: BackupCategories;
   counts: {
     groups: { total: number; add: number; update: number; skip: number };

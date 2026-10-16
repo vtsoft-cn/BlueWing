@@ -29,36 +29,36 @@ let startTime: number = 0;
 let totalRx: number = 0;
 let totalTx: number = 0;
 
-// 数据目录:便携优先(exe 同级 data/),目录不可写(如 Program Files)时回退 %APPDATA%\BlueBird。
+// 数据目录:便携优先(exe 同级 data/),目录不可写(如 Program Files)时回退 %APPDATA%\BlueWingConnect。
 // 必须在 app ready 之前设置:Chromium 配置(缓存/Cookie)、Database、LogManager、SystemProxy 全部跟随此目录。
 const exeDir = path.dirname(process.execPath || '');
 const portableDataDir = path.join(exeDir, 'data');
 const fallbackDataDir = path.join(
   process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'),
-  'BlueBird'
+  'BlueWingConnect'
 );
-let bluebirdDataDir = fallbackDataDir;
+let appDataDir = fallbackDataDir;
 try {
   fs.mkdirSync(portableDataDir, { recursive: true });
   const probe = path.join(portableDataDir, '.write-probe');
   fs.writeFileSync(probe, 'ok');
   fs.unlinkSync(probe);
-  bluebirdDataDir = portableDataDir;
+  appDataDir = portableDataDir;
 } catch {
-  bluebirdDataDir = fallbackDataDir;
+  appDataDir = fallbackDataDir;
 }
-process.env.BLUEBIRD_DATA_DIR = bluebirdDataDir;
-app.setPath('userData', bluebirdDataDir);
+process.env.BLUEWING_DATA_DIR = appDataDir;
+app.setPath('userData', appDataDir);
 
-// 安装器在向导阶段被取消时,data/ 可能仍留在同级 BlueBirdDataUpgrade 暂存里
+// 安装器在向导阶段被取消时,data/ 可能仍留在同级 BlueWingDataUpgrade 暂存里
 // (安装器无法挂钩取消事件):启动时发现便携 data/ 没有数据库而暂存里有,
 // 自动收回——否则用户面对空配置,且暂存会在下次安装时被当作过期遗留删除。
-if (bluebirdDataDir === portableDataDir) {
+if (appDataDir === portableDataDir) {
   try {
-    const stashDir = path.join(exeDir, '..', 'BlueBirdDataUpgrade');
+    const stashDir = path.join(exeDir, '..', 'BlueWingDataUpgrade');
     if (
-      !fs.existsSync(path.join(portableDataDir, 'bluebird.json')) &&
-      fs.existsSync(path.join(stashDir, 'bluebird.json'))
+      !fs.existsSync(path.join(portableDataDir, 'bluewing.json')) &&
+      fs.existsSync(path.join(stashDir, 'bluewing.json'))
     ) {
       fs.cpSync(stashDir, portableDataDir, { recursive: true });
       fs.rmSync(stashDir, { recursive: true, force: true });
@@ -93,14 +93,14 @@ if (!gotTheLock) {
 }
 
 /**
- * 检测其他安装路径的 BlueBird 实例(如尚未卸载的旧版本)。
+ * 检测其他安装路径的青翼连接实例(如尚未卸载的旧版本)。
  * requestSingleInstanceLock 只能约束实现了锁的实例——旧版本没有锁代码,检测不到,
  * 双开会互相覆盖系统代理注册表/抢占核心端口。发现异路径实例时弹窗提示并退出。
  */
 async function warnAndExitIfForeignInstance(): Promise<void> {
   if (process.platform !== 'win32') return;
   return new Promise((resolve) => {
-    const script = `Get-Process BlueBird -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Group-Object Path | ForEach-Object { $_.Name }`;
+    const script = `Get-Process 'BlueWing Connect' -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Group-Object Path | ForEach-Object { $_.Name }`;
     const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
       windowsHide: true,
     });
@@ -121,13 +121,13 @@ async function warnAndExitIfForeignInstance(): Promise<void> {
       if (paths.length > 0) {
         dialog.showMessageBoxSync({
           type: 'warning',
-          title: '检测到另一个 BlueBird 实例',
-          message: `检测到另一个安装路径的 BlueBird 正在运行,两个实例会互相覆盖系统代理设置:\n\n${paths.join('\n')}\n\n请先退出另一个 BlueBird,再打开本版本。`,
+          title: '检测到另一个青翼连接实例',
+          message: `检测到另一个安装路径的 青翼连接 BlueWing Connect 正在运行,两个实例会互相覆盖系统代理设置:\n\n${paths.join('\n')}\n\n请先退出另一个实例,再打开本版本。`,
           buttons: ['确定'],
         });
         LogManager.getInstance().addLog(
           'warn',
-          `检测到其他安装路径的 BlueBird 实例,已退出本实例: ${paths.join(' | ')}`,
+          `检测到其他安装路径的青翼连接实例,已退出本实例: ${paths.join(' | ')}`,
           'app'
         );
         app.exit(0);
@@ -165,6 +165,7 @@ function createWindow(): void {
     maxWidth: 1600,
     maxHeight: 1040,
     frame: false,
+    title: '青翼连接 BlueWing Connect',
     // 固定尺寸窗口:只保留最小化/关闭,不提供最大化
     maximizable: false,
     show: false,

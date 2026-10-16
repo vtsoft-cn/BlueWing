@@ -89,7 +89,7 @@ export const Logs: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `bluebird_log_${Date.now()}.txt`;
+    a.download = `bluewing_log_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };

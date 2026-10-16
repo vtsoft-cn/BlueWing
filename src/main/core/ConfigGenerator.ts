@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../../types';
+import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
 
 export class ConfigGenerator {
   /**
@@ -47,7 +48,7 @@ export class ConfigGenerator {
       const tunInbound: any = {
         type: 'tun',
         tag: 'tun-in',
-        interface_name: 'BlueBirdTun',
+        interface_name: 'BlueWingTun',
         address: settings.tunIPv6
           ? ['172.19.0.1/30', 'fdfe:dcba:9876::1/126']
           : ['172.19.0.1/30'],
@@ -140,6 +141,12 @@ export class ConfigGenerator {
     }
 
     const dnsRules: any[] = [];
+
+    // 应用内 Hosts 映射:生成 predefined DNS 规则直接返回固定记录(不修改系统 hosts)。
+    // 必须排在 fakeip 规则之前,否则 fakeip 模式会先接管全部查询导致映射永不生效。
+    for (const rule of this.buildHostsDnsRules(dns)) {
+      dnsRules.push(rule);
+    }
 
     if (dns.mode === 'fakeip') {
       dnsRules.push({
@@ -449,8 +456,8 @@ export class ConfigGenerator {
 
   /** 定位本地规则目录:优先用户数据目录(更新规则按钮写入的最新数据),其次应用内置(随包分发);都找不到返回 null(回退远程规则) */
   private static locateRulesDir(): string | null {
-    const dataRules = process.env.BLUEBIRD_DATA_DIR
-      ? path.join(process.env.BLUEBIRD_DATA_DIR, 'rules')
+    const dataRules = process.env.BLUEWING_DATA_DIR
+      ? path.join(process.env.BLUEWING_DATA_DIR, 'rules')
       : '';
     const candidates = [
       dataRules,
@@ -465,6 +472,45 @@ export class ConfigGenerator {
       }
     }
     return null;
+  }
+
+  /**
+   * 应用内 Hosts 映射 -> sing-box predefined DNS 规则(sing-box 1.14 无 dns.hosts 字段,
+   * 经实测以 RFC 1035 字符串记录的 answer 形式通过 check)。同域名的 IPv4/IPv6
+   * 合并为单条规则的多个 answer;非法记录跳过,保证配置始终可生成。
+   */
+  private static buildHostsDnsRules(dns: DnsConfig): any[] {
+    // domain(lowercase) -> answer 记录数组;后写入的同 IP 版本覆盖先前的
+    const grouped = new Map<string, string[]>();
+    for (const h of dns.hosts || []) {
+      if (!h || !h.enabled) continue;
+      const domain = String(h.domain || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\.$/, '');
+      const ip = String(h.ip || '')
+        .trim()
+        .replace(/^\[|\]$/g, '');
+      if (!domain || !isValidDomain(domain) || !isValidIpLiteral(ip)) continue;
+      const type = ip.includes(':') ? 'AAAA' : 'A';
+      const rr = `${domain}. 60 IN ${type} ${ip}`;
+      const list = grouped.get(domain) || [];
+      const idx = list.findIndex((r) => r.includes(` IN ${type} `));
+      if (idx >= 0) list[idx] = rr;
+      else list.push(rr);
+      grouped.set(domain, list);
+    }
+
+    const rules: any[] = [];
+    for (const [domain, answer] of grouped) {
+      rules.push({
+        domain: [domain],
+        action: 'predefined',
+        rcode: 'NOERROR',
+        answer,
+      });
+    }
+    return rules;
   }
 
   private static parseDnsServer(tag: string, address: string, detour?: string): any {

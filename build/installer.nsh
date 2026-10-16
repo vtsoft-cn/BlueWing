@@ -1,9 +1,9 @@
-; BlueBird 安装器定制:便携数据(data/)保全策略
+; 青翼连接 (BlueWing Connect) 安装器定制:便携数据(data/)保全策略
 ;
 ; 背景:升级重装时,electron-builder 会先静默执行旧版卸载器,其内部
 ; RMDir /r $INSTDIR 会连 portable data/ 一起清掉(/KEEP_APP_DATA 仅
 ; 保护 %APPDATA%,不保护安装目录内的数据)。因此:
-;   - 升级重装:安装器初始化时先结束运行中的 BlueBird/sing-box 进程
+;   - 升级重装:安装器初始化时先结束运行中的 青翼连接/sing-box 进程
 ;     (释放 data/ 内被占用的句柄——模板要到安装段才关应用,而暂存
 ;     改名在 .onInit 就必须完成),把旧目录 data/ 暂存到同级位置,
 ;     新文件装完后还原到 $INSTDIR\data(跨盘重装走复制中转)
@@ -22,23 +22,23 @@
 Var /GLOBAL bbDataOldDir   ; 检测到的旧安装目录
 Var /GLOBAL bbDataStash    ; data/ 暂存位置(旧安装目录同级)
 
-; 结束运行中的 BlueBird 与 sing-box。优先通过二次实例信号让运行实例优雅退出:
-; 拉起 "<旧目录>BlueBird.exe --bb-shutdown"——该进程拿不到单实例锁随即退出,
+; 结束运行中的 青翼连接 与 sing-box。优先通过二次实例信号让运行实例优雅退出:
+; 拉起 "<旧目录>BlueWing Connect.exe --bb-shutdown"——该进程拿不到单实例锁随即退出,
 ; 但信号已送达运行中的实例,后者还原系统代理、停止核心后自行退出(见主进程
 ; second-instance 处理)。轮询等待最多 6 秒;旧版本实例不识别信号或超时未退,
 ; 才回退温和/强制 taskkill(强杀会留下已开启的系统代理,由应用下次启动自愈)。
 ; 必须先探测确有运行实例,否则信号进程会凭空把应用启动起来。
 Function bbCloseRunningApp
   ${If} $bbDataOldDir != ""
-  ${AndIf} ${FileExists} "$bbDataOldDir\BlueBird.exe"
-    nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "IMAGENAME eq BlueBird.exe" /FO csv | "$SYSDIR\find.exe" "BlueBird.exe"`
+  ${AndIf} ${FileExists} "$bbDataOldDir\BlueWing Connect.exe"
+    nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "IMAGENAME eq BlueWing Connect.exe" /FO csv | "$SYSDIR\find.exe" "BlueWing Connect.exe"`
     Pop $R0
     ${If} $R0 == 0
-      nsExec::Exec `"$bbDataOldDir\BlueBird.exe" --bb-shutdown`
+      nsExec::Exec `"$bbDataOldDir\BlueWing Connect.exe" --bb-shutdown`
       StrCpy $R1 0
       bbGracefulWait:
       Sleep 500
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "IMAGENAME eq BlueBird.exe" /FO csv | "$SYSDIR\find.exe" "BlueBird.exe"`
+      nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "IMAGENAME eq BlueWing Connect.exe" /FO csv | "$SYSDIR\find.exe" "BlueWing Connect.exe"`
       Pop $R0
       ${If} $R0 != 0
         Return
@@ -49,10 +49,10 @@ Function bbCloseRunningApp
       ${EndIf}
     ${EndIf}
   ${EndIf}
-  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "BlueBird.exe"`
+  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "BlueWing Connect.exe"`
   nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "sing-box.exe"`
   Sleep 300
-  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "BlueBird.exe"`
+  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "BlueWing Connect.exe"`
   nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "sing-box.exe"`
 FunctionEnd
 
@@ -73,7 +73,7 @@ Function bbStashData
     Sleep 500
     Goto bbStashRetry
   ${EndIf}
-  MessageBox MB_RETRYCANCEL|MB_ICONSTOP|MB_TOPMOST "无法保全旧版用户数据:data 目录仍被占用(BlueBird 可能尚未完全退出)。$\r$\n请完全退出 BlueBird(托盘图标右键 -> 退出 BlueBird)后选择「重试」。$\r$\n选择「取消」将中止安装,不会改动任何现有数据。" /SD IDCANCEL IDRETRY bbStashRetryAll
+  MessageBox MB_RETRYCANCEL|MB_ICONSTOP|MB_TOPMOST "无法保全旧版用户数据:data 目录仍被占用(青翼连接 可能尚未完全退出)。$\r$\n请完全退出 青翼连接(托盘图标右键 -> 退出 青翼连接)后选择「重试」。$\r$\n选择「取消」将中止安装,不会改动任何现有数据。" /SD IDCANCEL IDRETRY bbStashRetryAll
   Abort
 FunctionEnd
 
@@ -83,8 +83,8 @@ Function bbValidateOldDir
   ${If} $bbDataOldDir != ""
   ${AndIf} ${FileExists} "$bbDataOldDir"
     ${If} ${FileExists} "$bbDataOldDir\data"
-    ${OrIf} ${FileExists} "$bbDataOldDir\BlueBird.exe"
-    ${OrIf} ${FileExists} "$bbDataOldDir\Uninstall BlueBird.exe"
+    ${OrIf} ${FileExists} "$bbDataOldDir\BlueWing Connect.exe"
+    ${OrIf} ${FileExists} "$bbDataOldDir\Uninstall BlueWing Connect.exe"
       Return
     ${EndIf}
   ${EndIf}
@@ -95,11 +95,11 @@ FunctionEnd
   ; 注意:宏体在 .onInit 早期展开,只能用 NSIS 核心指令与插件调用(不能依赖
   ; installUtil 的辅助宏,彼时尚未引入)。
   ;
-  ; 旧安装目录按三级候选定位,各级均经 bbValidateOldDir 校验:
+  ; 旧安装目录按候选定位,各级均经 bbValidateOldDir 校验:
   ;   1. 注册表 InstallLocation(INSTALL_REGISTRY_KEY 即 Software\{GUID},
   ;      initMultiUser 每次安装都会写入;实测可能残留过期或损坏的路径)
   ;   2. 本次安装目录 $INSTDIR(initMultiUser 已解析;同目录升级时即旧目录)
-  ;   3. 默认安装目录 %LOCALAPPDATA%\Programs\BlueBird(兜底)
+  ;   3. 默认安装目录 %LOCALAPPDATA%\Programs\BlueWing Connect(兜底)
   StrCpy $bbDataStash ""
   StrCpy $bbDataOldDir ""
   ReadRegStr $bbDataOldDir SHCTX "${INSTALL_REGISTRY_KEY}" InstallLocation
@@ -112,12 +112,12 @@ FunctionEnd
     Call bbValidateOldDir
   ${EndIf}
   ${If} $bbDataOldDir == ""
-    StrCpy $bbDataOldDir "$LOCALAPPDATA\Programs\BlueBird"
+    StrCpy $bbDataOldDir "$LOCALAPPDATA\Programs\BlueWing Connect"
     Call bbValidateOldDir
   ${EndIf}
 
   ${If} $bbDataOldDir != ""
-    StrCpy $bbDataStash "$bbDataOldDir\..\BlueBirdDataUpgrade"
+    StrCpy $bbDataStash "$bbDataOldDir\..\BlueWingDataUpgrade"
     ${If} ${FileExists} "$bbDataOldDir\data"
       ${If} ${FileExists} "$bbDataStash"
         ; 上次异常中断遗留的过期暂存:以现存 data/ 为准,清掉暂存
@@ -148,10 +148,10 @@ FunctionEnd
       ClearErrors
       CreateDirectory "$INSTDIR\bb-data-tmp"
       CopyFiles /SILENT "$bbDataStash" "$INSTDIR\bb-data-tmp"
-      ${If} ${FileExists} "$INSTDIR\bb-data-tmp\BlueBirdDataUpgrade"
-        Rename "$INSTDIR\bb-data-tmp\BlueBirdDataUpgrade" "$INSTDIR\data"
+      ${If} ${FileExists} "$INSTDIR\bb-data-tmp\BlueWingDataUpgrade"
+        Rename "$INSTDIR\bb-data-tmp\BlueWingDataUpgrade" "$INSTDIR\data"
         RMDir "$INSTDIR\bb-data-tmp"
-      ${ElseIf} ${FileExists} "$INSTDIR\bb-data-tmp\bluebird.json"
+      ${ElseIf} ${FileExists} "$INSTDIR\bb-data-tmp\bluewing.json"
         Rename "$INSTDIR\bb-data-tmp" "$INSTDIR\data"
       ${Else}
         RMDir /r "$INSTDIR\bb-data-tmp"

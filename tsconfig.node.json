@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/types/**/*"]
+  "include": ["src/main/**/*", "src/preload/**/*", "src/types/**/*", "src/utils/**/*"]
 }

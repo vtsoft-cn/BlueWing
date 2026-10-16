@@ -12,7 +12,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ coreState, activeNodeNam
   const isConnected = coreState === 'running';
 
   return (
-    <header className="h-9 w-full flex items-center justify-between pl-3 pr-1.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md select-none z-50 flex-shrink-0">
+    <header className="drag-region h-9 w-full flex items-center justify-between pl-3 pr-1.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/85 dark:bg-slate-900/85 select-none z-50 flex-shrink-0">
       {/* 连接状态 */}
       <div className="flex items-center gap-2 text-xs min-w-0">
         <span

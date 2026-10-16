@@ -1,6 +1,6 @@
 {
-  "name": "bluebird",
-  "productName": "BlueBird",
+  "name": "bluewing-connect",
+  "productName": "BlueWing Connect",
   "version": "1.0.0",
   "description": "基于 Sing-box 官方原生核心打造的现代化通用代理客户端与网络调试工具",
   "main": "dist/main/index.js",
@@ -39,8 +39,8 @@
     "vite": "^6.1.0"
   },
   "build": {
-    "appId": "com.bluebird.desktop",
-    "productName": "BlueBird",
+    "appId": "com.bluewing.connect",
+    "productName": "BlueWing Connect",
     "copyright": "Copyright © 2026 Garden",
     "directories": {
       "output": "release"
@@ -76,7 +76,7 @@
         }
       ],
       "icon": "src/images/ico/ico.ico",
-      "artifactName": "BlueBird-Setup.exe"
+      "artifactName": "BlueWingConnect-Setup.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -87,8 +87,8 @@
       "installerHeaderIcon": "src/images/ico/ico.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "BlueBird",
-      "artifactName": "BlueBird-Setup.exe"
+      "shortcutName": "青翼连接",
+      "artifactName": "BlueWingConnect-Setup.exe"
     }
   }
 }

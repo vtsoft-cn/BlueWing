@@ -86,7 +86,7 @@ export const Nodes: React.FC<NodesProps> = ({
   const [selectedGroup, setSelectedGroup] = useState('all'); // subscription group
   const [selectedRegion, setSelectedRegion] = useState('all'); // country / region
   const [sortBy, setSortByState] = useState<'default' | 'ping-asc' | 'ping-desc' | 'name-asc' | 'type' | 'starred' | 'speed-desc'>(() => {
-    const saved = localStorage.getItem('bluebird_node_sort_by');
+    const saved = localStorage.getItem('bluewing_node_sort_by');
     if (saved && ['default', 'ping-asc', 'ping-desc', 'name-asc', 'type', 'starred', 'speed-desc'].includes(saved)) {
       return saved as any;
     }
@@ -96,7 +96,7 @@ export const Nodes: React.FC<NodesProps> = ({
   const setSortBy = (val: 'default' | 'ping-asc' | 'ping-desc' | 'name-asc' | 'type' | 'starred' | 'speed-desc') => {
     setSortByState(val);
     try {
-      localStorage.setItem('bluebird_node_sort_by', val);
+      localStorage.setItem('bluewing_node_sort_by', val);
     } catch {
       // ignore
     }

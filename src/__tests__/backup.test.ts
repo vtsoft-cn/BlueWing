@@ -51,13 +51,13 @@ test('AndroidParcel: byte array with padding alignment', () => {
 
 test('AndroidParcel: string UTF-16LE with null terminator and padding', () => {
   const p = new AndroidParcel();
-  p.writeString('BlueBird Windows');
+  p.writeString('BlueWing Windows');
   p.writeString('中文测试节点');
   p.writeString('');
   p.writeString(null);
 
   p.setDataPosition(0);
-  assert.strictEqual(p.readString(), 'BlueBird Windows');
+  assert.strictEqual(p.readString(), 'BlueWing Windows');
   assert.strictEqual(p.readString(), '中文测试节点');
   assert.strictEqual(p.readString(), '');
   assert.strictEqual(p.readString(), null);
@@ -199,7 +199,7 @@ test('Cross-platform roundtrip: Windows -> Android Backup -> Windows Restore', (
       serverUrl: 'https://dav.example.com',
       username: 'user',
       password: 'pass',
-      remotePath: 'BlueBird',
+      remotePath: 'BlueWingConnect',
       autoSync: false,
     },
   };
@@ -253,10 +253,10 @@ test('Cross-platform roundtrip: Windows -> Android Backup -> Windows Restore', (
 
 test('Format Detection: Windows, Android, SingBox', () => {
   const winBackup = JSON.stringify({ schema_version: 2, nodes: [] });
-  assert.strictEqual(BackupValidator.detectFormat(winBackup).format, 'bluebird_windows');
+  assert.strictEqual(BackupValidator.detectFormat(winBackup).format, 'bluewing_windows');
 
   const androidBackup = JSON.stringify({ version: 1, profiles: ['abcd'], groups: ['efgh'] });
-  assert.strictEqual(BackupValidator.detectFormat(androidBackup).format, 'bluebird_android');
+  assert.strictEqual(BackupValidator.detectFormat(androidBackup).format, 'bluewing_android');
 
   const singboxBackup = JSON.stringify({ outbounds: [{ type: 'vless', server: '1.2.3.4' }] });
   assert.strictEqual(BackupValidator.detectFormat(singboxBackup).format, 'singbox_config');
@@ -292,7 +292,7 @@ test('Dry run preview computes adds, updates, and unparseable counts correctly',
   };
 
   const incoming = {
-    format: 'bluebird_windows' as const,
+    format: 'bluewing_windows' as const,
     nodes: [
       { id: '2', name: 'Node A', type: 'vless' as const, server: '1.1.1.1', port: 443, groupId: 'default' }, // match -> update
       { id: '3', name: 'Node B', type: 'trojan' as const, server: '2.2.2.2', port: 443, groupId: 'default' }, // new -> add

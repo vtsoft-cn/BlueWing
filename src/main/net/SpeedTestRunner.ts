@@ -25,7 +25,7 @@ export class SpeedTestRunner {
     try {
       ver = app.getVersion();
     } catch {}
-    return `BlueBird/${ver}${suffix}`;
+    return `BlueWingConnect/${ver}${suffix}`;
   }
 
   /**

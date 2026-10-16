@@ -8,6 +8,7 @@ import { UniversalSubscriptionParser } from '../main/net/UniversalSubscriptionPa
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { ProxySelectionService } from '../main/core/ProxySelectionService';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
+import { isValidIpLiteral, isValidDomain } from '../utils/ip';
 
 const execFileAsync = promisify(execFile);
 
@@ -30,7 +31,7 @@ const defaultSettings: AppSettings = {
   systemProxyBypassLan: true,
   tunEnabled: false,
   tunStack: 'system',
-  tunDevice: 'BlueBirdTun',
+  tunDevice: 'BlueWingTun',
   tunMtu: 9000,
   tunStrictRoute: false,
   tunEndpointIndependentNat: true,
@@ -162,6 +163,35 @@ proxies:
     const http = nodes.find((n) => n.name === 'Clash Http');
     assert.ok(http);
     assert.equal(http.type, 'http');
+  });
+});
+
+describe('IP/Domain validators', () => {
+  test('isValidIpLiteral accepts compressed and full IPv6, rejects malformed', () => {
+    assert.ok(isValidIpLiteral('10.0.0.5'));
+    assert.ok(isValidIpLiteral('255.255.255.255'));
+    assert.ok(!isValidIpLiteral('256.1.1.1'));
+    assert.ok(!isValidIpLiteral('1.2.3.4.5'));
+    assert.ok(isValidIpLiteral('fd00::5'));
+    assert.ok(isValidIpLiteral('::1'));
+    assert.ok(isValidIpLiteral('::'));
+    assert.ok(isValidIpLiteral('[fd00::5]'));
+    assert.ok(isValidIpLiteral('2001:db8:1:2:3:4:5:6'));
+    assert.ok(!isValidIpLiteral('fd00:::5'));
+    assert.ok(!isValidIpLiteral('1:2:3:4:5:6:7:8:9'));
+    assert.ok(!isValidIpLiteral('1:2:3:4:5:6:7')); // 无压缩时必须 8 组
+    assert.ok(!isValidIpLiteral('gg::1'));
+    assert.ok(!isValidIpLiteral(''));
+  });
+
+  test('isValidDomain accepts normal domains and single-label intranet hosts', () => {
+    assert.ok(isValidDomain('example.com'));
+    assert.ok(isValidDomain('a.b.example.com.'));
+    assert.ok(isValidDomain('nas'));
+    assert.ok(isValidDomain('xn--fiqs8s'));
+    assert.ok(!isValidDomain('not a domain!'));
+    assert.ok(!isValidDomain('-bad.example.com'));
+    assert.ok(!isValidDomain(''));
   });
 });
 
@@ -327,6 +357,68 @@ describe('ConfigGenerator', () => {
     try {
       const { stdout, stderr } = await execFileAsync(singBoxExe, ['check', '-c', tempConfigPath]);
       assert.ok(true, 'sing-box check succeeded without error');
+    } finally {
+      if (fs.existsSync(tempConfigPath)) {
+        fs.unlinkSync(tempConfigPath);
+      }
+    }
+  });
+
+  test('Compiles hosts records into predefined DNS rules ahead of all other rules', () => {
+    const dnsWithHosts: DnsConfig = {
+      ...defaultDns,
+      mode: 'fakeip',
+      hosts: [
+        { id: 'h1', domain: 'Example.COM.', ip: '10.0.0.5', enabled: true },
+        { id: 'h2', domain: 'example.com', ip: 'fd00::5', enabled: true },
+        { id: 'h3', domain: 'disabled.com', ip: '1.2.3.4', enabled: false },
+        { id: 'h4', domain: 'not a domain!', ip: '9.9.9.9', enabled: true },
+        { id: 'h5', domain: 'valid.example.org', ip: 'not-an-ip', enabled: true },
+      ],
+    };
+    const config = ConfigGenerator.generate('vless', sampleNodes, [], [], dnsWithHosts, defaultSettings);
+
+    const predefined = config.dns.rules.filter((r: any) => r.action === 'predefined');
+    assert.equal(predefined.length, 1, 'same domain v4+v6 merge into one rule');
+    // hosts 规则必须先于 fakeip 规则,否则 fakeip 先行接管导致映射失效
+    assert.ok(
+      config.dns.rules[0].action === 'predefined',
+      'predefined rule must be the first DNS rule'
+    );
+    const first = predefined[0];
+    assert.deepEqual(first.domain, ['example.com']);
+    assert.deepEqual(first.answer.sort(), [
+      'example.com. 60 IN A 10.0.0.5',
+      'example.com. 60 IN AAAA fd00::5',
+    ]);
+    assert.equal(first.rcode, 'NOERROR');
+    // 禁用与非法记录全部跳过,不进入配置
+    const allDomains = config.dns.rules.flatMap((r: any) => r.domain || []);
+    assert.ok(!allDomains.includes('disabled.com'));
+    assert.ok(!allDomains.includes('not a domain!'));
+    assert.ok(!allDomains.includes('valid.example.org'));
+  });
+
+  test('Validates hosts-containing config against sing-box.exe check (fakeip mode)', async () => {
+    const dnsWithHosts: DnsConfig = {
+      ...defaultDns,
+      mode: 'fakeip',
+      hosts: [
+        { id: 'h1', domain: 'git.internal.corp', ip: '10.20.30.40', enabled: true },
+        { id: 'h2', domain: 'mirror.internal.corp', ip: 'fd00::10', enabled: true },
+      ],
+    };
+    const config = ConfigGenerator.generate('vless', sampleNodes, [], [], dnsWithHosts, {
+      ...defaultSettings,
+      tunEnabled: true,
+    });
+    const tempConfigPath = path.resolve(__dirname, 'temp_test_hosts_config.json');
+    fs.writeFileSync(tempConfigPath, JSON.stringify(config, null, 2), 'utf-8');
+
+    const singBoxExe = path.resolve(__dirname, '../../bin/sing-box.exe');
+    try {
+      await execFileAsync(singBoxExe, ['check', '-c', tempConfigPath]);
+      assert.ok(true, 'sing-box check succeeded for hosts config');
     } finally {
       if (fs.existsSync(tempConfigPath)) {
         fs.unlinkSync(tempConfigPath);
