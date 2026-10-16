@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Select } from '../components/Select';
 import {
-  Settings as SettingsIcon,
   Sliders,
   Shield,
   Layers,
@@ -12,10 +12,8 @@ import {
   RotateCcw,
   Code2,
   Copy,
-  ExternalLink,
   RefreshCw,
   AlertTriangle,
-  FileText,
   X,
   Sparkles,
 } from 'lucide-react';
@@ -147,7 +145,7 @@ export const Settings: React.FC<SettingsProps> = ({
             <div className="flex items-center justify-between py-3">
               <div>
                 <h4 className="font-semibold text-slate-800 dark:text-slate-200">开机自动启动</h4>
-                <p className="text-[11px] text-slate-400">Windows 登录后自动在后台启动 OwnBox</p>
+                <p className="text-[11px] text-slate-400">Windows 登录后自动在后台启动 BlueBird</p>
               </div>
               <input
                 type="checkbox"
@@ -319,16 +317,16 @@ export const Settings: React.FC<SettingsProps> = ({
               <div>
                 <div className="flex items-center space-x-2">
                   <h4 className="font-semibold text-slate-800 dark:text-slate-200">TUN 协议栈实现 (Stack)</h4>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium">Sing-box 1.15+</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium">推荐</span>
                 </div>
-                <p className="text-[11px] text-slate-400">推荐使用 1.15 原生全新 TCP/IP 堆栈，官方独家自研，极致吞吐、超低延迟与低内存</p>
+                <p className="text-[11px] text-slate-400">推荐使用 Native 原生 TCP/IP 堆栈，极致吞吐、超低延迟与低内存</p>
               </div>
               <Select
                 value={formData.tunStack || 'native'}
                 onChange={(v) => setFormData({ ...formData, tunStack: v as any })}
                 className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
                 options={[
-                  { value: 'native', label: 'Native (Sing-box 1.15+ 原生自研堆栈，极速/推荐)' },
+                  { value: 'native', label: 'Native (原生自研堆栈，极速/推荐)' },
                   { value: 'system', label: 'System (旧版系统驱动协议栈)' },
                   { value: 'gvisor', label: 'gVisor (旧版 Google 纯用户态协议栈)' },
                   { value: 'mixed', label: 'Mixed (旧版混合协议栈)' },
@@ -574,8 +572,9 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* Inspect Live Config Modal */}
       {showConfigModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+        <Portal>
+        <div className="no-drag fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] overflow-hidden pop-enter">
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Code2 className="w-5 h-5 text-blue-600" />
@@ -607,7 +606,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
 
             <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between text-[11px] text-slate-500">
-              <span>此配置为当前送入 Sing-box 1.15 原生内核执行的真实完整 JSON。</span>
+              <span>此配置为当前送入 Sing-box 内核执行的真实完整 JSON。</span>
               <button
                 type="button"
                 onClick={() => setShowConfigModal(false)}
@@ -618,6 +617,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

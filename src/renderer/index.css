@@ -10,6 +10,73 @@
   }
 }
 
+/* 无边框窗口:任意空白区域可拖动窗口;交互元素与浮层(.no-drag)排除拖动 */
+body {
+  -webkit-app-region: drag;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+label,
+[contenteditable='true'],
+.no-drag,
+.no-drag * {
+  -webkit-app-region: no-drag;
+}
+
+/* 页面切换入场动画(配合 App 中 key={currentTab} 触发重放) */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-enter {
+  animation: page-enter 0.24s ease-out;
+}
+
+/* 浮层入场:弹窗表面轻微缩放淡入,遮罩/下拉纯淡入 */
+@keyframes pop-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.pop-enter {
+  animation: pop-enter 0.15s ease-out;
+}
+.fade-enter {
+  animation: page-enter 0.15s ease-out;
+}
+
+/* 内容区卡片/规则行统一悬停:边框提亮 + 阴影加深(不位移)
+   (限定 div 以排除按钮等交互控件;弹窗已 Portal 到 body,不受影响) */
+main div.rounded-xl.border,
+main div.rounded-2xl.border {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+main div.rounded-xl.border:hover,
+main div.rounded-2xl.border:hover {
+  border-color: rgba(148, 163, 184, 0.55);
+  box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.14);
+}
+.dark main div.rounded-xl.border:hover,
+.dark main div.rounded-2xl.border:hover {
+  border-color: rgba(71, 85, 105, 0.9);
+  box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.55);
+}
+
 /* Custom modern scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

@@ -1,17 +1,14 @@
 import React, { useState } from 'react';
-import {
-  Plus,
+import { Portal } from '../components/Portal';
+import {Plus,
   RefreshCw,
   Edit2,
   Trash2,
-  Copy,
   Rss,
   Clock,
   CheckCircle,
   AlertCircle,
-  ExternalLink,
-  X,
-} from 'lucide-react';
+  X,} from 'lucide-react';
 import { Subscription } from '../../types';
 import { toast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
@@ -250,7 +247,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
             暂无订阅链接
           </h4>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            添加机场或服务商提供的订阅链接，OwnBox 将自动下载所有节点并定期保持最新。
+            添加机场或服务商提供的订阅链接，BlueBird 将自动下载所有节点并定期保持最新。
           </p>
           <div className="pt-2">
             <button
@@ -265,7 +262,8 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
 
       {/* Add / Edit Subscription Modal */}
       {isAdding && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <Portal>
+        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
@@ -356,6 +354,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
             </form>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

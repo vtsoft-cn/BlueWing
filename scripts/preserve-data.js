@@ -15,8 +15,11 @@ function copyDir(from, to) {
 }
 
 function hasUserData(dir) {
-  const db = path.join(dir, 'ownbox.json');
-  if (!fs.existsSync(db)) return false;
+  // 兼容更名前的旧数据文件名,构建保全期间两者都认
+  const db = ['bluebird.json', 'ownbox.json']
+    .map((f) => path.join(dir, f))
+    .find((p) => fs.existsSync(p));
+  if (!db) return false;
   try {
     const d = JSON.parse(fs.readFileSync(db, 'utf8'));
     // 空库(全默认)不算有效数据,避免空状态反向覆盖

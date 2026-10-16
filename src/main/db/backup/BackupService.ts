@@ -26,7 +26,7 @@ export class BackupService {
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
-    return path.join(dataDir, 'OwnBox_latest.ownboxbackup');
+    return path.join(dataDir, 'BlueBird_latest.bluebirdbackup');
   }
 
   /**
@@ -73,7 +73,7 @@ export class BackupService {
   }
 
   /**
-   * Exports native Windows backup file content (.ownboxbackup).
+   * Exports native Windows backup file content (.bluebirdbackup).
    */
   public static async exportWindowsBackup(
     categories: BackupCategories = { profiles: true, rules: true, settings: true }
@@ -107,7 +107,7 @@ export class BackupService {
   }
 
   /**
-   * Maintains local automatic overwrite backup: OwnBox_latest.ownboxbackup and .bak.
+   * Maintains local automatic overwrite backup: BlueBird_latest.bluebirdbackup and .bak.
    */
   public static async createLocalBackup(): Promise<{ success: boolean; filePath: string }> {
     const targetPath = this.getLocalBackupPath();
@@ -143,7 +143,7 @@ export class BackupService {
   public static async restoreLocalBackup(): Promise<BackupImportResult> {
     const targetPath = this.getLocalBackupPath();
     if (!fs.existsSync(targetPath)) {
-      throw new Error('未找到本地备份文件 (OwnBox_latest.ownboxbackup)');
+      throw new Error('未找到本地备份文件 (BlueBird_latest.bluebirdbackup)');
     }
     const content = fs.readFileSync(targetPath, 'utf8');
     return this.importWithTransaction(content, { profiles: true, rules: true, settings: true }, 'replace');
@@ -177,10 +177,10 @@ export class BackupService {
   public static parseRawContent(content: string | Buffer): RawParsedBackupData {
     const detection = BackupValidator.detectFormat(content);
 
-    if (detection.format === 'ownbox_android') {
+    if (detection.format === 'bluebird_android') {
       const decoded = AndroidBackupDecoder.decode(content);
       return {
-        format: 'ownbox_android',
+        format: 'bluebird_android',
         nodes: decoded.nodes,
         subscriptions: decoded.subscriptions,
         rules: decoded.rules,
@@ -191,11 +191,11 @@ export class BackupService {
       };
     }
 
-    if (detection.format === 'ownbox_windows') {
+    if (detection.format === 'bluebird_windows') {
       const contentStr = typeof content === 'string' ? content : content.toString('utf8');
       const decoded = WindowsBackupCodec.decode(contentStr);
       return {
-        format: 'ownbox_windows',
+        format: 'bluebird_windows',
         nodes: decoded.nodes || [],
         subscriptions: decoded.subscriptions || [],
         rules: decoded.routing?.rules || [],
@@ -245,6 +245,6 @@ export class BackupService {
       }
     }
 
-    throw new Error('无法识别的备份文件格式，请确保上传的是有效的 OwnBox 备份文件或 Android 导出的备份文件');
+    throw new Error('无法识别的备份文件格式，请确保上传的是有效的备份文件');
   }
 }

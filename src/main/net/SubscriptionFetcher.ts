@@ -16,7 +16,7 @@ export interface SubscriptionFetchResult {
 
 export class SubscriptionFetcher {
   private static readonly USER_AGENTS = [
-    'sing-box/1.15.0-alpha.6',
+    'sing-box/1.14.3',
     'ClashMeta/1.18.0',
     'v2rayN/6.23',
   ].join(' ');

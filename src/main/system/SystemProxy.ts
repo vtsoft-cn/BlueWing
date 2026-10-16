@@ -11,7 +11,7 @@ export interface ProxySnapshot {
 }
 
 interface OwnershipState {
-  managedByOwnBox: boolean;
+  managedByBlueBird: boolean;
   managedServer?: string;
   originalSnapshot: ProxySnapshot;
   updatedAt: number;
@@ -67,7 +67,7 @@ export class SystemProxy {
   }
 
   /**
-   * Capture initial Windows system proxy configuration before OwnBox modifies it
+   * Capture initial Windows system proxy configuration before BlueBird modifies it
    */
   public static async captureOriginalSnapshot(): Promise<ProxySnapshot> {
     const current = await this.getFullRegistryStatus();
@@ -75,7 +75,7 @@ export class SystemProxy {
 
     if (!existing) {
       this.saveOwnership({
-        managedByOwnBox: false,
+        managedByBlueBird: false,
         originalSnapshot: current,
         updatedAt: Date.now(),
       });
@@ -131,7 +131,7 @@ export class SystemProxy {
 
       // Record ownership
       this.saveOwnership({
-        managedByOwnBox: true,
+        managedByBlueBird: true,
         managedServer: proxyServer,
         originalSnapshot: original,
         updatedAt: Date.now(),
@@ -161,7 +161,7 @@ export class SystemProxy {
 
       const state = this.loadOwnership();
       if (state) {
-        state.managedByOwnBox = false;
+        state.managedByBlueBird = false;
         this.saveOwnership(state);
       }
 
@@ -174,7 +174,7 @@ export class SystemProxy {
   }
 
   /**
-   * Restore user's original proxy configuration upon quitting OwnBox with ownership verification
+   * Restore user's original proxy configuration upon quitting BlueBird with ownership verification
    */
   public static async restoreOriginal(): Promise<void> {
     const state = this.loadOwnership();
@@ -184,7 +184,7 @@ export class SystemProxy {
     }
 
     try {
-      // 1. Check ownership: Verify current registry proxy server matches what OwnBox set
+      // 1. Check ownership: Verify current registry proxy server matches what BlueBird set
       const current = await this.getFullRegistryStatus();
       if (state.managedServer && current.server && current.server !== state.managedServer) {
         LogManager.getInstance().addLog(
@@ -228,7 +228,7 @@ export class SystemProxy {
   }
 
   /**
-   * Check for residual OwnBox proxy on startup (e.g. after crash or sudden reboot)
+   * Check for residual BlueBird proxy on startup (e.g. after crash or sudden reboot)
    */
   public static async checkAndCleanResidual(expectedPort: number = 2080): Promise<boolean> {
     try {
@@ -236,7 +236,7 @@ export class SystemProxy {
       if (current.enabled && current.server && current.server.includes(`127.0.0.1:${expectedPort}`)) {
         LogManager.getInstance().addLog(
           'warn',
-          `检测到上次异常退出残留的 OwnBox 系统代理配置 (127.0.0.1:${expectedPort})，正在自动安全重置...`,
+          `检测到上次异常退出残留的 BlueBird 系统代理配置 (127.0.0.1:${expectedPort})，正在自动安全重置...`,
           'system'
         );
         await this.restoreOriginal();

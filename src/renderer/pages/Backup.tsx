@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
-import {
-  HardDrive,
+import {HardDrive,
   CloudUpload,
-  CloudDownload,
   Share2,
   Smartphone,
   Check,
   RefreshCw,
   Save,
-  FileText,
   AlertCircle,
   AlertTriangle,
   Layers,
@@ -18,9 +16,7 @@ import {
   CheckCircle2,
   Download,
   Upload,
-  Settings as SettingsIcon,
-  RotateCcw,
-} from 'lucide-react';
+  RotateCcw,} from 'lucide-react';
 import {
   AppSettings,
   WebDAVConfig,
@@ -68,7 +64,7 @@ export const Backup: React.FC<BackupProps> = ({
       serverUrl: '',
       username: '',
       password: '',
-      remotePath: 'OwnBox',
+      remotePath: 'BlueBird',
       autoSync: false,
     }
   );
@@ -81,7 +77,7 @@ export const Backup: React.FC<BackupProps> = ({
   const [pendingFileContent, setPendingFileContent] = useState<string | null>(null);
   const [pendingFileName, setPendingFileName] = useState<string>('');
   const [previewResult, setPreviewResult] = useState<BackupPreviewResult | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [, setIsPreviewLoading] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge');
   const [isImporting, setIsImporting] = useState(false);
@@ -137,13 +133,13 @@ export const Backup: React.FC<BackupProps> = ({
     }
   };
 
-  // 2. Action: 导出到文件 (Windows native .ownboxbackup)
+  // 2. Action: 导出到文件 (Windows native .bluebirdbackup)
   const handleExportWindows = async () => {
     if (!window.electronAPI?.backup) return;
     try {
       const data = await window.electronAPI.backup.exportData(exportCategories);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      downloadFile(data, `BlueBird_Win_Backup_${timestamp}.ownboxbackup`);
+      downloadFile(data, `BlueBird_Win_Backup_${timestamp}.bluebirdbackup`);
       setActionNotice({
         type: 'success',
         message: 'Windows 桌面端备份文件已生成并下载。',
@@ -162,11 +158,11 @@ export const Backup: React.FC<BackupProps> = ({
     try {
       const data = await window.electronAPI.backup.exportAndroid(exportCategories);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      downloadFile(data, `OwnBox_backup_android_${timestamp}.json`);
+      downloadFile(data, `BlueBird_backup_android_${timestamp}.json`);
       setActionNotice({
         type: 'success',
         message: 'Android 手机端兼容备份已成功生成！',
-        details: '该文件符合 OwnBox 手机端原生 Base64 Parcel 规范，手机端可直接点击“从文件导入”无损恢复。',
+        details: '该文件符合手机端原生 Base64 Parcel 规范，手机端可直接点击“从文件导入”无损恢复。',
       });
     } catch (e: any) {
       setActionNotice({
@@ -248,7 +244,7 @@ export const Backup: React.FC<BackupProps> = ({
     }
   };
 
-  // 6. Action: Local Overwrite Backup (OwnBox_latest.ownboxbackup)
+  // 6. Action: Local Overwrite Backup (BlueBird_latest.bluebirdbackup)
   const handleCreateLocalBackup = async () => {
     if (!window.electronAPI?.backup) return;
     try {
@@ -257,7 +253,7 @@ export const Backup: React.FC<BackupProps> = ({
         await loadLocalBackupInfo();
         setActionNotice({
           type: 'success',
-          message: '本地最新覆盖备份 (OwnBox_latest.ownboxbackup) 已更新！',
+          message: '本地最新覆盖备份 (BlueBird_latest.bluebirdbackup) 已更新！',
           details: '系统已原子写入最新快照并自动留存上一次状态为 .bak 备份。',
         });
       }
@@ -271,7 +267,7 @@ export const Backup: React.FC<BackupProps> = ({
 
   const handleRestoreLocalBackup = async () => {
     if (!window.electronAPI?.backup) return;
-    if (!(await confirmDialog({ title: '恢复本地备份', message: '确定要从本地最新备份 (OwnBox_latest.ownboxbackup) 覆盖还原当前全部配置吗？', danger: true }))) return;
+    if (!(await confirmDialog({ title: '恢复本地备份', message: '确定要从本地最新备份 (BlueBird_latest.bluebirdbackup) 覆盖还原当前全部配置吗？', danger: true }))) return;
 
     try {
       const res = await window.electronAPI.backup.restoreLocalBackup();
@@ -398,7 +394,7 @@ export const Backup: React.FC<BackupProps> = ({
               <span>跨端备份、迁移与同步中心</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              打通 OwnBox Android 手机端与 Windows 桌面端备份体系，支持三项分类独立选择与安全合并
+              打通 Android 手机端与 Windows 桌面端备份体系，支持三项分类独立选择与安全合并
             </p>
           </div>
 
@@ -473,7 +469,7 @@ export const Backup: React.FC<BackupProps> = ({
                 <Download className="w-5 h-5" />
               </div>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                .ownboxbackup
+                .bluebirdbackup
               </span>
             </div>
             <div>
@@ -508,14 +504,14 @@ export const Backup: React.FC<BackupProps> = ({
                 从文件导入
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
-                导入 .ownboxbackup 或通用备份文件，自动解析并弹窗确认变更明细。
+                导入 .bluebirdbackup 或通用备份文件，自动解析并弹窗确认变更明细。
               </p>
               <label className="w-full py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center justify-center space-x-1.5 cursor-pointer transition-colors shadow-sm shadow-emerald-500/20">
                 <CloudUpload className="w-3.5 h-3.5" />
                 <span>选择备份文件</span>
                 <input
                   type="file"
-                  accept=".ownboxbackup,.json,.zip"
+                  accept=".bluebirdbackup,.json,.zip"
                   onChange={(e) => handleSelectImportFile(e, false)}
                   className="hidden"
                 />
@@ -523,7 +519,7 @@ export const Backup: React.FC<BackupProps> = ({
             </div>
           </div>
 
-          {/* Button 4: 从 OwnBox 手机端导入 (Import from Mobile) */}
+          {/* Button 4: 从手机端导入 (Import from Mobile) */}
           <div className="p-4 rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 to-pink-50/30 dark:from-purple-950/20 dark:to-pink-950/10 hover:border-purple-400 dark:hover:border-purple-700 transition-all text-left flex flex-col justify-between group shadow-sm">
             <div className="flex items-center justify-between w-full mb-3">
               <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/25 group-hover:scale-105 transition-transform">
@@ -538,7 +534,7 @@ export const Backup: React.FC<BackupProps> = ({
                 从手机端导入
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
-                一键解码 OwnBox Android 导出的 Base64 Parcel 备份，智能映射节点与分组。
+                一键解码手机端导出的 Base64 Parcel 备份，智能映射节点与分组。
               </p>
               <label className="w-full py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium flex items-center justify-center space-x-1.5 cursor-pointer transition-colors shadow-sm shadow-purple-500/20">
                 <Smartphone className="w-3.5 h-3.5" />
@@ -588,7 +584,7 @@ export const Backup: React.FC<BackupProps> = ({
           <div>
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center space-x-2">
               <HardDrive className="w-4 h-4 text-indigo-500" />
-              <span>本地自动覆盖备份 (OwnBox_latest.ownboxbackup)</span>
+              <span>本地自动覆盖备份 (BlueBird_latest.bluebirdbackup)</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               系统独立维护本地最新状态快照与 .bak 双保险副本，与手动导出文件严格分离
@@ -710,7 +706,7 @@ export const Backup: React.FC<BackupProps> = ({
               type="text"
               value={webdavForm.remotePath}
               onChange={(e) => setWebdavForm({ ...webdavForm, remotePath: e.target.value })}
-              placeholder="OwnBox"
+              placeholder="BlueBird"
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
             />
           </div>
@@ -789,8 +785,9 @@ export const Backup: React.FC<BackupProps> = ({
 
       {/* 4. Dry-Run Import Preview Modal */}
       {previewModalOpen && previewResult && (
-        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <Portal>
+        <div className="no-drag fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden pop-enter">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
               <div className="flex items-center space-x-2.5">
@@ -804,10 +801,10 @@ export const Backup: React.FC<BackupProps> = ({
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     来源文件: <span className="font-mono">{pendingFileName}</span> (识别格式:{' '}
                     <span className="font-semibold text-blue-600 dark:text-blue-400">
-                      {previewResult.format === 'ownbox_android'
-                        ? 'OwnBox Android 手机端备份'
-                        : previewResult.format === 'ownbox_windows'
-                        ? 'OwnBox Windows 桌面端备份'
+                      {previewResult.format === 'bluebird_android'
+                        ? 'Android 手机端备份'
+                        : previewResult.format === 'bluebird_windows'
+                        ? 'Windows 桌面端备份'
                         : previewResult.format === 'singbox_config'
                         ? 'Sing-box 原生配置'
                         : '通用配置'}
@@ -1048,6 +1045,7 @@ export const Backup: React.FC<BackupProps> = ({
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

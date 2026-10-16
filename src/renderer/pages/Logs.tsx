@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Terminal,
-  Trash2,
+import {Trash2,
   Copy,
   Pause,
   Play,
   Search,
   Download,
-  Filter,
-  Check,
-} from 'lucide-react';
+  Check,} from 'lucide-react';
 import { LogEntry } from '../../types';
 import { toast } from '../components/Toast';
 
@@ -93,7 +89,7 @@ export const Logs: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ownbox_log_${Date.now()}.txt`;
+    a.download = `bluebird_log_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Portal } from '../components/Portal';
 import {
   X,
   Play,
@@ -177,7 +178,8 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
   const speedData = formatSpeed(downloadSpeed);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in duration-150">
+    <Portal>
+    <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 fade-enter">
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 border border-slate-200/90 dark:border-slate-800/90 shadow-2xl space-y-5 text-slate-900 dark:text-slate-100">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
@@ -450,5 +452,6 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
         </div>
       </div>
     </div>
+    </Portal>
   );
 };

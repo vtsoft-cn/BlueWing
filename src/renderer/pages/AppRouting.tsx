@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, LayoutGrid, Check, X, RefreshCw, AppWindow } from 'lucide-react';
+import { Portal } from '../components/Portal';
+import {Plus, Trash2, X, RefreshCw, AppWindow} from 'lucide-react';
 import { AppRule, InstalledAppInfo } from '../../types';
 import { toast } from '../components/Toast';
 
@@ -14,7 +15,7 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
   const [showAddModal, setShowAddModal] = useState(false);
   const [customName, setCustomName] = useState('');
   const [customPath, setCustomPath] = useState('');
-  const [customAction, setCustomAction] = useState<'proxy' | 'direct' | 'block'>('proxy');
+  const [customAction] = useState<'proxy' | 'direct' | 'block'>('proxy');
 
   const fetchRunningApps = async () => {
     if (!window.electronAPI) return;
@@ -193,7 +194,8 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
 
       {/* Add App Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <Portal>
+        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
@@ -267,6 +269,7 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
             </form>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

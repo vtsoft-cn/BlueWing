@@ -32,20 +32,9 @@ interface SidebarProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   theme: 'light' | 'dark';
-  coreState: string;
-  activeNodeName?: string;
-  latency?: number;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  currentTab,
-  onSelectTab,
-  theme,
-  coreState,
-  activeNodeName,
-  latency,
-}) => {
-  const isConnected = coreState === 'running';
+export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, theme }) => {
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: '首页', icon: <Home className="w-4 h-4" /> },
@@ -61,7 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className="w-56 h-full flex flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-3 select-none flex-shrink-0">
-      {/* Top Branding */}
+      {/* Top Branding(空白区域可拖动窗口,全局规则) */}
       <div className="space-y-4">
         <div className="flex items-center space-x-3 px-2 py-1">
           <img
@@ -100,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom Area: Settings, About, Connection Pill */}
+      {/* Bottom Area: Settings & About */}
       <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
         <button
           onClick={() => onSelectTab('settings')}
@@ -125,32 +114,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Info className="w-4 h-4" />
           <span>关于</span>
         </button>
-
-        {/* Status Card at very bottom */}
-        <div className="p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span
-                className={`w-2.5 h-2.5 rounded-full ${
-                  isConnected
-                    ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50'
-                    : 'bg-slate-400 dark:bg-slate-600'
-                }`}
-              />
-              <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
-                {isConnected ? '已连接' : '已断开'}
-              </span>
-            </div>
-            {isConnected && latency !== undefined && latency > 0 && (
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10">
-                {latency} ms
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] font-normal text-slate-500 dark:text-slate-400 mt-1 truncate">
-            {activeNodeName || '未选择节点'}
-          </p>
-        </div>
       </div>
     </aside>
   );

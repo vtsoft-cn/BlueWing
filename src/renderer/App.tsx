@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { TitleBar } from './components/TitleBar';
 import { Sidebar, NavTab } from './components/Sidebar';
+import { PageHeader } from './components/PageHeader';
 import { ToastHost, toast } from './components/Toast';
 import { ConfirmDialogHost } from './components/ConfirmDialog';
 import { Dashboard } from './pages/Dashboard';
@@ -27,7 +27,7 @@ import {
 // 首帧主题初始值:与 index.html 的早期脚本一致——优先取上次使用的主题设置,首次启动跟随系统
 const initialTheme: AppSettings['theme'] = (() => {
   try {
-    const t = localStorage.getItem('ownbox:theme');
+    const t = localStorage.getItem('bluebird:theme');
     if (t === 'dark' || t === 'light' || t === 'system') return t;
   } catch {}
   return 'system';
@@ -36,7 +36,7 @@ const initialTheme: AppSettings['theme'] = (() => {
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [coreState, setCoreState] = useState<string>('stopped');
-  const [coreVersion, setCoreVersion] = useState<string>('1.15.0-alpha.6');
+  const [coreVersion, setCoreVersion] = useState<string>('1.14.3');
   const [nodes, setNodes] = useState<ProxyNode[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<string>('');
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -80,7 +80,7 @@ export const App: React.FC = () => {
       serverUrl: '',
       username: '',
       password: '',
-      remotePath: 'OwnBox',
+      remotePath: 'BlueBird',
       autoSync: false,
     },
   });
@@ -180,7 +180,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     // 持久化主题设置,供下次启动的 index.html 早期脚本用作首帧初始值
     try {
-      localStorage.setItem('ownbox:theme', settings.theme);
+      localStorage.setItem('bluebird:theme', settings.theme);
     } catch {}
     document.documentElement.classList.toggle('dark', isDark);
   }, [isDark, settings.theme]);
@@ -261,27 +261,25 @@ export const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-100/70 dark:bg-slate-950 text-slate-800 dark:text-slate-100">
-      {/* 1. Window TitleBar */}
-      <TitleBar
-        theme={isDark ? 'dark' : 'light'}
-        coreState={coreState}
-        activeNodeName={activeNode?.name}
-      />
-
-      {/* 2. Workspace Body: Sidebar + Main Content */}
+      {/* Workspace Body: Sidebar 通顶 + 右侧(页头 + 内容);空白区域可拖动窗口 */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
           theme={isDark ? 'dark' : 'light'}
-          coreState={coreState}
-          activeNodeName={activeNode?.name}
-          latency={activeNode?.ping}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-5xl mx-auto">
+        {/* Right Column: PageHeader + Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <PageHeader
+            coreState={coreState}
+            activeNodeName={activeNode?.name}
+            latency={activeNode?.ping}
+          />
+
+          {/* Main Content Area(key 随页签变化,触发入场动画;no-drag 保证滚动条可交互) */}
+          <main className="flex-1 overflow-y-auto p-6 no-drag">
+          <div key={currentTab} className="max-w-5xl mx-auto page-enter">
             {currentTab === 'dashboard' && (
               <Dashboard
                 coreState={coreState}
@@ -363,6 +361,7 @@ export const App: React.FC = () => {
             )}
           </div>
         </main>
+        </div>
       </div>
 
       {/* 全局轻提示与确认对话框 */}

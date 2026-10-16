@@ -46,7 +46,7 @@ export const ConfirmDialogHost: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      className="no-drag fixed inset-0 z-[210] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={() => close(false)}
     >
       <div

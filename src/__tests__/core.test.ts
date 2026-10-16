@@ -30,7 +30,7 @@ const defaultSettings: AppSettings = {
   systemProxyBypassLan: true,
   tunEnabled: false,
   tunStack: 'system',
-  tunDevice: 'OwnBoxTun',
+  tunDevice: 'BlueBirdTun',
   tunMtu: 9000,
   tunStrictRoute: false,
   tunEndpointIndependentNat: true,

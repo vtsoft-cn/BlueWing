@@ -1,6 +1,6 @@
 /**
  * WindowsBackupCodec.ts
- * Codec for OwnBox Windows native backup format (.ownboxbackup).
+ * Codec for BlueBird Windows native backup format (.bluebirdbackup).
  * Schema version 2 with backward-compatibility for schema version 1.
  * Supports partial category export/import (profiles, rules, settings).
  */
@@ -66,7 +66,7 @@ export class WindowsBackupCodec {
     }
 
     if (!parsed.schema_version && !parsed.nodes && !parsed.subscriptions && !parsed.routing && !parsed.settings) {
-      throw new Error('Not a valid OwnBox Windows backup file');
+      throw new Error('Not a valid BlueBird backup file');
     }
 
     return parsed;

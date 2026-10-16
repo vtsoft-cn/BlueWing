@@ -4,7 +4,7 @@ import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../../typ
 
 export class ConfigGenerator {
   /**
-   * Generates a complete, standard Sing-box JSON configuration strictly compliant with Sing-box 1.14 / 1.15
+   * Generates a complete, standard Sing-box JSON configuration strictly compliant with Sing-box 1.14
    */
   public static generate(
     activeNodeId: string,
@@ -57,8 +57,7 @@ export class ConfigGenerator {
         endpoint_independent_nat: settings.tunEndpointIndependentNat !== false,
       };
 
-      // In Sing-box 1.15.0+, the new native TCP/IP stack is used when `stack` is omitted.
-      // Only set legacy `stack` when user explicitly chooses 'system', 'gvisor', or 'mixed'.
+      // `native` 堆栈通过省略 stack 字段表达;显式选择 system/gvisor/mixed 时才写入 legacy stack
       if (settings.tunStack && settings.tunStack !== 'native') {
         tunInbound.stack = settings.tunStack;
       }
@@ -112,8 +111,8 @@ export class ConfigGenerator {
       default: 'direct',
     });
 
-    // 3. DNS Configuration (Sing-box 1.14 / 1.15 compliant)
-    // Note: direct-dns must NOT have detour: 'direct' because detour to empty direct outbound is fatal in sing-box 1.15
+    // 3. DNS Configuration (Sing-box 1.14 compliant)
+    // Note: direct-dns must NOT have detour: 'direct' because detour to empty direct outbound is fatal in sing-box
     const dnsServers: any[] = [
       this.parseDnsServer('remote-dns', dns.remoteDns || 'https://1.1.1.1/dns-query', 'proxy'),
       this.parseDnsServer('direct-dns', dns.directDns || '223.5.5.5'),
@@ -193,7 +192,7 @@ export class ConfigGenerator {
       dnsConfig.cache_capacity = 4096;
     }
 
-    // 4. HTTP Clients for remote rule sets (Mandatory in Sing-box 1.14 / 1.15)
+    // 4. HTTP Clients for remote rule sets (Mandatory in Sing-box 1.14)
     // Note: Do not set detour: 'direct' here to avoid empty direct outbound error
     const http_clients = [
       {
@@ -450,8 +449,8 @@ export class ConfigGenerator {
 
   /** 定位本地规则目录:优先用户数据目录(更新规则按钮写入的最新数据),其次应用内置(随包分发);都找不到返回 null(回退远程规则) */
   private static locateRulesDir(): string | null {
-    const dataRules = process.env.OWNBOX_DATA_DIR
-      ? path.join(process.env.OWNBOX_DATA_DIR, 'rules')
+    const dataRules = process.env.BLUEBIRD_DATA_DIR
+      ? path.join(process.env.BLUEBIRD_DATA_DIR, 'rules')
       : '';
     const candidates = [
       dataRules,

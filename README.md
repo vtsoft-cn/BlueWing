@@ -1,7 +1,7 @@
-# OwnBox (Windows PC 客户端)
+# 青鸟 BlueBird (Windows PC 客户端)
 
 <p align="center">
-  <img src="src/renderer/assets/logo-light.png" width="128" height="128" alt="OwnBox Logo">
+  <img src="src/renderer/assets/light.svg" width="128" height="128" alt="BlueBird Logo">
   <br>
   <b>基于 Sing-box 官方原生核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
   <br>
@@ -9,33 +9,31 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Own716/OwnBoxForWin/releases"><img src="https://img.shields.io/badge/Release-v1.0.4-blue.svg?style=flat-square" alt="Version"></a>
+  <a href="https://gitee.com/vtsoft_cn/blue-bird"><img src="https://img.shields.io/badge/Gitee-vtsoft__cn%2Fblue--bird-C71D23.svg?logo=gitee&style=flat-square" alt="Gitee"></a>
   <a href="https://www.microsoft.com/windows"><img src="https://img.shields.io/badge/Platform-Windows%20x64-brightgreen.svg?style=flat-square" alt="Platform"></a>
-  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square" alt="License"></a>
-  <a href="https://t.me/OwnBoxs"><img src="https://img.shields.io/badge/Telegram-@OwnBoxs-2CA5E0.svg?logo=telegram&style=flat-square" alt="Telegram"></a>
 </p>
 
 ---
 
 ## 📖 项目介绍 / Introduction
 
-**OwnBox for Windows** 是专门面向 PC 桌面环境深度重构的原生通用网络代理与网络调试工具。以 Android 版 OwnBox 产品特性为功能基准，针对桌面大屏操作与 Windows 平台特性进行了全新原生架构设计。
+**青鸟 BlueBird** 是专门面向 PC 桌面环境深度打造的原生通用网络代理与网络调试工具,针对桌面大屏操作与 Windows 平台特性进行了全新原生架构设计。
 
-软件基于官方原生 **Sing-box 1.15.x** 核心构建，原生集成微软签名 **Wintun 0.14.1** 网卡驱动，全面支持 VLESS（含 Reality 伪装与 XHTTP / SplitHTTP 传输）、VMess、Trojan、Shadowsocks、Hysteria 1 / 2、TUIC、WireGuard、SOCKS5、HTTP 等全协议栈，提供毫秒级 TCP 握手测速、零断流节点热重载、Windows 进程应用级分流、防污染 FakeIP DNS 解析、WebDAV 云端多端同步与系统托盘快捷控制。
+软件基于官方原生 **Sing-box 1.14.3 稳定版**核心构建(全量构建标签,内置 NaiveProxy 支持),原生集成微软签名 **Wintun 0.14.1** 网卡驱动,全面支持 VLESS(含 Reality 伪装)、VMess、Trojan、Shadowsocks、Hysteria 1 / 2、TUIC、WireGuard、NaiveProxy、SOCKS5、HTTP 等全协议栈,提供毫秒级 TCP 握手测速、零断流节点热重载、Windows 进程应用级分流、防污染 FakeIP DNS 解析、WebDAV 云端多端同步与系统托盘快捷控制。
 
 ---
 
 ## 🚀 核心特性 / Features
 
-* **现代桌面原生 UI**：无边框 Fluent 玻璃拟态设计，系统浅色 / 深色主题无缝切换，自适应官方深浅双色 Logo；
-* **官方原生代理核心**：基于最新官方 Sing-box 1.15.0 原生二进制，集成 gVisor 高性能网络协议栈与 Clash API 监控；
+* **现代桌面原生 UI**：无边框设计(任意空白区域可拖动窗口)、页头状态栏与内嵌窗口控制,系统浅色 / 深色主题无缝切换,页面切换与卡片交互动效;
+* **官方原生代理核心**：基于官方 Sing-box 1.14.3 稳定版原生二进制,集成 gVisor 高性能网络协议栈与 Clash API 监控;
 * **零断流节点热切换**：集成 Clash API 动态热重载选择器，节点切换瞬间完成，零断流不断网；
 * **全协议栈与最新传输**：
-  * 支持 **VLESS** (支持 `xtls-rprx-vision` 流控、Reality 伪装、gRPC / WebSocket 以及最新 **XHTTP** 传输)；
-  * 支持 **VMess**, **Trojan**, **Shadowsocks**, **ShadowsocksR**；
+  * 支持 **VLESS** (支持 `xtls-rprx-vision` 流控、Reality 伪装、gRPC / WebSocket 传输);
+  * 支持 **VMess**, **Trojan**, **Shadowsocks**;
   * 支持 **Hysteria 1 / 2** (含 Salamander 混淆)；
   * 支持 **TUIC v5** (原生 QUIC 拥塞控制)；
-  * 支持 **WireGuard**、**Snell**、**SOCKS5**、**HTTP**；
+  * 支持 **WireGuard**(sing-box endpoint 架构)、**NaiveProxy**(真实 Chrome TLS 指纹,内置 libcronet)、**SOCKS5**、**HTTP**;
 * **双模式代理接管**：
   * **Windows 系统代理**：真实操纵注册表与 WinINet API，智能绕过局域网地址，所有权跟踪与异常启动自动修复；
   * **TUN 虚拟网卡**：基于 Wintun 0.14.1 驱动，全局透明接管所有软件网络流量，支持 DNS 劫持防护；
@@ -59,14 +57,14 @@
 
 ## 📥 发行版下载 / Download
 
-请前往 GitHub Releases 官方发布页面获取经过编译的 Windows 正式版本：
+请前往 Gitee 仓库获取经过编译的 Windows 正式版本：
 
-👉 **[前往 GitHub Releases 官方发布页面](https://github.com/Own716/OwnBoxForWin/releases)**
+👉 **[前往 Gitee 仓库](https://gitee.com/vtsoft_cn/blue-bird)**
 
 | 安装包类型 | 文件名 | 适用场景 |
 | :--- | :--- | :--- |
-| **Windows 安装版** | `OwnBox-Setup.exe` | 推荐普通用户使用，自动创建开始菜单与桌面快捷方式，支持卸载 |
-| **便携绿色版** | `OwnBox-1.0.4-x64.zip` | 解压即用，适合存放在移动硬盘中随时携带使用 |
+| **Windows 安装版** | `BlueBird-Setup.exe` | 推荐普通用户使用，自动创建开始菜单与桌面快捷方式，支持卸载 |
+| **便携绿色版** | `release/win-unpacked/` 目录 | 解压即用，数据保存在 exe 同级 data/ 目录,适合移动硬盘随身携带 |
 
 ---
 
@@ -75,13 +73,12 @@
 ### 依赖环境
 * Node.js >= 20.0
 * npm >= 10.0
-* Go >= 1.22 (如需自行编译 Sing-box 核心)
 
 ### 编译步骤
 ```bash
 # 1. 克隆代码仓库
-git clone https://github.com/Own716/OwnBoxForWin.git
-cd OwnBoxForWin
+git clone https://gitee.com/vtsoft_cn/blue-bird.git
+cd blue-bird
 
 # 2. 安装前端与桌面依赖
 npm install
@@ -92,18 +89,13 @@ npm run dev
 # 4. 运行全量单元与集成测试套件 (35 项测试)
 npm test
 
-# 5. 构建前端与主进程
+# 5. 构建前端与主进程(自动从 src/icon 同步图标)
 npm run build
 
 # 6. 打包生成 Windows 安装程序与免安装目录
-npm run dist:dir
+npm run dist
 ```
 构建产物将保存在 `release/` 目录中：
-- `release/win-unpacked/OwnBox.exe`
-- `release/OwnBox-Setup.exe`
+- `release/win-unpacked/BlueBird.exe`
+- `release/BlueBird-Setup.exe`
 
----
-
-## 📄 开源许可证 / License
-
-本项目基于 [GNU General Public License v3.0 (GPL-3.0)](LICENSE) 协议开源。

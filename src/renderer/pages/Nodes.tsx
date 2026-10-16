@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Portal } from '../components/Portal';
 import { toast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
-import {
-  Plus,
+import {Plus,
   Search,
   Zap,
   Star,
@@ -17,10 +17,7 @@ import {
   ChevronDown,
   Filter,
   CheckCircle2,
-  Radio,
-  ExternalLink,
-  Activity,
-} from 'lucide-react';
+  Activity,} from 'lucide-react';
 import { ProxyNode, Subscription } from '../../types';
 import { NodeEditorModal } from './NodeEditorModal';
 import { SingleNodeSpeedModal } from './SingleNodeSpeedModal';
@@ -89,7 +86,7 @@ export const Nodes: React.FC<NodesProps> = ({
   const [selectedGroup, setSelectedGroup] = useState('all'); // subscription group
   const [selectedRegion, setSelectedRegion] = useState('all'); // country / region
   const [sortBy, setSortByState] = useState<'default' | 'ping-asc' | 'ping-desc' | 'name-asc' | 'type' | 'starred' | 'speed-desc'>(() => {
-    const saved = localStorage.getItem('ownbox_node_sort_by');
+    const saved = localStorage.getItem('bluebird_node_sort_by');
     if (saved && ['default', 'ping-asc', 'ping-desc', 'name-asc', 'type', 'starred', 'speed-desc'].includes(saved)) {
       return saved as any;
     }
@@ -99,7 +96,7 @@ export const Nodes: React.FC<NodesProps> = ({
   const setSortBy = (val: 'default' | 'ping-asc' | 'ping-desc' | 'name-asc' | 'type' | 'starred' | 'speed-desc') => {
     setSortByState(val);
     try {
-      localStorage.setItem('ownbox_node_sort_by', val);
+      localStorage.setItem('bluebird_node_sort_by', val);
     } catch {
       // ignore
     }
@@ -379,7 +376,7 @@ export const Nodes: React.FC<NodesProps> = ({
 
             {/* Dropdown Menu Window */}
             {showSortDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-1.5 z-40 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-1.5 z-40 text-xs space-y-0.5 fade-enter">
                 <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                   选择排序方式
                 </div>
@@ -525,7 +522,7 @@ export const Nodes: React.FC<NodesProps> = ({
               <div
                 key={node.id}
                 onClick={() => onSelectNode(node.id)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
+                className={`p-4 rounded-2xl border transition-all duration-200 cursor-pointer relative group flex flex-col justify-between ${
                   isSelected
                     ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/25 shadow-sm shadow-blue-500/10 ring-1 ring-blue-500/30'
                     : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm'
@@ -734,7 +731,8 @@ export const Nodes: React.FC<NodesProps> = ({
 
       {/* Import Links Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <Portal>
+        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
               批量导入节点链接
@@ -765,6 +763,7 @@ export const Nodes: React.FC<NodesProps> = ({
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Single Node Speed Modal */}

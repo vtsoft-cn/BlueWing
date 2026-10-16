@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Globe, Server, Check, Zap, Save } from 'lucide-react';
+import {Check, Zap, Save} from 'lucide-react';
 import { DnsConfig } from '../../types';
 
 interface DNSProps {

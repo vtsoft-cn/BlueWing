@@ -20,16 +20,15 @@ export class Database {
   private settings: AppSettings;
 
   private saveTimer: NodeJS.Timeout | null = null;
-  private isDirty = false;
 
   private constructor(customDir?: string) {
     if (customDir) {
       this.dataDir = customDir;
     } else {
-      // 便携模式:主进程设置 OWNBOX_DATA_DIR(exe 同级 data/);未设置时回退 %APPDATA%\OwnBox
+      // 便携模式:主进程设置 BLUEBIRD_DATA_DIR(exe 同级 data/);未设置时回退 %APPDATA%\BlueBird
       const appData =
-        process.env.OWNBOX_DATA_DIR ||
-        path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'), 'OwnBox');
+        process.env.BLUEBIRD_DATA_DIR ||
+        path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'), 'BlueBird');
       this.dataDir = appData;
     }
 
@@ -37,7 +36,17 @@ export class Database {
       fs.mkdirSync(this.dataDir, { recursive: true });
     }
 
-    this.dbPath = path.join(this.dataDir, 'ownbox.json');
+    this.dbPath = path.join(this.dataDir, 'bluebird.json');
+
+    // 一次性迁移:更名前的旧数据文件自动改用新名(内容格式不变)
+    const legacyDb = path.join(this.dataDir, 'ownbox.json');
+    if (!fs.existsSync(this.dbPath) && fs.existsSync(legacyDb)) {
+      try {
+        fs.renameSync(legacyDb, this.dbPath);
+        const legacyBak = `${legacyDb}.bak`;
+        if (fs.existsSync(legacyBak)) fs.renameSync(legacyBak, `${this.dbPath}.bak`);
+      } catch {}
+    }
 
     // Default DNS
     this.dns = {
@@ -93,7 +102,7 @@ export class Database {
         serverUrl: '',
         username: '',
         password: '',
-        remotePath: 'OwnBox',
+        remotePath: 'BlueBird',
         autoSync: false,
       },
     };
@@ -219,7 +228,7 @@ export class Database {
   private applyData(data: any): void {
     if (Array.isArray(data.nodes)) {
       this.nodes = (data.nodes as ProxyNode[]).filter(
-        (n) => n && n.id && (!n.server || !n.server.includes('ownbox.org'))
+        (n) => n && n.id
       );
     }
     if (Array.isArray(data.subscriptions)) {
@@ -269,7 +278,7 @@ export class Database {
    */
   public save(debounceMs = 0): void {
     if (debounceMs > 0) {
-      this.isDirty = true;
+     
       if (this.saveTimer) {
         clearTimeout(this.saveTimer);
       }
@@ -335,7 +344,7 @@ export class Database {
 
       // 3. Rename temp file to target file
       fs.renameSync(tempPath, this.dbPath);
-      this.isDirty = false;
+     
     } catch (e) {
       console.error('Failed to save database atomically:', e);
       try {
@@ -453,7 +462,7 @@ export class Database {
         serverUrl: '',
         username: '',
         password: '',
-        remotePath: 'OwnBox',
+        remotePath: 'BlueBird',
         autoSync: false,
       },
     };

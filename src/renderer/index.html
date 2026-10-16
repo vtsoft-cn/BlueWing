@@ -9,7 +9,7 @@
       // 首次启动(无存储)跟随系统;之后以上次使用的主题设置为初始值,后续由 App.tsx 实时跟随系统调整。
       (function () {
         try {
-          var theme = localStorage.getItem('ownbox:theme') || 'system';
+          var theme = localStorage.getItem('bluebird:theme') || 'system';
           var dark = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (dark) document.documentElement.classList.add('dark');
         } catch (e) {}

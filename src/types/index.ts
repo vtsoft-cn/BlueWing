@@ -136,7 +136,7 @@ export interface WebDAVConfig {
   serverUrl: string;
   username: string;
   password: string;
-  remotePath: string; // default: "OwnBox"
+  remotePath: string; // default: "BlueBird"
   autoSync: boolean;
   lastSyncTime?: number;
 }
@@ -263,7 +263,7 @@ export interface BackupPreviewItem {
 
 export interface BackupPreviewResult {
   valid: boolean;
-  format: 'ownbox_windows' | 'ownbox_android' | 'singbox_config' | 'unknown';
+  format: 'bluebird_windows' | 'bluebird_android' | 'singbox_config' | 'unknown';
   categories: BackupCategories;
   counts: {
     groups: { total: number; add: number; update: number; skip: number };

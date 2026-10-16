@@ -1,12 +1,12 @@
 /**
  * AndroidBackupEncoder.ts
- * Encodes Windows domain models into OwnBox Android compatible backup JSON:
+ * Encodes Windows domain models into Android compatible backup JSON:
  * - profiles / proxies: Base64 Parcelled ProxyEntity (TYPE_CONFIG with sing-box outbound JSON)
  * - groups: Base64 Parcelled ProxyGroup (SubscriptionBean)
  * - rules: Base64 Parcelled RuleEntity
  * - settings: Base64 Parcelled KeyValuePair
  *
- * Can be directly restored by OwnBox Android BackupFragment without modifying Android code.
+ * Can be directly restored by Android BackupFragment without modifying Android code.
  */
 
 import { AndroidParcel } from './AndroidParcel';

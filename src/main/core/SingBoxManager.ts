@@ -2,7 +2,6 @@ import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import net from 'net';
-import http from 'http';
 import { EventEmitter } from 'events';
 import { CoreState } from '../../types';
 import { LogManager } from '../log/LogManager';
@@ -34,9 +33,9 @@ export class SingBoxManager extends EventEmitter {
 
   private constructor() {
     super();
-    const ownBoxDir = Database.getInstance().getDataDir();
+    const dataDir = Database.getInstance().getDataDir();
 
-    this.configPath = path.join(ownBoxDir, 'config.json');
+    this.configPath = path.join(dataDir, 'config.json');
     this.binaryPath = this.locateBinary();
   }
 
@@ -238,7 +237,7 @@ export class SingBoxManager extends EventEmitter {
         this.process = spawn(this.binaryPath, ['run', '-c', this.configPath], {
           cwd: workingDir,
           windowsHide: true,
-          // sing-box 1.15 对配置中 DNS 旧版地址过滤字段直接拒启(FATAL);
+          // sing-box 对配置中 DNS 旧版地址过滤字段直接拒启(FATAL);
           // 豁免仅注入本应用拉起的核心子进程,不污染系统环境
           env: { ...process.env, ENABLE_DEPRECATED_LEGACY_DNS_ADDRESS_FILTER: 'true' },
         });

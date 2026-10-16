@@ -1,6 +1,6 @@
 /**
  * AndroidBackupDecoder.ts
- * Decodes OwnBox Android backup files (JSON or ZIP) into Windows domain models:
+ * Decodes Android backup files (JSON or ZIP) into Windows domain models:
  * - ProxyNode[]
  * - Subscription[]
  * - RouteRule[]
@@ -188,7 +188,6 @@ export class AndroidBackupDecoder {
 
       const compMethod = buf.readUInt16LE(offset + 8);
       const compSize = buf.readUInt32LE(offset + 18);
-      const uncompSize = buf.readUInt32LE(offset + 22);
       const nameLen = buf.readUInt16LE(offset + 26);
       const extraLen = buf.readUInt16LE(offset + 28);
 
@@ -224,10 +223,10 @@ export class AndroidBackupDecoder {
     }
 
     const k = KryoBuffer.fromBuffer(bytes);
-    const version = k.readInt();
+    k.readInt();
     const id = k.readLong();
-    const userOrder = k.readLong();
-    const ungrouped = k.readBoolean();
+    k.readLong();
+    k.readBoolean();
     const name = k.readString();
     const type = k.readInt(); // 0 = BASIC, 1 = SUBSCRIPTION
 
@@ -237,17 +236,17 @@ export class AndroidBackupDecoder {
     }
 
     // SubscriptionBean
-    const subVersion = k.readInt();
-    const subType = k.readInt();
+    k.readInt();
+    k.readInt();
     const link = k.readString();
-    const forceResolve = k.readBoolean();
-    const deduplication = k.readBoolean();
-    const updateWhenConnectedOnly = k.readBoolean();
-    const customUserAgent = k.readString();
+    k.readBoolean();
+    k.readBoolean();
+    k.readBoolean();
+    k.readString();
     const autoUpdate = k.readBoolean();
     const autoUpdateDelay = k.readInt();
     const lastUpdated = k.readInt();
-    const subscriptionUserinfo = k.readString();
+    k.readString();
 
     const subId = idMapper.getOrCreateUuid(id, 'sub');
     return {
@@ -277,26 +276,23 @@ export class AndroidBackupDecoder {
     const id = k.readLong();
     const groupId = k.readLong();
     const type = k.readInt();
-    const userOrder = k.readLong();
+    k.readLong();
     const tx = k.readLong();
     const rx = k.readLong();
-    const status = k.readInt();
+    k.readInt();
     const ping = k.readInt();
     const uuid = k.readString();
-    const error = k.readString();
+    k.readString();
 
-    let speedTestMode = '';
-    let dlBps = 0n;
-    let ulBps = 0n;
     if (version >= 1) {
-      speedTestMode = k.readString() || '';
-      dlBps = k.readLong();
-      ulBps = k.readLong();
+      k.readString(); // speedTestMode(未使用)
+      k.readLong(); // dlBps
+      k.readLong(); // ulBps
     }
 
     const beanLen = k.readVarInt(true);
     const beanBytes = k.readBytes(beanLen);
-    const dirty = k.hasRemaining() ? k.readBoolean() : false;
+    if (k.hasRemaining()) k.readBoolean(); // dirty 标志(未使用)
 
     const nodeId = idMapper.getOrCreateUuid(id, 'node');
     const groupUuid = groupId > 0n ? idMapper.getOrCreateUuid(groupId, 'sub') : 'default';
@@ -325,14 +321,14 @@ export class AndroidBackupDecoder {
     try {
       if (type === 998) {
         // TYPE_CONFIG -> ConfigBean
-        const configVersion = k.readInt();
+        k.readInt(); // configVersion(未使用)
         const serverAddress = k.readString();
         const serverPort = k.readInt();
-        const extraVersion = k.readInt();
+        k.readInt(); // extraVersion(未使用)
         const name = k.readString();
-        const customOutboundJson = k.readString();
-        const customConfigJson = k.readString();
-        const configType = k.readInt(); // 0=config, 1=outbound
+        k.readString(); // customOutboundJson(未使用)
+        k.readString(); // customConfigJson(未使用)
+        k.readInt(); // configType: 0=config, 1=outbound(未使用)
         const configStr = k.readString();
 
         if (configStr && configStr.trim().startsWith('{')) {
@@ -501,17 +497,17 @@ export class AndroidBackupDecoder {
     const parcel = AndroidParcel.fromBase64UrlSafe(b64Str);
     const id = parcel.readLong();
     const name = parcel.readString();
-    const config = parcel.readString();
-    const userOrder = parcel.readLong();
+    parcel.readString(); // config(未使用)
+    parcel.readLong(); // userOrder(未使用)
     const enabled = parcel.readInt() !== 0;
     const domains = parcel.readString();
     const ip = parcel.readString();
     const port = parcel.readString();
     const sourcePort = parcel.readString();
     const network = parcel.readString();
-    const source = parcel.readString();
+    parcel.readString(); // source(未使用)
     const protocol = parcel.readString();
-    const ruleset = parcel.readString();
+    parcel.readString(); // ruleset(未使用)
     const outbound = parcel.readLong();
 
     // Packages set (Kotlin parcelize writes count + strings)

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Portal } from '../components/Portal';
 import {
   Power,
   ArrowDown,
@@ -359,7 +360,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Node Selector Drawer Modal */}
       {showNodeSelector && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <Portal>
+        <div className="no-drag fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center space-x-2">
@@ -406,6 +408,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

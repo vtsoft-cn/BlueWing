@@ -3,8 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import http from 'http';
 import dns from 'dns';
-import { spawn, exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { Database } from './db/Database';
 import { SingBoxManager } from './core/SingBoxManager';
 import { ConfigGenerator } from './core/ConfigGenerator';
@@ -30,36 +29,26 @@ let startTime: number = 0;
 let totalRx: number = 0;
 let totalTx: number = 0;
 
-// 数据目录:便携优先(exe 同级 data/),目录不可写(如 Program Files)时回退 %APPDATA%\OwnBox。
+// 数据目录:便携优先(exe 同级 data/),目录不可写(如 Program Files)时回退 %APPDATA%\BlueBird。
 // 必须在 app ready 之前设置:Chromium 配置(缓存/Cookie)、Database、LogManager、SystemProxy 全部跟随此目录。
-// 首次便携运行时,自动从旧 Roaming 目录迁移 ownbox.json / .bak / proxy_ownership.json。
 const exeDir = path.dirname(process.execPath || '');
 const portableDataDir = path.join(exeDir, 'data');
-const legacyDataDir = path.join(
+const fallbackDataDir = path.join(
   process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'),
-  'OwnBox'
+  'BlueBird'
 );
-let ownBoxDataDir = legacyDataDir;
+let bluebirdDataDir = fallbackDataDir;
 try {
   fs.mkdirSync(portableDataDir, { recursive: true });
   const probe = path.join(portableDataDir, '.write-probe');
   fs.writeFileSync(probe, 'ok');
   fs.unlinkSync(probe);
-  ownBoxDataDir = portableDataDir;
-
-  // 一次性迁移:便携目录还没有数据库,而旧 Roaming 目录有 → 复制过来(含备份与代理接管状态)
-  if (!fs.existsSync(path.join(ownBoxDataDir, 'ownbox.json')) && fs.existsSync(path.join(legacyDataDir, 'ownbox.json'))) {
-    fs.copyFileSync(path.join(legacyDataDir, 'ownbox.json'), path.join(ownBoxDataDir, 'ownbox.json'));
-    const legacyBak = path.join(legacyDataDir, 'ownbox.json.bak');
-    if (fs.existsSync(legacyBak)) fs.copyFileSync(legacyBak, path.join(ownBoxDataDir, 'ownbox.json.bak'));
-    const legacyOwnership = path.join(legacyDataDir, 'proxy_ownership.json');
-    if (fs.existsSync(legacyOwnership)) fs.copyFileSync(legacyOwnership, path.join(ownBoxDataDir, 'proxy_ownership.json'));
-  }
+  bluebirdDataDir = portableDataDir;
 } catch {
-  ownBoxDataDir = legacyDataDir;
+  bluebirdDataDir = fallbackDataDir;
 }
-process.env.OWNBOX_DATA_DIR = ownBoxDataDir;
-app.setPath('userData', ownBoxDataDir);
+process.env.BLUEBIRD_DATA_DIR = bluebirdDataDir;
+app.setPath('userData', bluebirdDataDir);
 
 // 单实例锁:已有实例在跑时,二次启动直接退出(不做任何清理,那是已运行实例的职责),
 // 并由已运行实例在 second-instance 事件里弹出/聚焦已有窗口,而不是创建新窗口
@@ -79,11 +68,11 @@ if (!gotTheLock) {
 }
 
 /**
- * 检测其他安装路径的 OwnBox 实例(如尚未卸载的旧版本)。
+ * 检测其他安装路径的 BlueBird 实例(如尚未卸载的旧版本)。
  * requestSingleInstanceLock 只能约束实现了锁的实例——旧版本没有锁代码,检测不到,
  * 双开会互相覆盖系统代理注册表/抢占核心端口。发现异路径实例时弹窗提示并退出。
  */
-async function warnAndExitIfForeignOwnBox(): Promise<void> {
+async function warnAndExitIfForeignInstance(): Promise<void> {
   if (process.platform !== 'win32') return;
   return new Promise((resolve) => {
     const script = `Get-Process BlueBird -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Group-Object Path | ForEach-Object { $_.Name }`;
@@ -153,7 +142,11 @@ function createWindow(): void {
     width: 1200,
     height: 780,
     minWidth: 980,
-    minHeight: 640,
+    // 页头(36px)占用纵向空间,最小/最大高度相应上移,保证内容区可用高度不变
+    minHeight: 680,
+    // 窗口尺寸上限:配合禁用最大化,避免在大屏上过度铺开
+    maxWidth: 1600,
+    maxHeight: 1040,
     frame: false,
     // 固定尺寸窗口:只保留最小化/关闭,不提供最大化
     maximizable: false,
@@ -221,7 +214,7 @@ function applyWindowIcon(on: boolean): void {
 let isAppQuitting = false;
 
 app.whenReady().then(async () => {
-  await warnAndExitIfForeignOwnBox();
+  await warnAndExitIfForeignInstance();
 
   createWindow();
 

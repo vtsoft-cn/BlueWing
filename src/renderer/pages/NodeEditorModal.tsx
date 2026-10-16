@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { ProxyNode, ProxyType } from '../../types';
 import { Select } from '../components/Select';
+import { Portal } from '../components/Portal';
 
 interface NodeEditorModalProps {
   node?: ProxyNode | null;
@@ -73,7 +74,8 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+    <Portal>
+    <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -367,5 +369,6 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
         </form>
       </div>
     </div>
+    </Portal>
   );
 };

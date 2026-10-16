@@ -41,7 +41,7 @@ export class WebDAVSyncService {
     try {
       const realPassword = CredentialSecurity.decrypt(cfg.password || '');
       const client = new WebDAVClient(cfg.serverUrl, cfg.username, realPassword);
-      const remoteDir = (cfg.remotePath || 'OwnBox').trim().replace(/^\/+|\/+$/g, '');
+      const remoteDir = (cfg.remotePath || 'BlueBird').trim().replace(/^\/+|\/+$/g, '');
 
       // 1. Ensure remote directory exists
       await client.createDir(remoteDir);
@@ -52,8 +52,8 @@ export class WebDAVSyncService {
 
       // 3. Upload timestamped snapshot and latest pointer
       const now = Date.now();
-      const snapshotName = `${remoteDir}/ownbox_backup_${now}.ownboxbackup`;
-      const latestName = `${remoteDir}/latest.ownboxbackup`;
+      const snapshotName = `${remoteDir}/bluebird_backup_${now}.bluebirdbackup`;
+      const latestName = `${remoteDir}/latest.bluebirdbackup`;
 
       const uploaded = await client.upload(snapshotName, content);
       if (!uploaded) {
@@ -64,7 +64,7 @@ export class WebDAVSyncService {
       try {
         await client.upload(latestName, content);
       } catch (err) {
-        console.warn('Failed to update latest.ownboxbackup on WebDAV:', err);
+        console.warn('Failed to update latest.bluebirdbackup on WebDAV:', err);
       }
 
       // 4. Update sync state
@@ -102,8 +102,8 @@ export class WebDAVSyncService {
     try {
       const realPassword = CredentialSecurity.decrypt(cfg.password || '');
       const client = new WebDAVClient(cfg.serverUrl, cfg.username, realPassword);
-      const remoteDir = (cfg.remotePath || 'OwnBox').trim().replace(/^\/+|\/+$/g, '');
-      const latestName = `${remoteDir}/latest.ownboxbackup`;
+      const remoteDir = (cfg.remotePath || 'BlueBird').trim().replace(/^\/+|\/+$/g, '');
+      const latestName = `${remoteDir}/latest.bluebirdbackup`;
 
       let content: string;
       try {

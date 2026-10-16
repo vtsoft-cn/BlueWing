@@ -4,8 +4,8 @@
  */
 
 export type BackupFormatType =
-  | 'ownbox_windows'
-  | 'ownbox_android'
+  | 'bluebird_windows'
+  | 'bluebird_android'
   | 'singbox_config'
   | 'unknown';
 
@@ -22,7 +22,7 @@ export class BackupValidator {
   public static detectFormat(content: string | Buffer): FormatDetectionResult {
     // 1. Check if ZIP (PK..)
     if (Buffer.isBuffer(content) && content.length >= 4 && content[0] === 0x50 && content[1] === 0x4b) {
-      return { format: 'ownbox_android', isZip: true };
+      return { format: 'bluebird_android', isZip: true };
     }
 
     if (typeof content === 'string') {
@@ -32,7 +32,7 @@ export class BackupValidator {
         try {
           const buf = Buffer.from(trimmed, 'base64');
           if (buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b) {
-            return { format: 'ownbox_android', isZip: true };
+            return { format: 'bluebird_android', isZip: true };
           }
         } catch {}
       }
@@ -40,16 +40,16 @@ export class BackupValidator {
       try {
         const json = JSON.parse(trimmed);
         if (json.schema_version !== undefined || (json.app_version && json.nodes)) {
-          return { format: 'ownbox_windows', rawJson: json };
+          return { format: 'bluebird_windows', rawJson: json };
         }
         if (json.profiles || json.proxies || json.groups || (json.rules && Array.isArray(json.rules) && typeof json.rules[0] === 'string')) {
-          return { format: 'ownbox_android', rawJson: json };
+          return { format: 'bluebird_android', rawJson: json };
         }
         if (json.outbounds && Array.isArray(json.outbounds)) {
           return { format: 'singbox_config', rawJson: json };
         }
         if (json.nodes || json.subscriptions || json.routing) {
-          return { format: 'ownbox_windows', rawJson: json };
+          return { format: 'bluebird_windows', rawJson: json };
         }
       } catch {}
     }

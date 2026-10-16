@@ -1,5 +1,5 @@
 {
-  "name": "ownbox",
+  "name": "bluebird",
   "productName": "BlueBird",
   "version": "1.0.0",
   "description": "基于 Sing-box 官方原生核心打造的现代化通用代理客户端与网络调试工具",
@@ -7,7 +7,7 @@
   "author": {
     "name": "Garden"
   },
-  "license": "GPL-3.0",
+  "license": "UNLICENSED",
   "scripts": {
     "dev": "vite",
     "sync-icons": "node scripts/sync-icons.mjs",

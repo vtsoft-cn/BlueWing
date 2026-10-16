@@ -54,13 +54,13 @@ describe('Database Storage & Recovery', () => {
         serverUrl: 'https://dav.example.com',
         username: 'user1',
         password: 'mySecretWebDAVPassword',
-        remotePath: 'OwnBox',
+        remotePath: 'BlueBird',
         autoSync: true,
       },
     });
 
-    const dbFile = path.join(TEST_DB_DIR, 'ownbox.json');
-    assert.ok(fs.existsSync(dbFile), 'Database file ownbox.json must exist');
+    const dbFile = path.join(TEST_DB_DIR, 'bluebird.json');
+    assert.ok(fs.existsSync(dbFile), 'Database file bluebird.json must exist');
 
     const raw = fs.readFileSync(dbFile, 'utf8');
     const parsed = JSON.parse(raw);
@@ -96,7 +96,7 @@ describe('Database Storage & Recovery', () => {
     // Flush explicitly ensures latest state is on disk immediately
     db.flush();
 
-    const dbFile = path.join(TEST_DB_DIR, 'ownbox.json');
+    const dbFile = path.join(TEST_DB_DIR, 'bluebird.json');
     const raw = fs.readFileSync(dbFile, 'utf8');
     const parsed = JSON.parse(raw);
     assert.equal(parsed.nodes[0].ping, 50, 'Latest debounced update must be written to disk');
@@ -110,8 +110,8 @@ describe('Database Storage & Recovery', () => {
     db.saveNodes(nodes);
     db.flush();
 
-    const dbFile = path.join(TEST_DB_DIR, 'ownbox.json');
-    const bakFile = path.join(TEST_DB_DIR, 'ownbox.json.bak');
+    const dbFile = path.join(TEST_DB_DIR, 'bluebird.json');
+    const bakFile = path.join(TEST_DB_DIR, 'bluebird.json.bak');
     assert.ok(fs.existsSync(bakFile), '.bak file must exist');
 
     // Corrupt the main db file with malformed JSON
@@ -127,7 +127,7 @@ describe('Database Storage & Recovery', () => {
 
     // Verify corrupted archive file was created
     const files = fs.readdirSync(TEST_DB_DIR);
-    const corruptedArchives = files.filter((f) => f.includes('ownbox.json.corrupted.'));
+    const corruptedArchives = files.filter((f) => f.includes('bluebird.json.corrupted.'));
     assert.ok(corruptedArchives.length > 0, 'Corrupted archive file must be created');
   });
 
@@ -139,7 +139,7 @@ describe('Database Storage & Recovery', () => {
     db.saveNodes(nodes);
     db.flush();
 
-    const dbFile = path.join(TEST_DB_DIR, 'ownbox.json');
+    const dbFile = path.join(TEST_DB_DIR, 'bluebird.json');
 
     // Simulate sudden power loss right when file was truncated (0 bytes)
     fs.writeFileSync(dbFile, '', 'utf8');
