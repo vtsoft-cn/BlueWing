@@ -1,10 +1,10 @@
-// 图标源同步:src/icon/Windows 是唯一图标事实来源(主题 × 代理状态四变体)。
+// 图标源同步:src/icon 是唯一图标事实来源(主题 × 代理状态四变体)。
 // 每次构建前执行,重新生成 bin/ 下全部图标派生物,防止改了源目录却忘同步;
 // 素材缺失时直接失败终止构建。
 //
 // 产物:
 //   bin/app-{dark|light}-{on|off}.ico   多尺寸(16~256),窗口/任务栏图标,随主题+状态
-//   bin/tray-{dark|light}-{on|off}.png  256px,托盘图标,随主题+状态
+//   bin/tray-{dark|light}-{on|off}.png  256px,托盘图标,由 menu-* 圆形图标分发
 //   bin/icon.ico                        应用主身份图标(安装器/exe),固定 light-off
 //   src/renderer/assets/{dark,light}.png 界面 Logo(256px,取 off 中性版,仅随主题)
 import fs from 'fs';
@@ -13,7 +13,7 @@ import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ICON_SRC = path.join(root, 'src', 'icon', 'Windows');
+const ICON_SRC = path.join(root, 'src', 'icon');
 const BIN = path.join(root, 'bin');
 const ASSETS = path.join(root, 'src', 'renderer', 'assets');
 const THEMES = ['dark', 'light'];
@@ -116,10 +116,10 @@ for (const theme of THEMES) {
     buildLadder(appPng, ladder);
     buildIco(ladder, path.join(BIN, `app-${theme}-${state}.ico`));
 
-    // 托盘图标:256 母图直接分发
-    const trayPng = path.join(ICON_SRC, `tray-${theme}-${state}.png`);
-    mustExist(trayPng);
-    fs.copyFileSync(trayPng, path.join(BIN, `tray-${theme}-${state}.png`));
+    // 托盘图标:menu 圆形母图(256px)直接分发
+    const menuPng = path.join(ICON_SRC, `menu-${theme}-${state}.png`);
+    mustExist(menuPng);
+    fs.copyFileSync(menuPng, path.join(BIN, `tray-${theme}-${state}.png`));
   }
 
   // 界面 Logo:取 off 中性版缩放为 256px PNG(仅随主题,不带状态环)
@@ -137,4 +137,4 @@ for (const stale of ['dark.svg', 'light.svg']) {
   fs.rmSync(path.join(ASSETS, stale), { force: true });
 }
 
-console.log('[sync-icons] 已从 src/icon/Windows 同步 → bin/app-*.{ico} ×4 + bin/tray-*.png ×4 + bin/icon.ico + 界面 Logo PNG ×2');
+console.log('[sync-icons] 已从 src/icon 同步 → bin/app-*.{ico} ×4 + bin/tray-*.png ×4 + bin/icon.ico + 界面 Logo PNG ×2');
