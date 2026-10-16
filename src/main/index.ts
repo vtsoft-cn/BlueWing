@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
@@ -22,7 +22,6 @@ import { UniversalSubscriptionParser } from './net/UniversalSubscriptionParser';
 import { TrayManager } from './tray/TrayManager';
 import { TrafficStats } from '../types';
 import { LogManager } from './log/LogManager';
-import { windowIconPath } from './branding';
 
 let mainWindow: BrowserWindow | null = null;
 let trafficTimer: NodeJS.Timeout | null = null;
@@ -51,6 +50,24 @@ try {
 process.env.BLUEBIRD_DATA_DIR = bluebirdDataDir;
 app.setPath('userData', bluebirdDataDir);
 
+// 安装器在向导阶段被取消时,data/ 可能仍留在同级 BlueBirdDataUpgrade 暂存里
+// (安装器无法挂钩取消事件):启动时发现便携 data/ 没有数据库而暂存里有,
+// 自动收回——否则用户面对空配置,且暂存会在下次安装时被当作过期遗留删除。
+if (bluebirdDataDir === portableDataDir) {
+  try {
+    const stashDir = path.join(exeDir, '..', 'BlueBirdDataUpgrade');
+    if (
+      !fs.existsSync(path.join(portableDataDir, 'bluebird.json')) &&
+      fs.existsSync(path.join(stashDir, 'bluebird.json'))
+    ) {
+      fs.cpSync(stashDir, portableDataDir, { recursive: true });
+      fs.rmSync(stashDir, { recursive: true, force: true });
+    }
+  } catch {
+    // 收回失败不阻断启动:暂存原样保留,留给下次安装或启动重试
+  }
+}
+
 // 单实例锁:已有实例在跑时,二次启动直接退出(不做任何清理,那是已运行实例的职责),
 // 并由已运行实例在 second-instance 事件里弹出/聚焦已有窗口,而不是创建新窗口
 const gotTheLock = app.requestSingleInstanceLock();
@@ -59,7 +76,14 @@ if (!gotTheLock) {
   isSecondaryInstance = true;
   app.exit(0);
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_e, commandLine) => {
+    // 安装器升级信号:让位于安装流程,退出前由 before-quit 统一清理
+    // (还原系统代理、停止核心),避免被强杀导致系统代理残留断网
+    if (commandLine.includes('--bb-shutdown')) {
+      LogManager.getInstance().addLog('info', '收到安装器升级请求,还原系统代理后退出', 'system');
+      app.quit();
+      return;
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
@@ -118,7 +142,7 @@ async function warnAndExitIfForeignInstance(): Promise<void> {
 }
 
 function getWindowIcon(): string {
-  return resourcePath('icon.ico') ?? '';
+  return resourcePath('ico.ico') ?? '';
 }
 
 function createWindow(): void {
@@ -193,18 +217,6 @@ function createWindow(): void {
   });
 
   TrayManager.getInstance().init(mainWindow);
-}
-
-/** 任务栏图标:随 主题 × 代理状态 切换 */
-function applyWindowIcon(on: boolean): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  try {
-    const settings = Database.getInstance().getSettings();
-    const theme = settings.theme || 'system';
-    const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
-    const p = windowIconPath(dark ? 'dark' : 'light', on) ?? getWindowIcon();
-    if (p) mainWindow.setIcon(nativeImage.createFromPath(p));
-  } catch {}
 }
 
 let isAppQuitting = false;
@@ -374,7 +386,6 @@ async function handleCoreStop(): Promise<boolean> {
     LogManager.getInstance().addLog('info', 'Windows 系统代理已关闭', 'system');
   }
   LogManager.getInstance().addLog('info', '代理核心引擎已停止连接', 'core');
-  applyWindowIcon(false);
   TrayManager.getInstance().updateMenu();
   return true;
 }
@@ -437,7 +448,6 @@ async function handleCoreStart(): Promise<boolean> {
   } else {
     LogManager.getInstance().addLog('error', 'Sing-box 核心启动失败，请检查配置或日志详情', 'core');
   }
-  applyWindowIcon(started && settings.systemProxyEnabled);
   TrayManager.getInstance().updateMenu();
   return started;
 }
@@ -887,8 +897,6 @@ ipcMain.handle('settings:save', async (_, s) => {
   if (core.getState() === 'running' && !coreAutoStarted && (coreConfigChanged || proxyChanged)) {
     await handleCoreStart();
   }
-  // 主题切换后刷新状态图标的明暗变体
-  applyWindowIcon(currentSettings.systemProxyEnabled && core.getState() === 'running');
 
   TrayManager.getInstance().updateMenu();
   return true;
