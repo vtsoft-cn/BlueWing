@@ -6,7 +6,7 @@
 - 修复安装到不可写目录(如 `C:\Program Files`)时核心启动即崩溃的问题:sing-box `cache_file` 未指定路径,默认在工作目录(安装目录)创建 `cache.db`,普通权限写入被拒导致 `FATAL: initialize cache-file: Access is denied`,表现为无法连接代理;现显式指向应用数据目录(`BLUEWING_DATA_DIR/cache.db`),并附回归单测。
 
 ### 🏷 品牌更名
-- 系统称号由「青鸟 BlueBird」更名为「青翼连接 BlueWing Connect」:窗口标题、托盘提示与菜单、侧边栏/关于页、各类弹窗与日志文案全部更新;打包产物同步更名——`productName` 改为 BlueWing Connect(安装目录与 exe 随之更名),快捷方式名「青翼连接」,安装包 `BlueWingConnect-Setup.exe`,测速 User-Agent 与 TUN 虚拟网卡名(`BlueWingTun`)一并更新。
+- 系统称号由「青鸟 BlueBird」更名为「青翼连接 BlueWing Connect」:窗口标题、托盘提示与菜单、侧边栏/关于页、各类弹窗与日志文案全部更新;打包产物同步更名——`productName` 改为 BlueWing Connect(安装目录与 exe 随之更名),快捷方式名 `BlueWing Connect`(英文名,安装后不再显示中文快捷方式名),安装包 `BlueWingConnect-Setup.exe`,测速 User-Agent 与 TUN 虚拟网卡名(`BlueWingTun`)一并更新。
 - BlueBird 旧标识彻底清除(不做旧数据迁移):`appId` 更名为 `com.bluewing.connect`;数据文件 `bluebird.json` → `bluewing.json`、回退目录 `%APPDATA%\BlueBird` → `%APPDATA%\BlueWingConnect`、环境变量 `BLUEWING_DATA_DIR`、日志文件 `bluewing.log`;备份体系全面换名——扩展名 `.bluebirdbackup` → `.bluewingbackup`,内部备份 `BlueWing_latest.bluewingbackup`、导入前快照 `BlueWing_pre_import_*`、格式识别键 `bluewing_windows` / `bluewing_android`、下载文件名前缀 `BlueWingConnect_`;WebDAV 默认远端目录与快照文件名同步换名;localStorage 键(`bluewing:theme`、节点排序、测速视图)、代理/DNS 所有权状态字段(`managedByBlueWing`、`bluewingManaged`)统一更名;安装器与异路径实例检测只认新进程名/新暂存名,移除 ownbox.json 历史迁移。旧版 BlueBird 的数据与安装不会被识别或延续,需自行卸载清理。
 
 ### ✨ 新功能
@@ -14,9 +14,10 @@
 - 新增主进程/渲染层共享的 IP 与域名字面量校验模块(`src/utils/ip.ts`,IPv6 完整支持 `::` 压缩形式),hosts 映射校验共用。
 
 ### 🎨 界面与交互
+- 统一卡片悬停效果覆盖缺口:关于页首卡为 `rounded-3xl`,不在原 `rounded-xl/2xl + border` 悬停选择器覆盖范围,悬停无"边框提亮 + 阴影加深"效果——选择器补齐 `rounded-3xl` 档位,全站卡片悬停行为一致(经运行时审计:11 个页签全部卡片型元素命中)。
 - 托盘图标简化:移除 `menu-{dark,light}-{on,off}.png` 主题变体四枚,改为仅随连接状态切换——连接 `on.png` / 断开 `off.png`(不随界面主题),`trayIconPath` 与托盘刷新逻辑同步精简。
 - 侧边栏左上角品牌区改为仅显示英文:「BlueWing Connect」+ 副题「PC Proxy Toolchain」。
-- 修复内容区滚动后顶部无法拖动窗口的问题:两重成因——①拖动面(页头/侧栏)叠加的 `backdrop-blur` 强制合成层、滚动触发层重建后 `-webkit-app-region: drag` 命中失效,已移除无效毛玻璃并为页头/侧栏品牌区新增显式 `.drag-region` 声明;②Chromium/Electron 已知缺陷(electron#40610/#52063):容器滚动后拖动区域矩形缓存整体失效——现于滚动停止后把 `app-region` 短暂切至 no-drag 并跨帧还原,强制重算拖动区域(全局 scroll 捕获,覆盖页面内嵌滚动区)。
+- 根治内容区滚动后页头无法拖动窗口的问题(DNS 页滚动后失效、日志页打开即失效):真因是 Chromium/Electron 缺陷(electron#40610 等)——任一滚动容器处于非零偏移时,`-webkit-app-region` 区域缓存与实际位置错位且滚动不再触发重发,表现为页头(滚动容器正上方)命中失效而侧栏正常;经最小复现环境 + 原生输入实测,静态/固定定位/合成层/显隐切换/重插 DOM/zoom/scrollTop 摆动等一切渲染层强制重算手段均无效(仅 scrollTop 归零自然恢复),前版「滚动停止后切换 app-region 跨帧还原」的补救实为无效代码,已移除。现页头改为 `no-drag` + pointer 捕获,经 IPC 通知主进程跟随光标移动窗口(`window:drag-begin/end`,10ms 轮询,失焦/关窗停止 + 渲染层异常 30 秒硬上限兜底),完全绕开该缺陷且免疫后续版本回归;侧栏品牌区等空白区域仍走 app-region(不在滚动容器正上方,实测不受影响)。本应用为固定尺寸窗口,无最大化/磁贴吸附,原生标题栏拖动无额外能力损失。
 - 图标体系重构:`src/images/`(现成 png / ico 母本,涵盖运行时全部图片)成为唯一图片源,构建链与运行时均直接引用源文件,移除构建期分发/缩放/多尺寸 ICO 组装逻辑;界面 Logo 由渲染层直引;全部图标高清重制,底板铺满画布无留白。
 - 托盘图标统一为 `menu-*` 圆形徽章变体:修复浅色主题误用 `app-*` 方形图标导致深浅主题托盘样式不一致的问题,移除冗余 `tray-*.png` 中转文件。
 - `.ico` 全部精简为单帧 256×256(移除内嵌 16/32/48 小尺寸帧),小尺寸场景由 Windows 系统缩放提供。
@@ -24,6 +25,8 @@
 - 任务栏窗口图标固定为 exe 内嵌图标(与桌面快捷方式一致),不再随主题与代理状态切换,连接状态反馈统一由托盘图标承担。
 
 ### 🔧 依赖与构建
+- 根治 Windows 打包 EPERM 失败:electron-builder 解压 Electron 发行包后零等待 rename 暂存目录,Defender 实时扫描刚写入的 electron.exe(约 170MB)短暂持有目录句柄,单次 rename 确定性失败(实测连续 5 次全败)——新增 `scripts/dist-wrapper.js` 包装 CLI,对 `fs.rename` / `fs/promises.rename` 叠加 EPERM/EBUSY/ENOTEMPTY 退避重试(最长约 40 次),`dist` / `dist:dir` 均改经包装器执行,实测约 2.4 秒内通过;app-builder-lib 持锁 rename 所涉 proper-lockfile 锁文件为暂存目录兄弟项,不阻塞改名,原锁行为保留不动。
+- 移除声明但从未引用的死依赖(`sql.js`、`clsx`、`tailwind-merge` 及 `@types/sql.js`),依赖清单恢复与实际使用一致。
 - Electron 34.5.8 → 44.8.0,electron-builder 25.1.8 → 26.15.3:安装包体积随新版 Electron 增大(约 139MB → 167MB);新工具链二进制首次构建需联网下载,GitHub 直连不可达时可用 npmmirror 镜像(`ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR`)。
 
 ### 🛡 数据与稳定性

@@ -12,22 +12,18 @@
     "dev": "vite",
     "build": "tsc && vite build && tsc -p tsconfig.node.json",
     "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts",
-    "dist": "node scripts/preserve-data.js backup && npm run build && electron-builder && node scripts/preserve-data.js restore",
-    "dist:dir": "node scripts/preserve-data.js backup && npm run build && electron-builder --dir && node scripts/preserve-data.js restore"
+    "dist": "node scripts/preserve-data.js backup && npm run build && node scripts/dist-wrapper.js && node scripts/preserve-data.js restore",
+    "dist:dir": "node scripts/preserve-data.js backup && npm run build && node scripts/dist-wrapper.js --dir && node scripts/preserve-data.js restore"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "sql.js": "^1.12.0",
-    "tailwind-merge": "^3.0.1"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "electron": "^44.8.0",
@@ -87,7 +83,7 @@
       "installerHeaderIcon": "src/images/ico/ico.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "青翼连接",
+      "shortcutName": "BlueWing Connect",
       "artifactName": "BlueWingConnect-Setup.exe"
     }
   }
