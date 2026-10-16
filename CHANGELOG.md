@@ -2,6 +2,9 @@
 
 ## [未发布]
 
+### 🛡 数据与稳定性
+- 修复安装到不可写目录(如 `C:\Program Files`)时核心启动即崩溃的问题:sing-box `cache_file` 未指定路径,默认在工作目录(安装目录)创建 `cache.db`,普通权限写入被拒导致 `FATAL: initialize cache-file: Access is denied`,表现为无法连接代理;现显式指向应用数据目录(`BLUEWING_DATA_DIR/cache.db`),并附回归单测。
+
 ### 🏷 品牌更名
 - 系统称号由「青鸟 BlueBird」更名为「青翼连接 BlueWing Connect」:窗口标题、托盘提示与菜单、侧边栏/关于页、各类弹窗与日志文案全部更新;打包产物同步更名——`productName` 改为 BlueWing Connect(安装目录与 exe 随之更名),快捷方式名「青翼连接」,安装包 `BlueWingConnect-Setup.exe`,测速 User-Agent 与 TUN 虚拟网卡名(`BlueWingTun`)一并更新。
 - BlueBird 旧标识彻底清除(不做旧数据迁移):`appId` 更名为 `com.bluewing.connect`;数据文件 `bluebird.json` → `bluewing.json`、回退目录 `%APPDATA%\BlueBird` → `%APPDATA%\BlueWingConnect`、环境变量 `BLUEWING_DATA_DIR`、日志文件 `bluewing.log`;备份体系全面换名——扩展名 `.bluebirdbackup` → `.bluewingbackup`,内部备份 `BlueWing_latest.bluewingbackup`、导入前快照 `BlueWing_pre_import_*`、格式识别键 `bluewing_windows` / `bluewing_android`、下载文件名前缀 `BlueWingConnect_`;WebDAV 默认远端目录与快照文件名同步换名;localStorage 键(`bluewing:theme`、节点排序、测速视图)、代理/DNS 所有权状态字段(`managedByBlueWing`、`bluewingManaged`)统一更名;安装器与异路径实例检测只认新进程名/新暂存名,移除 ownbox.json 历史迁移。旧版 BlueBird 的数据与安装不会被识别或延续,需自行卸载清理。

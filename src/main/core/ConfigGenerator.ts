@@ -435,10 +435,16 @@ export class ConfigGenerator {
     }
 
     // Rule-set 磁盘缓存:首次成功下载后,后续启动直接命中缓存,
-    // 规则源(jsdelivr)被间歇性重置时核心仍可正常启动(下载失败降级为后台重试)
+    // 规则源(jsdelivr)被间歇性重置时核心仍可正常启动(下载失败降级为后台重试)。
+    // path 必须显式指向应用数据目录:默认相对路径 cache.db 落在工作目录(安装目录),
+    // 装到 Program Files 等不可写目录时核心启动即 FATAL (Access is denied)
     rootConfig.experimental = {
       cache_file: {
         enabled: true,
+        path: (process.env.BLUEWING_DATA_DIR
+          ? path.join(process.env.BLUEWING_DATA_DIR, 'cache.db')
+          : path.join(process.cwd(), 'cache.db')
+        ).replace(/\\/g, '/'),
       },
     };
 

@@ -348,6 +348,18 @@ describe('ConfigGenerator', () => {
     });
   });
 
+  test('Points cache_file at an explicit path outside the install directory', () => {
+    // 安装到 Program Files 等不可写目录时,默认相对路径 cache.db 会让核心启动即
+    // FATAL (Access is denied);必须显式落到应用数据目录
+    const config = ConfigGenerator.generate('vless', sampleNodes, [], [], defaultDns, defaultSettings);
+    const cacheFile = config.experimental?.cache_file;
+    assert.ok(cacheFile?.enabled, 'cache_file must be enabled');
+    assert.ok(
+      typeof cacheFile?.path === 'string' && cacheFile.path.endsWith('cache.db') && cacheFile.path.includes('/'),
+      'cache_file.path must be an explicit absolute path, got: ' + cacheFile?.path
+    );
+  });
+
   test('Validates generated config against sing-box.exe check', async () => {
     const config = ConfigGenerator.generate('vless', sampleNodes, [], [], defaultDns, defaultSettings);
     const tempConfigPath = path.resolve(__dirname, 'temp_test_config.json');
