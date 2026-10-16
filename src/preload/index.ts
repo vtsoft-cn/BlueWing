@@ -6,6 +6,9 @@ export const api = {
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     close: () => ipcRenderer.send('window:close'),
+    // 页头手动拖动(绕开 Chromium 滚动后 app-region 失效缺陷,详见主进程注释)
+    beginDrag: () => ipcRenderer.send('window:drag-begin'),
+    endDrag: () => ipcRenderer.send('window:drag-end'),
   },
 
   // Sing-box core control

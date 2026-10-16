@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
@@ -180,6 +180,10 @@ function createWindow(): void {
   });
 
   LogManager.getInstance().setMainWindow(mainWindow);
+
+  // 页头拖动兜底:窗口失焦(如 Alt+Tab)或关闭时停止移动循环,避免失控
+  mainWindow.on('blur', stopHeaderDrag);
+  mainWindow.on('closed', stopHeaderDrag);
 
   // Open any external http(s) links in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -470,6 +474,44 @@ ipcMain.handle('log:export', async () => {
 // Window controls
 ipcMain.on('window:minimize', () => mainWindow?.minimize());
 ipcMain.on('window:close', () => mainWindow?.close());
+
+// 页头手动拖动:Chromium/Electron 缺陷(electron#40610 等)——内容区一旦发生滚动,
+// draggable regions 缓存与实际位置错位且不再重发,-webkit-app-region 的页头拖动随之失效
+// (渲染层任何强制重算手段均无效,实测仅 scrollTop 归零才恢复)。因此页头不再依赖
+// app-region,改为渲染层 pointerdown 通知主进程,由主进程跟随光标移动窗口,完全绕开该缺陷。
+// 本应用为固定尺寸窗口(不可最大化),不涉及磁贴吸附,无原生标题栏拖动的额外能力损失。
+let headerDrag: { win: BrowserWindow; offX: number; offY: number; w: number; h: number; last: Electron.Point; timer: NodeJS.Timeout; startedAt: number } | null = null;
+const stopHeaderDrag = () => {
+  if (!headerDrag) return;
+  clearInterval(headerDrag.timer);
+  headerDrag = null;
+};
+ipcMain.on('window:drag-begin', (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!win || headerDrag) return;
+  const pt = screen.getCursorScreenPoint();
+  const b = win.getBounds();
+  headerDrag = {
+    win,
+    offX: pt.x - b.x,
+    offY: pt.y - b.y,
+    w: b.width,
+    h: b.height,
+    last: pt,
+    startedAt: Date.now(),
+    timer: setInterval(() => {
+      const d = headerDrag;
+      if (!d || d.win.isDestroyed()) return stopHeaderDrag();
+      // 兜底:渲染层异常导致 pointerup 丢失时,30 秒后强制结束,避免窗口无限跟随光标
+      if (Date.now() - d.startedAt > 30_000) return stopHeaderDrag();
+      const p = screen.getCursorScreenPoint();
+      if (p.x === d.last.x && p.y === d.last.y) return;
+      d.last = p;
+      d.win.setBounds({ x: p.x - d.offX, y: p.y - d.offY, width: d.w, height: d.h });
+    }, 10),
+  };
+});
+ipcMain.on('window:drag-end', stopHeaderDrag);
 ipcMain.handle('system:openExternal', (_, url: string) => {
   if (url && (url.startsWith('http:') || url.startsWith('https:'))) {
     shell.openExternal(url);

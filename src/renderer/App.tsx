@@ -36,39 +36,6 @@ const initialTheme: AppSettings['theme'] = (() => {
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
 
-  // 已知 Chromium/Electron 问题(electron#40610、#52063):容器滚动后拖动区域
-  // 矩形缓存失效,页头/品牌区不再被系统视为可拖。滚动停止 150ms 后把
-  // app-region 短暂切到 no-drag 并跨帧还原,强制 Chromium 重算拖动区域。
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let raf1 = 0;
-    let raf2 = 0;
-    const refreshDragRegions = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        const dragEls = [
-          document.body,
-          ...Array.from(document.querySelectorAll<HTMLElement>('.drag-region')),
-        ];
-        dragEls.forEach((el) => el.style.setProperty('-webkit-app-region', 'no-drag'));
-        // 提交一帧 no-drag 再还原,确保区域重算生效(双 rAF 等待两帧)
-        raf1 = requestAnimationFrame(() => {
-          raf2 = requestAnimationFrame(() => {
-            dragEls.forEach((el) => el.style.removeProperty('-webkit-app-region'));
-          });
-        });
-      }, 150);
-    };
-    // capture 捕获所有容器(含页面内嵌滚动区)的滚动,与页面结构解耦
-    document.addEventListener('scroll', refreshDragRegions, { passive: true, capture: true });
-    return () => {
-      document.removeEventListener('scroll', refreshDragRegions, true);
-      clearTimeout(timer);
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
-  }, []);
-
   const [coreState, setCoreState] = useState<string>('stopped');
   const [coreVersion, setCoreVersion] = useState<string>('1.14.3');
   const [nodes, setNodes] = useState<ProxyNode[]>([]);

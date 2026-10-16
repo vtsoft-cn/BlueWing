@@ -10,7 +10,12 @@
   }
 }
 
-/* 无边框窗口:任意空白区域可拖动窗口;交互元素与浮层(.no-drag)排除拖动 */
+/* 无边框窗口拖动策略(Electron 44.8 实测结论):
+   - 主拖动面是页头:页头为 no-drag,经 pointer 事件 + IPC 由主进程移动窗口,
+     完全绕开 Chromium 缺陷——内容区滚动后 -webkit-app-region 区域缓存错位且不重发
+     (electron#40610),任何渲染层强制重算都无效;
+   - 侧栏品牌区等空白区域仍走 app-region(它们不在滚动容器正上方,实测不受该缺陷影响);
+   - 勿给拖动面加 backdrop-filter(合成层会加剧区域命中失效)。 */
 body {
   -webkit-app-region: drag;
 }
@@ -27,9 +32,7 @@ label,
   -webkit-app-region: no-drag;
 }
 
-/* 显式拖动面(页头/侧栏品牌区):
-   勿给这些元素加 backdrop-filter——合成层在内容滚动重建后会导致
-   drag 区域命中失效(Electron 已知问题),表现为"滚动后顶部拖不动窗口" */
+/* 显式拖动面(侧栏品牌区):页头已改走 IPC 拖动,不再使用本机制 */
 .drag-region {
   -webkit-app-region: drag;
 }
@@ -68,13 +71,16 @@ label,
 }
 
 /* 内容区卡片/规则行统一悬停:边框提亮 + 阴影加深(不位移)
-   (限定 div 以排除按钮等交互控件;弹窗已 Portal 到 body,不受影响) */
+   (覆盖卡片体系的全部圆角档位 xl/2xl/3xl,如关于页首卡为 3xl;
+   限定 div 以排除按钮等交互控件;弹窗已 Portal 到 body,不受影响) */
 main div.rounded-xl.border,
-main div.rounded-2xl.border {
+main div.rounded-2xl.border,
+main div.rounded-3xl.border {
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 main div.rounded-xl.border:hover,
-main div.rounded-2xl.border:hover {
+main div.rounded-2xl.border:hover,
+main div.rounded-3xl.border:hover {
   border-color: rgba(148, 163, 184, 0.55);
   box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.14);
 }
