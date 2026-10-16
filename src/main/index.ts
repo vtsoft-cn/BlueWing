@@ -202,11 +202,14 @@ function createWindow(): void {
   TrayManager.getInstance().init(mainWindow);
 }
 
-/** 任务栏图标随代理状态切换:开启代理 → light,关闭 → dark */
+/** 任务栏图标:随 主题 × 代理状态 切换 */
 function applyWindowIcon(on: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
-    const p = windowIconPath(on) ?? getWindowIcon();
+    const settings = Database.getInstance().getSettings();
+    const theme = settings.theme || 'system';
+    const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
+    const p = windowIconPath(dark ? 'dark' : 'light', on) ?? getWindowIcon();
     if (p) mainWindow.setIcon(nativeImage.createFromPath(p));
   } catch {}
 }
@@ -816,6 +819,11 @@ ipcMain.handle('settings:save', async (_, s) => {
   const prevSettings = { ...db.getSettings() };
   db.saveSettings(s);
   const currentSettings = db.getSettings();
+
+  // 主题变化 → 立即刷新托盘/任务栏图标(图标随主题 × 代理状态)
+  if (prevSettings.theme !== currentSettings.theme) {
+    TrayManager.getInstance().updateMenu();
+  }
 
   // 1. Windows Startup
   if (s.startOnBoot !== undefined) {

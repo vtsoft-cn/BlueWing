@@ -1,9 +1,9 @@
-import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app } from 'electron';
+import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app, nativeTheme } from 'electron';
 import { Database } from '../db/Database';
 import { SingBoxManager } from '../core/SingBoxManager';
 import { SystemProxy } from '../system/SystemProxy';
 import { ConfigGenerator } from '../core/ConfigGenerator';
-import { resourcePath, windowIconPath, trayIconPath } from '../branding';
+import { resourcePath, windowIconPath, trayIconPath, IconTheme } from '../branding';
 
 export class TrayManager {
   private static instance: TrayManager;
@@ -12,9 +12,17 @@ export class TrayManager {
 
   private constructor() {}
 
-  /** 任务栏窗口图标随代理状态切换:开启 → light,关闭 → dark */
+  /** 图标主题:跟随界面设置,system 时用系统偏好判定 */
+  private iconTheme(): IconTheme {
+    const theme = Database.getInstance().getSettings().theme || 'system';
+    return theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors)
+      ? 'dark'
+      : 'light';
+  }
+
+  /** 任务栏窗口图标:随 主题 × 代理状态 切换 */
   private applyWindowIcon(on: boolean): void {
-    const p = windowIconPath(on);
+    const p = windowIconPath(this.iconTheme(), on);
     if (p && this.mainWindow && !this.mainWindow.isDestroyed()) {
       try {
         this.mainWindow.setIcon(p);
@@ -30,8 +38,8 @@ export class TrayManager {
   }
 
   private getTrayIcon(): NativeImage {
-    // 初始状态未连接代理 → dark;找不到时回退应用主图标
-    const p = trayIconPath(false) ?? resourcePath('icon.ico');
+    // 初始未连接代理 → off;主题跟随界面;找不到时回退应用主图标
+    const p = trayIconPath(this.iconTheme(), false) ?? resourcePath('icon.ico');
     if (p) {
       try {
         const img = nativeImage.createFromPath(p);
@@ -89,9 +97,11 @@ export class TrayManager {
       isRunning ? `BlueBird - 已连接: ${activeNode?.name || '未知'}` : 'BlueBird - 未连接'
     );
 
-    // 托盘图标随代理状态切换:开启代理 → light,关闭 → dark
+    // 托盘与任务栏图标:随 主题 × 代理状态 切换(主题在运行中改变时也会经此刷新)
     const proxyOn = isRunning && settings.systemProxyEnabled;
-    const statePng = trayIconPath(proxyOn);
+    const theme = this.iconTheme();
+    this.applyWindowIcon(proxyOn);
+    const statePng = trayIconPath(theme, proxyOn);
     if (statePng) {
       try {
         const img = nativeImage.createFromPath(statePng);

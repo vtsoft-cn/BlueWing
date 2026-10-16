@@ -12,8 +12,8 @@ import {
   Settings,
   Info,
 } from 'lucide-react';
-import logoDark from '../assets/dark.svg';
-import logoLight from '../assets/light.svg';
+import logoDark from '../assets/dark.png';
+import logoLight from '../assets/light.png';
 
 export type NavTab =
   | 'dashboard'
