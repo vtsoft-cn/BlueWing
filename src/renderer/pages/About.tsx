@@ -1,6 +1,6 @@
 import React from 'react';
-import logoDark from '../../images/png/app-dark-off.png';
-import logoLight from '../../images/png/app-light-off.png';
+import logoDark from '../../images/png/app-dark.png';
+import logoLight from '../../images/png/app-light.png';
 
 interface AboutProps {
   theme: 'light' | 'dark';

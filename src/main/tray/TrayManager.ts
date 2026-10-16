@@ -3,7 +3,7 @@ import { Database } from '../db/Database';
 import { SingBoxManager } from '../core/SingBoxManager';
 import { SystemProxy } from '../system/SystemProxy';
 import { ConfigGenerator } from '../core/ConfigGenerator';
-import { resourcePath, windowIconPath, trayIconPath, IconTheme } from '../branding';
+import { resourcePath, trayIconPath, IconTheme } from '../branding';
 
 export class TrayManager {
   private static instance: TrayManager;
@@ -20,16 +20,6 @@ export class TrayManager {
       : 'light';
   }
 
-  /** 任务栏窗口图标:随 主题 × 代理状态 切换 */
-  private applyWindowIcon(on: boolean): void {
-    const p = windowIconPath(this.iconTheme(), on);
-    if (p && this.mainWindow && !this.mainWindow.isDestroyed()) {
-      try {
-        this.mainWindow.setIcon(p);
-      } catch {}
-    }
-  }
-
   public static getInstance(): TrayManager {
     if (!TrayManager.instance) {
       TrayManager.instance = new TrayManager();
@@ -39,7 +29,7 @@ export class TrayManager {
 
   private getTrayIcon(): NativeImage {
     // 初始未连接代理 → off;主题跟随界面;找不到时回退应用主图标
-    const p = trayIconPath(this.iconTheme(), false) ?? resourcePath('icon.ico');
+    const p = trayIconPath(this.iconTheme(), false) ?? resourcePath('ico.ico');
     if (p) {
       try {
         const img = nativeImage.createFromPath(p);
@@ -97,10 +87,9 @@ export class TrayManager {
       isRunning ? `BlueBird - 已连接: ${activeNode?.name || '未知'}` : 'BlueBird - 未连接'
     );
 
-    // 托盘与任务栏图标:随 主题 × 代理状态 切换(主题在运行中改变时也会经此刷新)
+    // 托盘图标:随 主题 × 代理状态 切换(主题在运行中改变时也会经此刷新)
     const proxyOn = isRunning && settings.systemProxyEnabled;
     const theme = this.iconTheme();
-    this.applyWindowIcon(proxyOn);
     const statePng = trayIconPath(theme, proxyOn);
     if (statePng) {
       try {
@@ -124,7 +113,6 @@ export class TrayManager {
             await core.stop();
             if (settings.systemProxyEnabled) {
               await SystemProxy.disable();
-              this.applyWindowIcon(false);
             }
           } else {
             // 连接意图保护:系统代理与 TUN 都未启用时自动补开,确保连接真实生效
@@ -143,7 +131,6 @@ export class TrayManager {
             const started = await core.start(config);
             if (started && settings.systemProxyEnabled) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
-              this.applyWindowIcon(true);
             }
           }
           this.updateMenu();
@@ -175,10 +162,8 @@ export class TrayManager {
           if (core.getState() === 'running') {
             if (newState) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
-              this.applyWindowIcon(true);
             } else {
               await SystemProxy.disable();
-              this.applyWindowIcon(false);
             }
           } else if (newState) {
             // 核心未运行时勾选系统代理:自动连接,确保开关真实生效而不是只改设置
@@ -193,7 +178,6 @@ export class TrayManager {
             const started = await core.start(config);
             if (started) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
-              this.applyWindowIcon(true);
             }
           }
           this.updateMenu();

@@ -22,12 +22,7 @@ export function resourcePath(file: string): string | null {
   return null;
 }
 
-/** 任务栏窗口图标(.ico):主题 × 代理状态 */
-export function windowIconPath(theme: IconTheme, proxyOn: boolean): string | null {
-  return resourcePath(`app-${theme}-${proxyOn ? 'on' : 'off'}.ico`);
-}
-
-/** 托盘图标(.png):主题 × 代理状态 */
+/** 托盘图标(.png):主题 × 代理状态,统一使用 menu-* 圆形徽章变体 */
 export function trayIconPath(theme: IconTheme, proxyOn: boolean): string | null {
-  return resourcePath(`tray-${theme}-${proxyOn ? 'on' : 'off'}.png`);
+  return resourcePath(`menu-${theme}-${proxyOn ? 'on' : 'off'}.png`);
 }
