@@ -758,17 +758,20 @@ ipcMain.handle('subs:delete', (_, id) => {
   return deleted;
 });
 
-// 正在更新中的订阅(防止手动更新与自动调度并发重入)
-const subscriptionUpdatesInFlight = new Set<string>();
+// 正在更新中的订阅(防止手动更新与自动调度并发重入)。
+// 后到者共享同一次在途更新的 Promise 并等待其真实结果:
+// 若像互斥锁那样直接返回 false,手动刷新撞上后台自动更新时会立刻弹出
+// 上一次失败遗留的 errorMessage,看起来像"没有重新刷新、直接报订阅地址有问题"。
+const subscriptionUpdatesInFlight = new Map<string, Promise<boolean>>();
 
-async function updateSubscriptionById(id: string): Promise<boolean> {
-  if (subscriptionUpdatesInFlight.has(id)) return false;
-  subscriptionUpdatesInFlight.add(id);
-  try {
-    return await doUpdateSubscription(id);
-  } finally {
+function updateSubscriptionById(id: string): Promise<boolean> {
+  const inFlight = subscriptionUpdatesInFlight.get(id);
+  if (inFlight) return inFlight;
+  const p = doUpdateSubscription(id).finally(() => {
     subscriptionUpdatesInFlight.delete(id);
-  }
+  });
+  subscriptionUpdatesInFlight.set(id, p);
+  return p;
 }
 
 /** 到期检查:对开启"自动更新"且超出更新间隔的订阅执行后台更新 */

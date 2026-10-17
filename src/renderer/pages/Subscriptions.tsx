@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Portal } from '../components/Portal';
 import {Plus,
   RefreshCw,
@@ -27,6 +27,8 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  // 按钮 disabled 依赖重渲染生效,快速双击仍会并发触发两次更新并弹重复 toast,用 ref 同步挡住
+  const updatingIdRef = useRef<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -37,6 +39,8 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
 
   const handleUpdate = async (id: string) => {
     if (!window.electronAPI) return;
+    if (updatingIdRef.current === id) return;
+    updatingIdRef.current = id;
     setUpdatingId(id);
     try {
       const success = await window.electronAPI.subscriptions.update(id);
@@ -51,6 +55,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
     } catch (e: any) {
       toast.error(`更新订阅出错: ${e.message}`);
     } finally {
+      updatingIdRef.current = null;
       setUpdatingId(null);
     }
   };
