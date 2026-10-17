@@ -392,6 +392,46 @@ async function handleCoreStop(): Promise<boolean> {
   return true;
 }
 
+/**
+ * 节点集合变化后,若原活跃节点已被删除(saveNodes 回落只改数据库,不碰运行中的核心):
+ * - 广播 node:changed 同步渲染层高亮(此前仅手动切换路径广播,删除路径渲染层会停留在已删节点);
+ * - 核心运行中:热切换到回落节点(运行配置本就含全部节点 outbound,通常瞬时完成,失败自动重载核心);
+ * - 节点被全部删除:停核心并断开系统代理,避免核心继续用已删节点出流量而界面显示无节点。
+ * coreAlreadyConsistent:订阅更新按服务器地址保留活跃节点时,运行中核心仍走同一服务器,不打断连接。
+ */
+async function syncActiveNodeAfterNodesReplaced(
+  prevActiveId: string,
+  options?: { coreAlreadyConsistent?: boolean }
+): Promise<void> {
+  const db = Database.getInstance();
+  // 原活跃节点仍在列表(普通编辑/测速/排序):无需任何同步
+  if (!prevActiveId || db.getNodes().some((n) => n.id === prevActiveId)) return;
+
+  const newActiveId = db.getActiveNodeId();
+  mainWindow?.webContents.send('node:changed', newActiveId);
+
+  if (options?.coreAlreadyConsistent) return;
+  if (SingBoxManager.getInstance().getState() !== 'running') return;
+
+  if (!newActiveId) {
+    LogManager.getInstance().addLog(
+      'warn',
+      '节点列表已全部删除,停止代理核心并断开系统代理',
+      'app'
+    );
+    await handleCoreStop();
+    return;
+  }
+
+  const target = db.getNodes().find((n) => n.id === newActiveId);
+  LogManager.getInstance().addLog(
+    'info',
+    `活跃节点被删除,已自动切换至: ${target?.name ?? newActiveId}`,
+    'app'
+  );
+  await ProxySelectionService.selectNode(newActiveId);
+}
+
 async function handleCoreStart(): Promise<boolean> {
   const db = Database.getInstance();
   const core = SingBoxManager.getInstance();
@@ -588,9 +628,19 @@ SingBoxManager.getInstance().on('stateChange', (state) => {
 // Nodes
 ipcMain.handle('nodes:getAll', () => Database.getInstance().getNodes());
 ipcMain.handle('nodes:save', (_, nodes) => {
-  Database.getInstance().saveNodes(nodes);
+  const db = Database.getInstance();
+  const prevActiveId = db.getActiveNodeId();
+  db.saveNodes(nodes);
   // 节点列表变化后同步托盘菜单,避免显示过期列表
   TrayManager.getInstance().updateMenu();
+  // 活跃节点被删除时同步运行中核心与渲染层;普通编辑场景原活跃节点仍在,直接零开销返回
+  syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
+    LogManager.getInstance().addLog(
+      'error',
+      `删除节点后同步切换活跃节点失败: ${e?.message || e}`,
+      'app'
+    )
+  );
 });
 ipcMain.handle('nodes:getActiveId', () => Database.getInstance().getActiveNodeId());
 ipcMain.handle('nodes:setActiveId', async (_, id) => {
@@ -605,9 +655,21 @@ ipcMain.handle('nodes:batchPing', (_, list) => TcpPing.batchPing(list, 10));
 ipcMain.handle('subs:getAll', () => Database.getInstance().getSubscriptions());
 ipcMain.handle('subs:save', (_, subs) => Database.getInstance().saveSubscriptions(subs));
 ipcMain.handle('subs:delete', (_, id) => {
-  const deleted = Database.getInstance().deleteSubscriptionCascade(id);
+  const db = Database.getInstance();
+  const prevActiveId = db.getActiveNodeId();
+  const deleted = db.deleteSubscriptionCascade(id);
   // 节点列表变化后同步托盘菜单,避免显示过期列表
-  if (deleted) TrayManager.getInstance().updateMenu();
+  if (deleted) {
+    TrayManager.getInstance().updateMenu();
+    // 级联删除可能删掉活跃节点:同步运行中核心与渲染层
+    syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
+      LogManager.getInstance().addLog(
+        'error',
+        `删除订阅后同步切换活跃节点失败: ${e?.message || e}`,
+        'app'
+      )
+    );
+  }
   return deleted;
 });
 
@@ -689,10 +751,12 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
       db.saveNodes([...otherNodes, ...newNodes]);
 
       // 保持活跃节点:更新后 ID 会变,按服务器地址映射到新节点
+      let keptActiveOnSameServer = false;
       if (oldActive && oldActive.server) {
         const matched = newNodes.find((n) => nodeKey(n) === nodeKey(oldActive));
         if (matched) {
           db.setActiveNodeId(matched.id);
+          keptActiveOnSameServer = true;
           LogManager.getInstance().addLog(
             'info',
             `订阅更新完成,活跃节点已自动保持: ${matched.name}`,
@@ -714,6 +778,16 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
       db.saveSubscriptions(subs);
       // 节点列表已整体替换,同步托盘菜单
       TrayManager.getInstance().updateMenu();
+      // 活跃节点随更新被删/重映射:同步渲染层;运行中核心仅在未能保留原服务器时才切换
+      syncActiveNodeAfterNodesReplaced(prevActiveId, {
+        coreAlreadyConsistent: keptActiveOnSameServer,
+      }).catch((e: any) =>
+        LogManager.getInstance().addLog(
+          'error',
+          `订阅更新后同步切换活跃节点失败: ${e?.message || e}`,
+          'app'
+        )
+      );
       return true;
     } else {
       target.status = 'error';
