@@ -83,6 +83,8 @@ if (!gotTheLock) {
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      // 窗口可能处于关闭进托盘的隐藏状态(任务栏按钮已摘除),显示前挂回
+      mainWindow.setSkipTaskbar(false);
       mainWindow.show();
       mainWindow.focus();
     }
@@ -214,6 +216,10 @@ function createWindow(): void {
     const settings = Database.getInstance().getSettings();
     if (settings.closeToTray && !isAppQuitting) {
       e.preventDefault();
+      // Windows 下在 close 事件里同步 hide(),shell 会为这个"正在关闭"的窗口在
+      // 任务栏残留一个点击无响应的死按钮(窗口已隐藏但按钮不消失):
+      // 显式摘除任务栏按钮再隐藏,所有恢复显示路径统一挂回
+      mainWindow?.setSkipTaskbar(true);
       mainWindow?.hide();
     }
   });

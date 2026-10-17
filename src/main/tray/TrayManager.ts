@@ -59,9 +59,17 @@ export class TrayManager {
         this.mainWindow.focus();
       }
     } else {
-      this.mainWindow.show();
-      this.mainWindow.focus();
+      this.showFromTray();
     }
+  }
+
+  /** 从托盘恢复窗口:关闭进托盘时已摘除任务栏按钮,显示前挂回,避免窗口无任务栏入口 */
+  public showFromTray(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (this.mainWindow.isMinimized()) this.mainWindow.restore();
+    this.mainWindow.setSkipTaskbar(false);
+    this.mainWindow.show();
+    this.mainWindow.focus();
   }
 
   public updateMenu(): void {
@@ -203,8 +211,7 @@ export class TrayManager {
       {
         label: '打开主界面',
         click: () => {
-          this.mainWindow?.show();
-          this.mainWindow?.focus();
+          this.showFromTray();
         },
       },
       {
