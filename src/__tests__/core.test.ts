@@ -360,6 +360,19 @@ describe('ConfigGenerator', () => {
     );
   });
 
+  test('Base rule-sets resolve to bundled local files (offline-first startup)', () => {
+    // bin/rules 缺失时核心会退化为远程下载(被墙即反复重启),此测试锁死内置行为
+    const config = ConfigGenerator.generate('vless', sampleNodes, [], [], defaultDns, defaultSettings);
+    const tags = ['geosite-cn', 'geoip-cn', 'geosite-category-ads-all', 'geoip-private'];
+    for (const tag of tags) {
+      const rs = (config.route.rule_set || []).find((r: any) => r.tag === tag);
+      assert.ok(rs, `rule_set ${tag} must exist`);
+      assert.equal(rs.type, 'local', `rule_set ${tag} must be local, got ${rs.type}`);
+      assert.ok(typeof rs.path === 'string' && rs.path.endsWith('/' + tag + '.srs'), `rule_set ${tag} path must point to bundled .srs, got: ${rs.path}`);
+      assert.ok(fs.existsSync(rs.path), `bundled file must exist on disk: ${rs.path}`);
+    }
+  });
+
   test('Validates generated config against sing-box.exe check', async () => {
     const config = ConfigGenerator.generate('vless', sampleNodes, [], [], defaultDns, defaultSettings);
     const tempConfigPath = path.resolve(__dirname, 'temp_test_config.json');

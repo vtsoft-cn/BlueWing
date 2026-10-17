@@ -32,7 +32,10 @@ export class SystemProxy {
     try {
       const p = this.getStateFilePath();
       if (fs.existsSync(p)) {
-        return JSON.parse(fs.readFileSync(p, 'utf8'));
+        // 容错剥离 UTF-8 BOM:外部工具/编辑器写入的带 BOM JSON 会导致
+        // JSON.parse 失败、所有权被误判为 null(代理清理与还原全部跳过)
+        const raw = fs.readFileSync(p, 'utf8');
+        return JSON.parse(raw.replace(/^\uFEFF/, ''));
       }
     } catch {}
     return null;
@@ -157,9 +160,18 @@ export class SystemProxy {
   public static async disable(): Promise<boolean> {
     try {
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '0', '/f']);
+
+      // 清除死回环地址:仅当 ProxyServer 是本应用写入的受管服务器时删除,
+      // 不触碰用户自有代理配置;避免禁用后注册表残留 127.0.0.1:<port> 死值
+      const state = this.loadOwnership();
+      if (state?.managedServer) {
+        const current = await this.getFullRegistryStatus();
+        if (current.server === state.managedServer) {
+          await this.execReg(['delete', this.REG_KEY, '/v', 'ProxyServer', '/f']);
+        }
+      }
       await this.refreshWinINet();
 
-      const state = this.loadOwnership();
       if (state) {
         state.managedByBlueWing = false;
         this.saveOwnership(state);

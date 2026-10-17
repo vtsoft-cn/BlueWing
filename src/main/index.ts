@@ -5,6 +5,7 @@ import http from 'http';
 import dns from 'dns';
 import { spawn } from 'child_process';
 import { Database } from './db/Database';
+import { resolveDataDir } from './system/DataDirResolver';
 import { resourcePath } from './branding';
 import { SingBoxManager } from './core/SingBoxManager';
 import { ConfigGenerator } from './core/ConfigGenerator';
@@ -29,24 +30,16 @@ let startTime: number = 0;
 let totalRx: number = 0;
 let totalTx: number = 0;
 
-// 数据目录:便携优先(exe 同级 data/),目录不可写(如 Program Files)时回退 %APPDATA%\BlueWingConnect。
-// 必须在 app ready 之前设置:Chromium 配置(缓存/Cookie)、Database、LogManager、SystemProxy 全部跟随此目录。
+// 数据目录:便携优先(exe 同级 data/),不可写回退 %APPDATA%;含前向迁移与搁浅迁移规则
+// (详见 system/DataDirResolver.ts)。必须在 app ready 之前设置:Chromium 配置
+// (缓存/Cookie)、Database、LogManager、SystemProxy 全部跟随此目录。
 const exeDir = path.dirname(process.execPath || '');
 const portableDataDir = path.join(exeDir, 'data');
 const fallbackDataDir = path.join(
   process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'),
   'BlueWingConnect'
 );
-let appDataDir = fallbackDataDir;
-try {
-  fs.mkdirSync(portableDataDir, { recursive: true });
-  const probe = path.join(portableDataDir, '.write-probe');
-  fs.writeFileSync(probe, 'ok');
-  fs.unlinkSync(probe);
-  appDataDir = portableDataDir;
-} catch {
-  appDataDir = fallbackDataDir;
-}
+const { dir: appDataDir } = resolveDataDir(portableDataDir, fallbackDataDir);
 process.env.BLUEWING_DATA_DIR = appDataDir;
 app.setPath('userData', appDataDir);
 

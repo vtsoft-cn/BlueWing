@@ -71,16 +71,17 @@ label,
 }
 
 /* 内容区卡片/规则行统一悬停:边框提亮 + 阴影加深(不位移)
-   (覆盖卡片体系的全部圆角档位 xl/2xl/3xl,如关于页首卡为 3xl;
-   限定 div 以排除按钮等交互控件;弹窗已 Portal 到 body,不受影响) */
-main div.rounded-xl.border,
-main div.rounded-2xl.border,
-main div.rounded-3xl.border {
+   (覆盖卡片体系全部圆角档位 xl/2xl/3xl,如关于页首卡为 3xl;
+   卡片容器限定 div 与 form(设置页主卡为 <form>,纯 div 选择器会漏掉),
+   以排除按钮等交互控件;弹窗已 Portal 到 body,不受影响) */
+main :is(div, form).rounded-xl.border,
+main :is(div, form).rounded-2xl.border,
+main :is(div, form).rounded-3xl.border {
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
-main div.rounded-xl.border:hover,
-main div.rounded-2xl.border:hover,
-main div.rounded-3xl.border:hover {
+main :is(div, form).rounded-xl.border:hover,
+main :is(div, form).rounded-2xl.border:hover,
+main :is(div, form).rounded-3xl.border:hover {
   border-color: rgba(148, 163, 184, 0.55);
   box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.14);
 }

@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && tsc -p tsconfig.node.json",
-    "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts",
+    "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts src/__tests__/datadir.test.ts",
     "dist": "node scripts/preserve-data.js backup && npm run build && node scripts/dist-wrapper.js && node scripts/preserve-data.js restore",
     "dist:dir": "node scripts/preserve-data.js backup && npm run build && node scripts/dist-wrapper.js --dir && node scripts/preserve-data.js restore"
   },
@@ -43,7 +43,6 @@
     },
     "files": [
       "dist/**/*",
-      "bin/**/*",
       "package.json"
     ],
     "extraResources": [
@@ -76,7 +75,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "src/images/ico/ico.ico",
       "uninstallerIcon": "src/images/ico/ico.ico",
