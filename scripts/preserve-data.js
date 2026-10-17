@@ -52,7 +52,7 @@ if (mode === 'backup') {
 
   if (fs.existsSync(src) && hasUserData(src)) {
     copyDir(src, keep);
-    console.log('[preserve-data] 已备份便携数据 → release/.data-preserve');
+    console.log('[preserve-data] 已备份便携数据 → .data-preserve(仓库根)');
   } else {
     console.log('[preserve-data] 无有效便携数据需要备份');
   }
@@ -60,7 +60,13 @@ if (mode === 'backup') {
   if (!fs.existsSync(src) || !hasUserData(src)) {
     if (fs.existsSync(keep)) {
       copyDir(keep, src);
-      console.log('[preserve-data] 构建清空了 data/,已从备份还原');
+      // 一次性消费:还原成功即删除备份。否则用户此后主动清空数据时,
+      // 下次构建 restore 又会把这份过期备份"复活"回去,与用户删除意图相悖。
+      // 若构建中途崩溃(已清 data 未走到还原),备份未消费、保留给下次构建兜底。
+      try {
+        fs.rmSync(keep, { recursive: true, force: true });
+      } catch {}
+      console.log('[preserve-data] 构建清空了 data/,已从备份还原(备份已消费)');
     } else {
       console.log('[preserve-data] 无备份可还原');
     }
