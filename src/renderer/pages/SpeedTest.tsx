@@ -16,7 +16,6 @@ interface SpeedTestProps {
   nodes: ProxyNode[];
   activeNodeId: string;
   onSelectNode: (id: string) => void;
-  onSaveNodes: (nodes: ProxyNode[]) => void;
 }
 
 interface TestRow {
@@ -32,7 +31,6 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
   nodes,
   activeNodeId,
   onSelectNode,
-  onSaveNodes,
 }) => {
   const [testMode, setTestMode] = useState<'ping' | 'latency' | 'download' | 'full'>('ping');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
@@ -203,20 +201,21 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
 
     // Persist all results back to database
     setTestRows((latestRows) => {
-      const savedNodes = nodes.map((n) => {
-        const match = latestRows.find((r) => r.node.id === n.id);
-        if (match) {
+      window.electronAPI?.nodes.bulkUpdate(
+        latestRows.map((r) => {
+          const cur = nodes.find((n) => n.id === r.node.id);
           return {
-            ...n,
-            ping: match.tcpPing !== undefined ? match.tcpPing : n.ping,
-            httpLatency: match.httpLatency !== undefined ? match.httpLatency : n.httpLatency,
-            downloadSpeed: match.downloadSpeed !== undefined ? match.downloadSpeed : n.downloadSpeed,
-            lastTested: Date.now(),
+            id: r.node.id,
+            patch: {
+              // 未测出的项保留原值(与原全量回传语义一致)
+              ping: r.tcpPing !== undefined ? r.tcpPing : cur?.ping,
+              httpLatency: r.httpLatency !== undefined ? r.httpLatency : cur?.httpLatency,
+              downloadSpeed: r.downloadSpeed !== undefined ? r.downloadSpeed : cur?.downloadSpeed,
+              lastTested: Date.now(),
+            },
           };
-        }
-        return n;
-      });
-      onSaveNodes(savedNodes);
+        })
+      );
       return latestRows;
     });
 
@@ -271,18 +270,13 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
             : r
         );
 
-        const savedNodes = nodes.map((n) =>
-          n.id === targetNode.id
-            ? {
-                ...n,
-                ping: pingRes.time,
-                httpLatency: lat !== undefined ? lat : n.httpLatency,
-                downloadSpeed: dl !== undefined ? dl : n.downloadSpeed,
-                lastTested: Date.now(),
-              }
-            : n
-        );
-        onSaveNodes(savedNodes);
+        const cur = nodes.find((n) => n.id === targetNode.id);
+        window.electronAPI?.nodes.update(targetNode.id, {
+          ping: pingRes.time,
+          httpLatency: lat !== undefined ? lat : cur?.httpLatency,
+          downloadSpeed: dl !== undefined ? dl : cur?.downloadSpeed,
+          lastTested: Date.now(),
+        });
 
         return updated;
       });

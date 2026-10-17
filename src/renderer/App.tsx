@@ -155,6 +155,22 @@ export const App: React.FC = () => {
       const unsubNode = window.electronAPI.nodes.onNodeChanged((id) => {
         setActiveNodeId(id);
       });
+      // 主进程为节点列表唯一事实源:订阅更新(含后台自动)/备份导入/增删改后统一刷新
+      const unsubNodes = window.electronAPI.nodes.onNodesChanged((list) => {
+        setNodes(list);
+      });
+      const unsubSubs = window.electronAPI.subscriptions.onSubsChanged((subs) => {
+        setSubscriptions(subs);
+      });
+      const unsubRules = window.electronAPI.routing.onRulesChanged((rules) => {
+        setRules(rules);
+      });
+      const unsubAppRules = window.electronAPI.routing.onAppRulesChanged((appRules) => {
+        setAppRules(appRules);
+      });
+      const unsubDns = window.electronAPI.dns.onDnsChanged((dnsCfg) => {
+        setDns(dnsCfg);
+      });
       const unsubSettings = window.electronAPI.settings.onSettingsChanged((s) => {
         setSettings(s);
       });
@@ -163,6 +179,11 @@ export const App: React.FC = () => {
         unsubState();
         unsubTraffic();
         unsubNode();
+        unsubNodes();
+        unsubSubs();
+        unsubRules();
+        unsubAppRules();
+        unsubDns();
         unsubSettings();
       };
     }
@@ -206,14 +227,6 @@ export const App: React.FC = () => {
     setActiveNodeId(id);
     if (window.electronAPI) {
       await window.electronAPI.nodes.setActiveId(id);
-    }
-  };
-
-  // Save Nodes
-  const handleSaveNodes = async (newNodes: ProxyNode[]) => {
-    setNodes(newNodes);
-    if (window.electronAPI) {
-      await window.electronAPI.nodes.save(newNodes);
     }
   };
 
@@ -301,7 +314,6 @@ export const App: React.FC = () => {
                 nodes={nodes}
                 activeNodeId={activeNodeId}
                 onSelectNode={handleSelectNode}
-                onSaveNodes={handleSaveNodes}
                 subscriptions={subscriptions}
               />
             )}
@@ -335,7 +347,6 @@ export const App: React.FC = () => {
                 nodes={nodes}
                 activeNodeId={activeNodeId}
                 onSelectNode={handleSelectNode}
-                onSaveNodes={handleSaveNodes}
               />
             )}
 

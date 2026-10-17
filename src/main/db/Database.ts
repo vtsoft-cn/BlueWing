@@ -367,6 +367,53 @@ export class Database {
     this.save();
   }
 
+  // ---- 定向节点操作(渲染层不再全量回传列表,主进程为唯一事实源) ----
+
+  public addNode(node: ProxyNode): void {
+    this.nodes.push(node);
+    // 空列表首节点即活跃,与 saveNodes 回落语义一致
+    if (!this.activeNodeId) this.activeNodeId = node.id;
+    this.save();
+  }
+
+  /** 编辑节点:同 id 整体替换 */
+  public updateNode(node: ProxyNode): boolean {
+    const idx = this.nodes.findIndex((n) => n.id === node.id);
+    if (idx < 0) return false;
+    this.nodes[idx] = { ...node, id: this.nodes[idx].id };
+    this.save();
+    return true;
+  }
+
+  /** 字段级补丁(测速/星标等),id 不可变;高频调用走去抖落盘 */
+  public updateNodeFields(id: string, patch: Partial<ProxyNode>): boolean {
+    const idx = this.nodes.findIndex((n) => n.id === id);
+    if (idx < 0) return false;
+    this.nodes[idx] = { ...this.nodes[idx], ...patch, id };
+    this.saveDebounced();
+    return true;
+  }
+
+  public bulkUpdateNodeFields(patches: { id: string; patch: Partial<ProxyNode> }[]): number {
+    if (patches.length === 0) return 0;
+    const map = new Map(patches.map((p) => [p.id, p.patch]));
+    let applied = 0;
+    this.nodes = this.nodes.map((node) => {
+      const patch = map.get(node.id);
+      if (!patch) return node;
+      applied++;
+      return { ...node, ...patch, id: node.id };
+    });
+    if (applied > 0) this.saveDebounced();
+    return applied;
+  }
+
+  public deleteNode(id: string): boolean {
+    if (!this.nodes.some((n) => n.id === id)) return false;
+    this.saveNodes(this.nodes.filter((n) => n.id !== id));
+    return true;
+  }
+
   public getSubscriptions(): Subscription[] {
     return this.subscriptions;
   }

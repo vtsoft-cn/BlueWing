@@ -40,7 +40,16 @@ export const api = {
   // Nodes management
   nodes: {
     getAll: (): Promise<ProxyNode[]> => ipcRenderer.invoke('nodes:getAll'),
-    save: (nodes: ProxyNode[]) => ipcRenderer.invoke('nodes:save', nodes),
+    /** 字段级补丁(测速/星标等),id 不可变 */
+    update: (id: string, patch: Partial<ProxyNode>) =>
+      ipcRenderer.invoke('nodes:updateFields', id, patch),
+    /** 批量字段补丁(批量测速) */
+    bulkUpdate: (patches: { id: string; patch: Partial<ProxyNode> }[]) =>
+      ipcRenderer.invoke('nodes:bulkUpdateFields', patches),
+    /** 编辑节点:同 id 整体替换 */
+    replace: (node: ProxyNode) => ipcRenderer.invoke('nodes:updateFull', node),
+    add: (node: ProxyNode) => ipcRenderer.invoke('nodes:add', node),
+    remove: (id: string) => ipcRenderer.invoke('nodes:delete', id),
     getActiveId: (): Promise<string> => ipcRenderer.invoke('nodes:getActiveId'),
     setActiveId: (id: string) => ipcRenderer.invoke('nodes:setActiveId', id),
     ping: (host: string, port: number) => ipcRenderer.invoke('nodes:ping', host, port),
@@ -52,6 +61,12 @@ export const api = {
       ipcRenderer.on('node:changed', sub);
       return () => ipcRenderer.removeListener('node:changed', sub);
     },
+    // 主进程侧节点列表变更(订阅更新/备份导入/增删改)后刷新 UI,渲染层不再持有列表事实源
+    onNodesChanged: (callback: (nodes: ProxyNode[]) => void) => {
+      const sub = (_: any, nodes: ProxyNode[]) => callback(nodes);
+      ipcRenderer.on('nodes:changed', sub);
+      return () => ipcRenderer.removeListener('nodes:changed', sub);
+    },
   },
 
   // Subscriptions
@@ -60,6 +75,12 @@ export const api = {
     save: (subs: Subscription[]) => ipcRenderer.invoke('subs:save', subs),
     delete: (id: string) => ipcRenderer.invoke('subs:delete', id),
     update: (id: string) => ipcRenderer.invoke('subs:update', id),
+    // 订阅更新(含后台自动更新)状态变化后刷新 UI
+    onSubsChanged: (callback: (subs: Subscription[]) => void) => {
+      const sub = (_: any, subs: Subscription[]) => callback(subs);
+      ipcRenderer.on('subs:changed', sub);
+      return () => ipcRenderer.removeListener('subs:changed', sub);
+    },
   },
 
   // Routing
@@ -72,6 +93,17 @@ export const api = {
     /** 更新分流规则集数据(.srs)到用户数据目录,返回成功/失败清单与核心连接状态 */
     updateRuleSets: (): Promise<{ updated: string[]; failed: string[]; coreRunning: boolean }> =>
       ipcRenderer.invoke('rules:updateRuleSets'),
+    // 备份导入替换规则后刷新 UI
+    onRulesChanged: (callback: (rules: RouteRule[]) => void) => {
+      const sub = (_: any, rules: RouteRule[]) => callback(rules);
+      ipcRenderer.on('rules:changed', sub);
+      return () => ipcRenderer.removeListener('rules:changed', sub);
+    },
+    onAppRulesChanged: (callback: (rules: AppRule[]) => void) => {
+      const sub = (_: any, rules: AppRule[]) => callback(rules);
+      ipcRenderer.on('apprules:changed', sub);
+      return () => ipcRenderer.removeListener('apprules:changed', sub);
+    },
   },
 
   // DNS
@@ -82,6 +114,12 @@ export const api = {
       domain: string
     ): Promise<{ success: boolean; ip?: string; allIps?: string[]; latency?: number; error?: string }> =>
       ipcRenderer.invoke('dns:testResolve', domain),
+    // 备份导入替换 DNS 配置后刷新 UI
+    onDnsChanged: (callback: (dns: DnsConfig) => void) => {
+      const sub = (_: any, dns: DnsConfig) => callback(dns);
+      ipcRenderer.on('dns:changed', sub);
+      return () => ipcRenderer.removeListener('dns:changed', sub);
+    },
   },
 
   // Logs

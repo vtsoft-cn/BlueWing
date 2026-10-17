@@ -26,7 +26,6 @@ interface NodesProps {
   nodes: ProxyNode[];
   activeNodeId: string;
   onSelectNode: (id: string) => void;
-  onSaveNodes: (nodes: ProxyNode[]) => void;
   subscriptions: Subscription[];
 }
 
@@ -79,7 +78,6 @@ export const Nodes: React.FC<NodesProps> = ({
   nodes,
   activeNodeId,
   onSelectNode,
-  onSaveNodes,
   subscriptions,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -227,11 +225,9 @@ export const Nodes: React.FC<NodesProps> = ({
     setPingingNodeIds((prev) => new Set(prev).add(node.id));
     try {
       const res = await window.electronAPI.nodes.ping(node.server, node.port);
-      const updated = nodes.map((n) => (n.id === node.id ? { ...n, ping: res.time, lastTested: Date.now() } : n));
-      onSaveNodes(updated);
+      window.electronAPI.nodes.update(node.id, { ping: res.time, lastTested: Date.now() });
     } catch {
-      const updated = nodes.map((n) => (n.id === node.id ? { ...n, ping: -1, lastTested: Date.now() } : n));
-      onSaveNodes(updated);
+      window.electronAPI.nodes.update(node.id, { ping: -1, lastTested: Date.now() });
     } finally {
       setPingingNodeIds((prev) => {
         const next = new Set(prev);
@@ -246,31 +242,31 @@ export const Nodes: React.FC<NodesProps> = ({
     setIsPinging(true);
     const list = filteredNodes.map((n) => ({ id: n.id, host: n.server, port: n.port }));
     const resultsMap = await window.electronAPI.nodes.batchPing(list);
-    const updated = nodes.map((n) => {
-      const res = resultsMap.get(n.id);
-      return res ? { ...n, ping: res.time } : n;
-    });
-    onSaveNodes(updated);
+    window.electronAPI.nodes.bulkUpdate(
+      list
+        .filter((n) => resultsMap.has(n.id))
+        .map((n) => ({ id: n.id, patch: { ping: resultsMap.get(n.id)!.time } }))
+    );
     setIsPinging(false);
   };
 
   const handleClearPings = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = nodes.map((n) => ({ ...n, ping: undefined }));
-    onSaveNodes(updated);
+    window.electronAPI?.nodes.bulkUpdate(
+      nodes.map((n) => ({ id: n.id, patch: { ping: undefined } }))
+    );
   };
 
   const handleToggleStar = (nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = nodes.map((n) => (n.id === nodeId ? { ...n, starred: !n.starred } : n));
-    onSaveNodes(updated);
+    const target = nodes.find((n) => n.id === nodeId);
+    if (target) window.electronAPI?.nodes.update(nodeId, { starred: !target.starred });
   };
 
   const handleDeleteNode = async (nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!(await confirmDialog({ title: '删除节点', message: '确定要删除此节点吗？', danger: true }))) return;
-    const updated = nodes.filter((n) => n.id !== nodeId);
-    onSaveNodes(updated);
+    await window.electronAPI?.nodes.remove(nodeId);
   };
 
   const handleCopyLink = (node: ProxyNode, e: React.MouseEvent) => {
@@ -327,8 +323,7 @@ export const Nodes: React.FC<NodesProps> = ({
       toast.success(`成功导入 ${imported.length} 个节点`);
       setImportText('');
       setShowImportModal(false);
-      const all = await window.electronAPI.nodes.getAll();
-      onSaveNodes(all);
+      // 节点列表由主进程广播 nodes:changed 统一刷新
     } else {
       toast.error('未识别到有效的节点链接');
     }
@@ -718,11 +713,10 @@ export const Nodes: React.FC<NodesProps> = ({
           }}
           onSave={(saved) => {
             if (editingNode) {
-              const updated = nodes.map((n) => (n.id === saved.id ? saved : n));
-              onSaveNodes(updated);
+              window.electronAPI?.nodes.replace(saved);
               toast.success(`节点「${saved.name}」已更新`);
             } else {
-              onSaveNodes([...nodes, saved]);
+              window.electronAPI?.nodes.add(saved);
               toast.success(`节点「${saved.name}」添加成功`);
             }
           }}
@@ -773,18 +767,13 @@ export const Nodes: React.FC<NodesProps> = ({
           isActive={speedTestingNode.id === activeNodeId}
           onSelectNode={onSelectNode}
           onSaveNodePing={(nodeId, ping, httpLatency, downloadSpeed) => {
-            const updated = nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    ping,
-                    httpLatency: httpLatency !== undefined ? httpLatency : n.httpLatency,
-                    downloadSpeed: downloadSpeed !== undefined ? downloadSpeed : n.downloadSpeed,
-                    lastTested: Date.now(),
-                  }
-                : n
-            );
-            onSaveNodes(updated);
+            const current = nodes.find((n) => n.id === nodeId);
+            window.electronAPI?.nodes.update(nodeId, {
+              ping,
+              httpLatency: httpLatency !== undefined ? httpLatency : current?.httpLatency,
+              downloadSpeed: downloadSpeed !== undefined ? downloadSpeed : current?.downloadSpeed,
+              lastTested: Date.now(),
+            });
           }}
           onClose={() => setSpeedTestingNode(null)}
         />

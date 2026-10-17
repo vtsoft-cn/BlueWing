@@ -21,7 +21,7 @@ import { BackupService } from './db/backup/BackupService';
 import { SubscriptionFetcher } from './net/SubscriptionFetcher';
 import { UniversalSubscriptionParser } from './net/UniversalSubscriptionParser';
 import { TrayManager } from './tray/TrayManager';
-import { TrafficStats } from '../types';
+import { TrafficStats, Subscription } from '../types';
 import { LogManager } from './log/LogManager';
 
 let mainWindow: BrowserWindow | null = null;
@@ -438,6 +438,42 @@ async function syncActiveNodeAfterNodesReplaced(
   await ProxySelectionService.selectNode(newActiveId);
 }
 
+/**
+ * 节点列表任何主进程侧变更后统一广播全量列表。
+ * 渲染层不再回传全量列表(旧 nodes:save 与订阅自动更新并发时会用过期列表覆盖新节点,
+ * 且自动更新后渲染层列表过期、点击旧节点报"节点不存在"),以主进程为唯一事实源。
+ */
+function broadcastNodesChanged(): void {
+  mainWindow?.webContents.send('nodes:changed', Database.getInstance().getNodes());
+}
+
+/**
+ * 备份导入/恢复会整体替换节点(乃至订阅/规则/DNS/设置):成功后同步托盘与全部
+ * 渲染层状态,并在活跃节点被替换时同步运行中核心(与删除路径同一套回落语义)。
+ */
+async function runBackupImport<T>(fn: () => Promise<T> | T): Promise<T> {
+  const db = Database.getInstance();
+  const prevActiveId = db.getActiveNodeId();
+  const res = await fn();
+  if (!res || (res as any).success !== false) {
+    TrayManager.getInstance().updateMenu();
+    broadcastNodesChanged();
+    mainWindow?.webContents.send('subs:changed', db.getSubscriptions());
+    mainWindow?.webContents.send('settings:changed', db.getSettings());
+    mainWindow?.webContents.send('rules:changed', db.getRules());
+    mainWindow?.webContents.send('apprules:changed', db.getAppRules());
+    mainWindow?.webContents.send('dns:changed', db.getDns());
+    syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
+      LogManager.getInstance().addLog(
+        'error',
+        `备份导入后同步切换活跃节点失败: ${e?.message || e}`,
+        'app'
+      )
+    );
+  }
+  return res;
+}
+
 async function handleCoreStart(): Promise<boolean> {
   const db = Database.getInstance();
   const core = SingBoxManager.getInstance();
@@ -632,21 +668,51 @@ SingBoxManager.getInstance().on('stateChange', (state) => {
 });
 
 // Nodes
+// 渲染层全部走定向操作;主进程变更后广播 nodes:changed,渲染层订阅刷新。
+// 字段补丁不触发托盘重建(托盘只展示名称/类型,补丁不触及);增/删/整体替换才更新托盘。
 ipcMain.handle('nodes:getAll', () => Database.getInstance().getNodes());
-ipcMain.handle('nodes:save', (_, nodes) => {
+ipcMain.handle('nodes:updateFields', (_, id, patch) => {
+  const ok = Database.getInstance().updateNodeFields(id, patch);
+  if (ok) broadcastNodesChanged();
+  return ok;
+});
+ipcMain.handle('nodes:bulkUpdateFields', (_, patches) => {
+  const applied = Database.getInstance().bulkUpdateNodeFields(patches);
+  if (applied > 0) broadcastNodesChanged();
+  return applied;
+});
+ipcMain.handle('nodes:updateFull', (_, node) => {
+  const ok = Database.getInstance().updateNode(node);
+  if (ok) {
+    TrayManager.getInstance().updateMenu();
+    broadcastNodesChanged();
+  }
+  return ok;
+});
+ipcMain.handle('nodes:add', (_, node) => {
+  Database.getInstance().addNode(node);
+  TrayManager.getInstance().updateMenu();
+  broadcastNodesChanged();
+  return true;
+});
+ipcMain.handle('nodes:delete', (_, id) => {
   const db = Database.getInstance();
   const prevActiveId = db.getActiveNodeId();
-  db.saveNodes(nodes);
-  // 节点列表变化后同步托盘菜单,避免显示过期列表
-  TrayManager.getInstance().updateMenu();
-  // 活跃节点被删除时同步运行中核心与渲染层;普通编辑场景原活跃节点仍在,直接零开销返回
-  syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
-    LogManager.getInstance().addLog(
-      'error',
-      `删除节点后同步切换活跃节点失败: ${e?.message || e}`,
-      'app'
-    )
-  );
+  const deleted = db.deleteNode(id);
+  if (deleted) {
+    // 节点列表变化后同步托盘菜单,避免显示过期列表
+    TrayManager.getInstance().updateMenu();
+    broadcastNodesChanged();
+    // 活跃节点被删除时同步运行中核心与渲染层;普通删除场景原活跃节点仍在,零开销返回
+    syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
+      LogManager.getInstance().addLog(
+        'error',
+        `删除节点后同步切换活跃节点失败: ${e?.message || e}`,
+        'app'
+      )
+    );
+  }
+  return deleted;
 });
 ipcMain.handle('nodes:getActiveId', () => Database.getInstance().getActiveNodeId());
 ipcMain.handle('nodes:setActiveId', async (_, id) => {
@@ -659,7 +725,19 @@ ipcMain.handle('nodes:batchPing', (_, list) => TcpPing.batchPing(list, 10));
 
 // Subscriptions
 ipcMain.handle('subs:getAll', () => Database.getInstance().getSubscriptions());
-ipcMain.handle('subs:save', (_, subs) => Database.getInstance().saveSubscriptions(subs));
+ipcMain.handle('subs:save', (_, subs) => {
+  const db = Database.getInstance();
+  // 渲染层全量回传可能基于过期快照:保留主进程侧后台自动更新的状态字段,
+  // 避免并发时把 status/lastUpdate/nodeCount 回退(增删改语义不受影响)
+  const cur = new Map(db.getSubscriptions().map((s) => [s.id, s]));
+  const merged = subs.map((s: Subscription) => {
+    const c = cur.get(s.id);
+    return c
+      ? { ...s, status: c.status, lastUpdate: c.lastUpdate, nodeCount: c.nodeCount, errorMessage: c.errorMessage }
+      : s;
+  });
+  db.saveSubscriptions(merged);
+});
 ipcMain.handle('subs:delete', (_, id) => {
   const db = Database.getInstance();
   const prevActiveId = db.getActiveNodeId();
@@ -667,6 +745,7 @@ ipcMain.handle('subs:delete', (_, id) => {
   // 节点列表变化后同步托盘菜单,避免显示过期列表
   if (deleted) {
     TrayManager.getInstance().updateMenu();
+    broadcastNodesChanged();
     // 级联删除可能删掉活跃节点:同步运行中核心与渲染层
     syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
       LogManager.getInstance().addLog(
@@ -782,8 +861,10 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
       target.status = 'success';
       target.errorMessage = undefined;
       db.saveSubscriptions(subs);
-      // 节点列表已整体替换,同步托盘菜单
+      // 节点列表已整体替换,同步托盘菜单与渲染层(含后台自动更新场景)
       TrayManager.getInstance().updateMenu();
+      broadcastNodesChanged();
+      mainWindow?.webContents.send('subs:changed', subs);
       // 活跃节点随更新被删/重映射:同步渲染层;运行中核心仅在未能保留原服务器时才切换
       syncActiveNodeAfterNodesReplaced(prevActiveId, {
         coreAlreadyConsistent: keptActiveOnSameServer,
@@ -799,6 +880,7 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
       target.status = 'error';
       target.errorMessage = '未能从订阅源解析出有效节点';
       db.saveSubscriptions(subs);
+      mainWindow?.webContents.send('subs:changed', subs);
       return false;
     }
   } catch (e: any) {
@@ -806,6 +888,7 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
     target.status = 'error';
     target.errorMessage = e.message || '更新订阅失败';
     db.saveSubscriptions(subs);
+    mainWindow?.webContents.send('subs:changed', subs);
     return false;
   }
 }
@@ -919,7 +1002,7 @@ ipcMain.handle('webdav:backup', async () => {
   return true;
 });
 ipcMain.handle('webdav:restore', async () => {
-  const res = await WebDAVSyncService.restore();
+  const res = await runBackupImport(() => WebDAVSyncService.restore());
   if (!res.success) {
     throw new Error(res.message);
   }
@@ -931,19 +1014,25 @@ ipcMain.handle('backup:export', (_, categories) => BackupService.exportWindowsBa
 ipcMain.handle('backup:exportAndroid', (_, categories) => BackupService.exportAndroidBackup(categories));
 ipcMain.handle('backup:previewImport', (_, content, categories) => BackupService.previewImport(content, categories));
 ipcMain.handle('backup:importWithTransaction', (_, content, categories, mode) =>
-  BackupService.importWithTransaction(content, categories, mode)
+  runBackupImport(() => BackupService.importWithTransaction(content, categories, mode))
 );
 ipcMain.handle('backup:createLocalBackup', () => BackupService.createLocalBackup());
-ipcMain.handle('backup:restoreLocalBackup', () => BackupService.restoreLocalBackup());
+ipcMain.handle('backup:restoreLocalBackup', () =>
+  runBackupImport(() => BackupService.restoreLocalBackup())
+);
 ipcMain.handle('backup:getLatestLocalBackupInfo', () => BackupService.getLatestLocalBackupInfo());
 ipcMain.handle('backup:import', (_, content) =>
-  BackupService.importWithTransaction(content, { profiles: true, rules: true, settings: true })
+  runBackupImport(() =>
+    BackupService.importWithTransaction(content, { profiles: true, rules: true, settings: true })
+  )
 );
 ipcMain.handle('backup:importLinks', (_, text) => {
   const nodes = BackupMigrator.parseNodeLinks(text);
   if (nodes.length > 0) {
     const db = Database.getInstance();
     db.saveNodes([...db.getNodes(), ...nodes]);
+    TrayManager.getInstance().updateMenu();
+    broadcastNodesChanged();
   }
   return nodes;
 });

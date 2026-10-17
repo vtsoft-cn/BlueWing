@@ -216,3 +216,82 @@ describe('Database Storage & Recovery', () => {
     assert.equal(reloaded.getActiveNodeId(), '', 'Active node id must be empty when no nodes remain');
   });
 });
+
+describe('Database Targeted Node Operations', () => {
+  beforeEach(() => {
+    cleanTestDir();
+  });
+
+  afterEach(() => {
+    cleanTestDir();
+  });
+
+  const mkNode = (id: string): ProxyNode => ({
+    id,
+    name: id,
+    type: 'socks',
+    server: '1.1.1.1',
+    port: 1080,
+    groupId: 'manual',
+  });
+
+  test('updateNodeFields patches fields, keeps id immutable, returns false for unknown id', () => {
+    const db = Database.getInstance(TEST_DB_DIR);
+    db.saveNodes([mkNode('n1'), mkNode('n2')]);
+    db.setActiveNodeId('n1');
+
+    assert.equal(db.updateNodeFields('n1', { ping: 42, starred: true, id: 'EVIL' }), true);
+    const patched = db.getNodes().find((n) => n.id === 'n1')!;
+    assert.equal(patched.ping, 42);
+    assert.equal(patched.starred, true);
+    assert.equal(patched.id, 'n1', 'Patch must never change node id');
+    assert.equal(db.updateNodeFields('missing', { ping: 1 }), false, 'Unknown id must return false');
+
+    // 去抖落盘尚未写盘,重载前必须显式 flush(resetInstance 会丢弃待写定时器)
+    db.flush();
+    Database.resetInstance();
+    const reloaded = Database.getInstance(TEST_DB_DIR);
+    assert.equal(reloaded.getNodes().find((n) => n.id === 'n1')?.ping, 42);
+  });
+
+  test('bulkUpdateNodeFields applies only matching ids and reports count', () => {
+    const db = Database.getInstance(TEST_DB_DIR);
+    db.saveNodes([mkNode('n1'), mkNode('n2'), mkNode('n3')]);
+
+    const applied = db.bulkUpdateNodeFields([
+      { id: 'n1', patch: { ping: 10 } },
+      { id: 'n3', patch: { ping: 30 } },
+      { id: 'ghost', patch: { ping: -1 } },
+    ]);
+    assert.equal(applied, 2, 'Only existing ids count as applied');
+    assert.equal(db.getNodes().find((n) => n.id === 'n2')?.ping, undefined);
+    assert.equal(db.bulkUpdateNodeFields([]), 0, 'Empty patch list is a no-op');
+  });
+
+  test('addNode sets active when list was empty; updateNode replaces by id', () => {
+    const db = Database.getInstance(TEST_DB_DIR);
+    db.addNode(mkNode('first'));
+    assert.equal(db.getActiveNodeId(), 'first', 'First node added to empty list becomes active');
+
+    const edited = { ...mkNode('first'), name: 'renamed', server: '2.2.2.2' };
+    assert.equal(db.updateNode(edited), true);
+    assert.equal(db.getNodes()[0].name, 'renamed');
+    assert.equal(db.getNodes()[0].server, '2.2.2.2');
+    assert.equal(db.updateNode(mkNode('missing')), false, 'Updating unknown id must return false');
+    assert.equal(db.getActiveNodeId(), 'first', 'Editing a node keeps the active id');
+  });
+
+  test('deleteNode falls back active node and clears it when list becomes empty', () => {
+    const db = Database.getInstance(TEST_DB_DIR);
+    db.saveNodes([mkNode('n1'), mkNode('n2')]);
+    db.setActiveNodeId('n2');
+
+    assert.equal(db.deleteNode('n2'), true, 'Deleting active node succeeds');
+    assert.equal(db.getActiveNodeId(), 'n1', 'Active falls back to first remaining node');
+    assert.equal(db.deleteNode('n2'), false, 'Deleting twice returns false');
+
+    assert.equal(db.deleteNode('n1'), true);
+    assert.equal(db.getNodes().length, 0);
+    assert.equal(db.getActiveNodeId(), '', 'Active id cleared when no nodes remain');
+  });
+});
