@@ -22,10 +22,37 @@ export class SubscriptionFetcher {
   ].join(' ');
 
   /**
+   * 把各阶段的失败证据归类为简短中文原因(区分 DNS/超时/拒连/TLS/HTTP 状态),
+   * 让用户能判断是所在网络拦截还是订阅服务器问题。
+   * curl 的错误对象 code 为其退出码:6=DNS 7=拒连/连不上 28=超时 35+*=TLS。
+   */
+  private static classifyFailure(err: any, stage: string): string {
+    const msg = String(err?.message || err?.name || err || '');
+    const code = typeof err?.code === 'number' ? err.code : undefined;
+    if (err?.name === 'AbortError' || /timed?out|timeout/i.test(msg) || code === 28) {
+      return `${stage}:连接超时`;
+    }
+    if (code === 6 || /ENOTFOUND|EAI_AGAIN|getaddrinfo|Could not resolve|resolve.*fail/i.test(msg)) {
+      return `${stage}:域名解析失败(当前网络无法解析该域名)`;
+    }
+    if (code === 7 || /ECONNREFUSED/i.test(msg)) {
+      return `${stage}:连接被拒绝`;
+    }
+    if ((code !== undefined && [35, 53, 54, 58, 59, 60, 66, 77, 82, 83, 90, 91].includes(code)) || /certificate|SSL|TLS/i.test(msg)) {
+      return `${stage}:TLS 握手/证书校验失败`;
+    }
+    return `${stage}:${msg || '未知错误'}`;
+  }
+
+  /**
    * Fetches subscription content with redirect following, standard headers, and fallback mechanisms
    */
   public static async fetch(url: string, mixedPort: number = 2080): Promise<SubscriptionFetchResult> {
     const trimmedUrl = url.trim();
+    const failures: string[] = [];
+    const record = (reason: string) => {
+      if (reason && !failures.includes(reason)) failures.push(reason);
+    };
 
     // 1. Try Electron net.fetch (Chromium network stack with automatic redirect following & system proxy)
     try {
@@ -50,9 +77,12 @@ export class SubscriptionFetcher {
         if (content && content.length > 5) {
           return { content, userInfo };
         }
+        record('网络层:响应内容为空');
+      } else {
+        record(`网络层:HTTP ${res.status}`);
       }
     } catch (e) {
-      console.warn('net.fetch failed, attempting curl fallback...', e);
+      record(this.classifyFailure(e, '网络层'));
     }
 
     // 2. Try native Windows curl.exe (direct connection with -L to follow redirects and -k for SSL)
@@ -66,8 +96,9 @@ export class SubscriptionFetcher {
       if (parsed.content && parsed.content.length > 5) {
         return parsed;
       }
+      record('直连:响应内容为空');
     } catch (e) {
-      console.warn('Direct curl failed, attempting proxy curl...', e);
+      record(this.classifyFailure(e, '直连'));
     }
 
     // 3. Fallback: Try curl with local proxy (mixed port or socks)
@@ -89,10 +120,15 @@ export class SubscriptionFetcher {
         if (parsed.content && parsed.content.length > 5) {
           return parsed;
         }
-      } catch {}
+      } catch (e) {
+        record(this.classifyFailure(e, `本地代理(${proxy.replace('127.0.0.1', '本机')})`));
+      }
     }
 
-    throw new Error('无法连接到订阅服务器，请检查链接有效性或代理设置');
+    const detail = failures.length > 0 ? failures.slice(0, 3).join(';') : '未知原因';
+    throw new Error(
+      `无法连接到订阅服务器——${detail}。若当前网络无法直连订阅源,可先连接一个可用节点后重试(核心运行时会经本地代理自动重试)`
+    );
   }
 
   private static parseCurlOutput(output: string): SubscriptionFetchResult {

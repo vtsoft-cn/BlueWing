@@ -574,10 +574,10 @@ export const Nodes: React.FC<NodesProps> = ({
                             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-medium'
                             : 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/40 font-semibold'
                           : isTimeout
-                          ? 'bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/25 font-medium'
+                          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/40 font-semibold'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                       }`}
-                      title="点击快速测试 TCP Ping 延迟"
+                      title={isTimeout ? '当前网络无法与该节点建立 TCP 连接(可能被所在网络拦截或节点已下线),点击重测' : '点击快速测试 TCP Ping 延迟'}
                     >
                       {pingingNodeIds.has(node.id) ? (
                         <>
@@ -587,7 +587,7 @@ export const Nodes: React.FC<NodesProps> = ({
                       ) : (
                         <>
                           <Zap className="w-2.5 h-2.5" />
-                          <span>{hasPing ? `${node.ping} ms` : isTimeout ? '超时' : '测速'}</span>
+                          <span>{hasPing ? `${node.ping} ms` : isTimeout ? '网络不可达' : '测速'}</span>
                         </>
                       )}
                     </button>

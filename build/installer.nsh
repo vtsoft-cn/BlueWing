@@ -235,6 +235,17 @@ FunctionEnd
   ${EndIf}
 
   ${If} $bbDataOldDir != ""
+    ; 注册表 InstallLocation 若被第三方写成带尾部反斜杠,会让 schtasks /tr 的
+    ; \" 转义歧义(路径以 \ 结尾时 \\" 被当作字面反斜杠+引号结束)。统一修剪,
+    ; NSIS 路径拼接本来就按无尾反斜杠约定。
+    StrCpy $R8 ""
+    StrCpy $R8 "$bbDataOldDir" 1 -1
+    ${If} $R8 == "\"
+      StrCpy $bbDataOldDir "$bbDataOldDir" -1
+    ${EndIf}
+  ${EndIf}
+
+  ${If} $bbDataOldDir != ""
     ; 只要有旧安装就无条件先关闭运行实例(优雅信号还原系统代理,兜底强杀+
     ; 特征值代理清理):不可只在数据暂存分支做——per-machine 装在 Program Files
     ; 时数据在 %APPDATA%、旧目录无 data/,旧版不调用会导致运行实例被模板自带的
