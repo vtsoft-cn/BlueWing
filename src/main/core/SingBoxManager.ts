@@ -2,6 +2,7 @@ import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import net from 'net';
+import http from 'http';
 import { EventEmitter } from 'events';
 import { CoreState } from '../../types';
 import { LogManager } from '../log/LogManager';
@@ -305,6 +306,10 @@ export class SingBoxManager extends EventEmitter {
         if (isReady && this.process && !this.process.killed) {
           this.setState('running');
           this.log('info', `青翼连接 核心引擎启动成功 (PID: ${this.process.pid}, 监听端口: ${mixedPort})`, 'core');
+          // cache_file 会跨重启恢复上次持久化的选择器状态,静默覆盖配置中的 selector default,
+          // 曾导致"界面已切换节点、核心仍走旧节点"(旧节点不可用时表现为全网络极慢);
+          // 就绪后按应用记录的活跃节点校正,不阻塞启动
+          this.syncActiveSelection(config, clashPort).catch(() => {});
           return true;
         } else {
           this.log('error', 'Sing-box 核心就绪超时或中途异常退出', 'core');
@@ -411,6 +416,105 @@ export class SingBoxManager extends EventEmitter {
         resolve(false);
       });
       socket.connect(port, host);
+    });
+  }
+
+  /**
+   * 核心就绪后把应用记录的活跃节点重新下发给 Clash API 选择器。
+   * mixed 端口可连不代表 Clash API 已就绪,带短暂重试;失败静默放弃(配置 default 仍兜底)。
+   */
+  private async syncActiveSelection(config: Record<string, any>, clashPort: number): Promise<void> {
+    if (!config.experimental?.clash_api?.external_controller) return;
+
+    const selector = config.outbounds?.find((o: any) => o.type === 'selector' && o.tag === 'proxy');
+    const db = Database.getInstance();
+    const activeId = db.getActiveNodeId();
+    const desired = `node-${activeId}`;
+    if (!selector || !Array.isArray(selector.outbounds) || !selector.outbounds.includes(desired)) {
+      return;
+    }
+
+    const secret: string | undefined = config.experimental.clash_api.secret || undefined;
+    const friendlyName = db.getNodes().find((n) => n.id === activeId)?.name || activeId;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (this.state !== 'running') return;
+      const current = await this.getClashSelection(clashPort, secret);
+      if (current === undefined) {
+        await new Promise((r) => setTimeout(r, 300));
+        continue;
+      }
+      if (current === desired) return;
+      if (await this.putClashSelection(clashPort, desired, secret)) {
+        this.log(
+          'info',
+          `已按应用记录校正核心选择器 -> ${friendlyName} (缓存残留的节点 ${current} 已被覆盖)`,
+          'core'
+        );
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+
+  private getClashSelection(clashPort: number, secret?: string): Promise<string | undefined> {
+    return new Promise((resolve) => {
+      try {
+        const headers: Record<string, string> = {};
+        if (secret) headers['Authorization'] = `Bearer ${secret}`;
+        const req = http.request(
+          { hostname: '127.0.0.1', port: clashPort, path: '/proxies/proxy', method: 'GET', headers, timeout: 1500 },
+          (res) => {
+            let body = '';
+            res.on('data', (d) => (body += d));
+            res.on('end', () => {
+              try {
+                const now = JSON.parse(body)?.now;
+                resolve(typeof now === 'string' ? now : undefined);
+              } catch {
+                resolve(undefined);
+              }
+            });
+          }
+        );
+        req.on('error', () => resolve(undefined));
+        req.on('timeout', () => {
+          req.destroy();
+          resolve(undefined);
+        });
+        req.end();
+      } catch {
+        resolve(undefined);
+      }
+    });
+  }
+
+  private putClashSelection(clashPort: number, tag: string, secret?: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        const payload = JSON.stringify({ name: tag });
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Content-Length': String(Buffer.byteLength(payload)),
+        };
+        if (secret) headers['Authorization'] = `Bearer ${secret}`;
+        const req = http.request(
+          { hostname: '127.0.0.1', port: clashPort, path: '/proxies/proxy', method: 'PUT', headers, timeout: 1500 },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode === 204 || res.statusCode === 200);
+          }
+        );
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => {
+          req.destroy();
+          resolve(false);
+        });
+        req.write(payload);
+        req.end();
+      } catch {
+        resolve(false);
+      }
     });
   }
 

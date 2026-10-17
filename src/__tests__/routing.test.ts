@@ -98,6 +98,70 @@ describe('Routing and App Rules in ConfigGenerator', () => {
     assert.equal(disabledRule, undefined, 'Disabled app rule must not be included');
   });
 
+  test('ws transport falls back to SNI as Host when transport host is missing (CDN IP nodes)', () => {
+    // 复现线上问题:旧版导入的 CF 优选 IP 节点无 transportHost,ws 升级以裸 IP 作 Host
+    // 被 Cloudflare 以 403 (Direct IP access not allowed) 拒绝,必须回退 SNI
+    const cdnNode: ProxyNode = {
+      id: 'node-cdn',
+      name: 'CF IP node',
+      type: 'vless',
+      server: '172.67.78.115',
+      port: 2087,
+      groupId: 'default',
+      uuid: '5da33dc5-f22f-4501-8c6e-3506ad1e89f5',
+      tls: true,
+      sni: 'vtsoft.cn',
+      transport: 'ws',
+    };
+
+    const dns: DnsConfig = {
+      mode: 'standard',
+      remoteDns: 'https://1.1.1.1/dns-query',
+      directDns: '223.5.5.5',
+      fakeIpRange: '198.18.0.0/15',
+      enableDnsRouting: true,
+      servers: [],
+    };
+
+    const config = ConfigGenerator.generate('node-cdn', [cdnNode], [], [], dns, defaultSettings);
+    const outbound = config.outbounds.find((o: any) => o.tag === 'node-node-cdn');
+    assert.ok(outbound, 'vless outbound must exist');
+    assert.equal(outbound.transport.type, 'ws');
+    assert.equal(outbound.transport.headers?.Host, 'vtsoft.cn', 'ws Host must fall back to SNI');
+  });
+
+  test('CN direct rules precede app proxy rules; app block rules stay ahead of everything', () => {
+    const appRules: AppRule[] = [
+      { id: '1', name: 'Microsoft Edge', exePath: 'msedge.exe', action: 'proxy', enabled: true },
+      { id: '2', name: 'Blocked App', exePath: 'malware.exe', action: 'block', enabled: true },
+    ];
+
+    const dns: DnsConfig = {
+      mode: 'standard',
+      remoteDns: 'https://1.1.1.1/dns-query',
+      directDns: '223.5.5.5',
+      fakeIpRange: '198.18.0.0/15',
+      enableDnsRouting: true,
+      servers: [],
+    };
+
+    const config = ConfigGenerator.generate('node-test', [sampleNode], [], appRules, dns, {
+      ...defaultSettings,
+      routingMode: 'rule',
+    });
+    const rules: any[] = config.route.rules;
+
+    const cnIdx = rules.findIndex((r: any) => r.rule_set?.includes('geosite-cn') && r.outbound === 'direct');
+    const edgeIdx = rules.findIndex((r: any) => r.process_name?.includes('msedge.exe'));
+    const blockIdx = rules.findIndex((r: any) => r.process_name?.includes('malware.exe'));
+
+    assert.ok(cnIdx >= 0, 'geosite-cn direct rule must exist');
+    assert.ok(edgeIdx >= 0, 'msedge proxy rule must exist');
+    assert.ok(blockIdx >= 0, 'malware block rule must exist');
+    assert.ok(cnIdx < edgeIdx, 'CN direct must be evaluated before app proxy rules');
+    assert.ok(blockIdx < cnIdx, 'app block rule must stay ahead of all domain rules');
+  });
+
   test('Configures custom DNS servers and cache capacity in Sing-box', () => {
     const dns: DnsConfig = {
       mode: 'fakeip',

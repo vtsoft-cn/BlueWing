@@ -273,29 +273,11 @@ export class ConfigGenerator {
       );
     }
 
-    // App rules (Windows process routing)
+    // App rules (Windows process routing)——block 保持最前:进程"阻止"不可被任何直连规则绕过
     for (const app of appRules) {
-      if (!app.enabled) continue;
-      const ruleItem: any = {};
-      if (app.action === 'block') {
-        ruleItem.action = 'reject';
-      } else {
-        ruleItem.outbound = app.action;
-      }
-
-      let procName = '';
-      if (app.exePath) {
-        const clean = app.exePath.trim().replace(/^["']|["']$/g, '');
-        procName = path.basename(clean);
-      } else if (app.name) {
-        const cleanName = app.name.trim();
-        procName = cleanName.endsWith('.exe') ? cleanName : `${cleanName}.exe`;
-      }
-
-      if (procName) {
-        ruleItem.process_name = [procName];
-      }
-      routeRules.push(ruleItem);
+      if (!app.enabled || app.action !== 'block') continue;
+      const ruleItem = this.buildAppRouteRule(app);
+      if (ruleItem) routeRules.push(ruleItem);
     }
 
     // Custom Route Rules
@@ -410,6 +392,14 @@ export class ConfigGenerator {
           outbound: 'direct',
         }
       );
+    }
+
+    // App rules 的 proxy/direct 位于域名规则(含国内直连)之后:应用分流只接管未命中的流量,
+    // 避免代理节点不可用时,浏览器进程规则抢先命中导致国内网站也全部经代理失败(体感全断网)
+    for (const app of appRules) {
+      if (!app.enabled || app.action === 'block') continue;
+      const ruleItem = this.buildAppRouteRule(app);
+      if (ruleItem) routeRules.push(ruleItem);
     }
 
     const finalOutbound = settings.routingMode === 'direct' ? 'direct' : 'proxy';
@@ -642,12 +632,17 @@ export class ConfigGenerator {
   private static buildTransport(node: ProxyNode): any | undefined {
     if (!node.transport || node.transport === 'tcp') return undefined;
 
+    // HTTP 层 Host 缺失时回退 SNI:CDN(IP 直连)节点若以裸 IP 作 Host,
+    // 会被 Cloudflare 以 403 (Direct IP access not allowed) 拒绝——
+    // 订阅未携带 host 参数或旧版导入的节点均无 transportHost,统一在此兜底
+    const host = node.transportHost || node.sni || undefined;
+
     if (node.transport === 'xhttp') {
       const transport: any = {
         type: 'httpupgrade',
       };
       if (node.transportPath) transport.path = node.transportPath;
-      if (node.transportHost) transport.host = node.transportHost;
+      if (host) transport.host = host;
       if (node.xhttpExtraHeaders) transport.headers = node.xhttpExtraHeaders;
       return transport;
     }
@@ -657,8 +652,8 @@ export class ConfigGenerator {
         type: 'ws',
         path: node.transportPath || '/',
       };
-      if (node.transportHost) {
-        transport.headers = { Host: node.transportHost };
+      if (host) {
+        transport.headers = { Host: host };
       }
       return transport;
     }
@@ -675,13 +670,36 @@ export class ConfigGenerator {
         type: 'http',
         path: node.transportPath || '/',
       };
-      if (node.transportHost) {
-        transport.host = [node.transportHost];
+      if (host) {
+        transport.host = [host];
       }
       return transport;
     }
 
     return undefined;
+  }
+
+  /** 应用分流规则 -> sing-box process_name 路由规则;取不到有效进程名时返回 null(无匹配条件的规则会误伤全部流量) */
+  private static buildAppRouteRule(app: AppRule): any | null {
+    const ruleItem: any = {};
+    if (app.action === 'block') {
+      ruleItem.action = 'reject';
+    } else {
+      ruleItem.outbound = app.action;
+    }
+
+    let procName = '';
+    if (app.exePath) {
+      const clean = app.exePath.trim().replace(/^["']|["']$/g, '');
+      procName = path.basename(clean);
+    } else if (app.name) {
+      const cleanName = app.name.trim();
+      procName = cleanName.endsWith('.exe') ? cleanName : `${cleanName}.exe`;
+    }
+
+    if (!procName) return null;
+    ruleItem.process_name = [procName];
+    return ruleItem;
   }
 
   /** WireGuard 自 sing-box 1.11 起采用 endpoint 架构(非普通出站),selector 仍按 tag 引用 */

@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { UniversalSubscriptionParser } from '../main/net/UniversalSubscriptionParser';
@@ -471,5 +472,68 @@ describe('ProxySelectionService', () => {
     const result = await ProxySelectionService.selectNode('node-2');
     assert.ok(result.success);
     assert.equal(ProxySelectionService.getActiveNodeId(), 'node-2');
+  });
+});
+
+describe('SingBoxManager selector re-sync after core start', () => {
+  test('syncActiveSelection corrects cache-restored stale selection to app active node', async () => {
+    const { Database } = await import('../main/db/Database');
+    // 隔离:临时目录数据库,绝不触碰用户真实数据
+    Database.resetInstance();
+    const testDbDir = path.resolve(__dirname, 'temp_db_core_test');
+    const db = Database.getInstance(testDbDir);
+    db.saveNodes([
+      { id: 'old-node', name: '旧节点', type: 'socks', server: '1.1.1.1', port: 1080, groupId: 'default' },
+      { id: 'active-node', name: '应用所选节点', type: 'socks', server: '2.2.2.2', port: 1080, groupId: 'default' },
+    ]);
+    db.setActiveNodeId('active-node');
+
+    // 模拟 sing-box Clash API:选择器持有 cache_file 恢复出的残留旧选择
+    let current = 'node-old-node';
+    const puts: string[] = [];
+    const server = http.createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/proxies/proxy') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ name: 'proxy', now: current }));
+      } else if (req.method === 'PUT' && req.url === '/proxies/proxy') {
+        let body = '';
+        req.on('data', (d) => (body += d));
+        req.on('end', () => {
+          const name = JSON.parse(body).name;
+          puts.push(name);
+          current = name;
+          res.writeHead(204);
+          res.end();
+        });
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const clashPort = (server.address() as { port: number }).port;
+
+    const { SingBoxManager } = await import('../main/core/SingBoxManager');
+    const mgr = SingBoxManager.getInstance() as any;
+    const config = {
+      experimental: { clash_api: { external_controller: `127.0.0.1:${clashPort}` } },
+      outbounds: [{ type: 'selector', tag: 'proxy', outbounds: ['node-old-node', 'node-active-node'] }],
+    };
+
+    const prevState = mgr.state;
+    mgr.state = 'running';
+    try {
+      await mgr.syncActiveSelection(config, clashPort);
+      assert.deepEqual(puts, ['node-active-node'], 'stale cached selection must be corrected via PUT');
+      assert.equal(current, 'node-active-node');
+
+      // 选择已一致时不得重复下发
+      puts.length = 0;
+      await mgr.syncActiveSelection(config, clashPort);
+      assert.equal(puts.length, 0, 'no redundant PUT when selection already matches');
+    } finally {
+      mgr.state = prevState;
+      server.close();
+    }
   });
 });
