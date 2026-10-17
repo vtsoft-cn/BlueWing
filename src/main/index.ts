@@ -68,6 +68,10 @@ let isSecondaryInstance = false;
 if (!gotTheLock) {
   isSecondaryInstance = true;
   app.exit(0);
+} else if (process.argv.includes('--bb-shutdown')) {
+  // --bb-shutdown 作为首实例 = 没有运行中的实例可通知;立即退出,绝不启动完整
+  // 应用(否则安装器的信号任务会凭空拉起应用主窗口一闪而过,用户看到"闪退")
+  app.exit(0);
 } else {
   app.on('second-instance', (_e, commandLine) => {
     // 安装器升级信号:让位于安装流程,退出前由 before-quit 统一清理

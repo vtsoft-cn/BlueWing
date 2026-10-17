@@ -114,13 +114,13 @@ Function bbCloseRunningApp
     ${If} $R0 == 0
       ; 提权安装器(本进程 high integrity)直接启动信号进程会以管理员完整性运行,
       ; 与普通用户运行实例的单实例握手失败,信号送不到、实例被强杀、系统代理残留
-      ; (实测)。信号命令写入 $PLUGINSDIR 的 cmd 脚本(内容引号完全可控),经一次性
-      ; 计划任务以登录用户(中等完整性)身份执行,握手可靠;任务即用即删。
+      ; (实测)。信号写入 $PLUGINSDIR 的 VBS 脚本(wscript 无窗口,cmd 会闪现控制台),
+      ; 经一次性计划任务以登录用户(中等完整性)身份执行,握手可靠;任务即用即删。
       InitPluginsDir
-      FileOpen $9 "$PLUGINSDIR\bb-signal.cmd" w
-      FileWrite $9 "@start $\"$\" $\"$bbDataOldDir\BlueWing Connect.exe$\" --bb-shutdown$\r$\n"
+      FileOpen $9 "$PLUGINSDIR\bb-signal.vbs" w
+      FileWrite $9 "CreateObject($\"WScript.Shell$\").Run $\"$\"$\"$bbDataOldDir\BlueWing Connect.exe$\"$\" --bb-shutdown$\", 0, False$\r$\n"
       FileClose $9
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /create /tn "BlueWingUpgradeShutdown" /tr "$PLUGINSDIR\bb-signal.cmd" /sc once /st 23:59 /f`
+      nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /create /tn "BlueWingUpgradeShutdown" /tr "wscript.exe $\"$PLUGINSDIR\bb-signal.vbs$\"" /sc once /st 23:59 /f`
       Pop $R9
       nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /run /tn "BlueWingUpgradeShutdown"`
       Pop $R9
