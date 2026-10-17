@@ -101,7 +101,7 @@ Var /GLOBAL bbDataStash    ; data/ 暂存位置(旧安装目录同级)
 
 ; 结束运行中的 青翼连接 与 sing-box。优先让运行实例优雅退出(还原系统代理、
 ; 停止核心后自行退出,见主进程 second-instance 对 --bb-shutdown 的处理):
-; 信号命令写入 $PLUGINSDIR 脚本,经一次性计划任务以登录用户身份拉起
+; 信号经一次性计划任务以登录用户身份直接拉起
 ; "<旧目录>BlueWing Connect.exe --bb-shutdown"——避免提权安装器直接启动时
 ; 子进程继承管理员完整性、与普通用户实例的单实例握手失败。轮询等待最多 6 秒;
 ; 超时未退才回退温和/强制 taskkill,并在强杀后清理特征值残留系统代理兜底。
@@ -114,13 +114,12 @@ Function bbCloseRunningApp
     ${If} $R0 == 0
       ; 提权安装器(本进程 high integrity)直接启动信号进程会以管理员完整性运行,
       ; 与普通用户运行实例的单实例握手失败,信号送不到、实例被强杀、系统代理残留
-      ; (实测)。信号写入 $PLUGINSDIR 的 VBS 脚本(wscript 无窗口,cmd 会闪现控制台),
-      ; 经一次性计划任务以登录用户(中等完整性)身份执行,握手可靠;任务即用即删。
-      InitPluginsDir
-      FileOpen $9 "$PLUGINSDIR\bb-signal.vbs" w
-      FileWrite $9 "CreateObject($\"WScript.Shell$\").Run $\"$\"$\"$bbDataOldDir\BlueWing Connect.exe$\"$\" --bb-shutdown$\", 0, False$\r$\n"
-      FileClose $9
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /create /tn "BlueWingUpgradeShutdown" /tr "wscript.exe $\"$PLUGINSDIR\bb-signal.vbs$\"" /sc once /st 23:59 /f`
+      ; (实测)。改为一次性计划任务以登录用户(中等完整性)身份直接拉起
+      ; "<旧目录>BlueWing Connect.exe --bb-shutdown":该路径不创建任何窗口
+      ; (show:false 且单实例握手前即退出),无需任何脚本载体——曾用 $PLUGINSDIR
+      ; 的 VBS 经 wscript 无窗拉起,但"wscript+临时目录脚本"组合会被杀软/攻击面
+      ; 防护拦截(实测报"加载脚本失败: 拒绝访问"),任务即用即删。
+      nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /create /tn "BlueWingUpgradeShutdown" /tr "\"$bbDataOldDir\BlueWing Connect.exe\" --bb-shutdown" /sc once /st 23:59 /f`
       Pop $R9
       nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /run /tn "BlueWingUpgradeShutdown"`
       Pop $R9
