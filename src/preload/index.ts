@@ -58,6 +58,7 @@ export const api = {
   subscriptions: {
     getAll: (): Promise<Subscription[]> => ipcRenderer.invoke('subs:getAll'),
     save: (subs: Subscription[]) => ipcRenderer.invoke('subs:save', subs),
+    delete: (id: string) => ipcRenderer.invoke('subs:delete', id),
     update: (id: string) => ipcRenderer.invoke('subs:update', id),
   },
 

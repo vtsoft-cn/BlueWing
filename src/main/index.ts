@@ -604,6 +604,12 @@ ipcMain.handle('nodes:batchPing', (_, list) => TcpPing.batchPing(list, 10));
 // Subscriptions
 ipcMain.handle('subs:getAll', () => Database.getInstance().getSubscriptions());
 ipcMain.handle('subs:save', (_, subs) => Database.getInstance().saveSubscriptions(subs));
+ipcMain.handle('subs:delete', (_, id) => {
+  const deleted = Database.getInstance().deleteSubscriptionCascade(id);
+  // 节点列表变化后同步托盘菜单,避免显示过期列表
+  if (deleted) TrayManager.getInstance().updateMenu();
+  return deleted;
+});
 
 // 正在更新中的订阅(防止手动更新与自动调度并发重入)
 const subscriptionUpdatesInFlight = new Set<string>();
@@ -647,12 +653,18 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
   const target = subs.find((s) => s.id === id);
   if (!target || !target.url) return false;
 
+  // 拉取期间订阅被删除:丢弃结果,防止写回过期数组把已删订阅及其节点复活
+  const subDeleted = () => !db.getSubscriptions().some((s) => s.id === id);
+
   try {
     target.status = 'updating';
     db.saveSubscriptions(subs);
 
     const settings = db.getSettings();
     const result = await SubscriptionFetcher.fetch(target.url, settings.mixedPort);
+
+    if (subDeleted()) return false;
+
     const newNodes = UniversalSubscriptionParser.parse(result.content);
 
     if (newNodes.length > 0) {
@@ -710,6 +722,7 @@ async function doUpdateSubscription(id: string): Promise<boolean> {
       return false;
     }
   } catch (e: any) {
+    if (subDeleted()) return false;
     target.status = 'error';
     target.errorMessage = e.message || '更新订阅失败';
     db.saveSubscriptions(subs);

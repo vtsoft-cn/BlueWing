@@ -57,8 +57,15 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
 
   const handleDelete = async (id: string) => {
     if (!(await confirmDialog({ title: '删除订阅源', message: '确定要删除此订阅源吗？删除后其节点列表将被一并移除。', danger: true }))) return;
-    const updated = subscriptions.filter((s) => s.id !== id);
-    onSaveSubscriptions(updated);
+    if (!window.electronAPI) return;
+    try {
+      await window.electronAPI.subscriptions.delete(id);
+      onSaveSubscriptions(await window.electronAPI.subscriptions.getAll());
+      // 级联删除了订阅的节点,刷新节点列表与活跃节点
+      onRefreshNodes();
+    } catch (e: any) {
+      toast.error(`删除订阅出错: ${e.message}`);
+    }
   };
 
   const handleSaveSub = (e: React.FormEvent) => {

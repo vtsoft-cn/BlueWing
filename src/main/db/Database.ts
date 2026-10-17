@@ -376,6 +376,17 @@ export class Database {
     this.save();
   }
 
+  /**
+   * 级联删除订阅及其全部节点(节点以 groupId === 订阅 id 关联)。
+   * 单次落盘;活跃节点被删时由 saveNodes 语义回落(列表清空归空,否则取首节点)。
+   */
+  public deleteSubscriptionCascade(id: string): boolean {
+    if (!this.subscriptions.some((s) => s.id === id)) return false;
+    this.subscriptions = this.subscriptions.filter((s) => s.id !== id);
+    this.saveNodes(this.nodes.filter((n) => n.groupId !== id));
+    return true;
+  }
+
   public getRules(): RouteRule[] {
     return this.rules;
   }

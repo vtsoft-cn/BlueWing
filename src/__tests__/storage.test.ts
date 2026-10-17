@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { Database } from '../main/db/Database';
 import { CredentialSecurity } from '../main/security/CredentialSecurity';
-import { ProxyNode } from '../types';
+import { ProxyNode, Subscription } from '../types';
 
 const TEST_DB_DIR = path.resolve(__dirname, 'temp_db_storage_test');
 
@@ -151,5 +151,68 @@ describe('Database Storage & Recovery', () => {
 
     assert.equal(recoveredDb.getNodes().length, 1);
     assert.equal(recoveredDb.getNodes()[0].id, 'powerloss-node');
+  });
+
+  test('deleteSubscriptionCascade removes subscription and its nodes, falls back active node', () => {
+    const db = Database.getInstance(TEST_DB_DIR);
+    const mkSub = (id: string): Subscription => ({
+      id,
+      name: id,
+      url: `https://${id}`,
+      nodeCount: 0,
+      lastUpdate: 0,
+      autoUpdate: false,
+      updateIntervalHours: 24,
+      status: 'idle',
+    });
+    const mkNode = (id: string, groupId: string): ProxyNode => ({
+      id,
+      name: id,
+      type: 'socks',
+      server: `1.1.1.1`,
+      port: 1080,
+      groupId,
+    });
+
+    db.saveSubscriptions([mkSub('sub-a'), mkSub('sub-b')]);
+    db.saveNodes([mkNode('n-a1', 'sub-a'), mkNode('n-a2', 'sub-a'), mkNode('n-b1', 'sub-b')]);
+    db.setActiveNodeId('n-a2'); // active node belongs to the subscription being deleted
+
+    assert.equal(db.deleteSubscriptionCascade('nonexistent'), false, 'Deleting unknown id must return false');
+
+    assert.equal(db.deleteSubscriptionCascade('sub-a'), true, 'Deleting existing subscription must return true');
+    assert.equal(
+      db.getSubscriptions().some((s) => s.id === 'sub-a'),
+      false,
+      'Subscription must be removed'
+    );
+    assert.equal(
+      db.getSubscriptions().some((s) => s.id === 'sub-b'),
+      true,
+      'Other subscriptions must be kept'
+    );
+    assert.equal(
+      db.getNodes().some((n) => n.groupId === 'sub-a'),
+      false,
+      'Nodes of the deleted subscription must be cascade-removed'
+    );
+    assert.equal(
+      db.getNodes().some((n) => n.id === 'n-b1'),
+      true,
+      'Nodes of other subscriptions must be kept'
+    );
+    assert.equal(db.getActiveNodeId(), 'n-b1', 'Active node must fall back to first remaining node');
+
+    // Verify persistence after reload
+    Database.resetInstance();
+    const reloaded = Database.getInstance(TEST_DB_DIR);
+    assert.equal(reloaded.getSubscriptions().length, 1);
+    assert.equal(reloaded.getNodes().length, 1);
+    assert.equal(reloaded.getActiveNodeId(), 'n-b1');
+
+    // Deleting the last nodes clears active node id
+    assert.equal(reloaded.deleteSubscriptionCascade('sub-b'), true);
+    assert.equal(reloaded.getNodes().length, 0, 'All nodes removed when last subscription deleted');
+    assert.equal(reloaded.getActiveNodeId(), '', 'Active node id must be empty when no nodes remain');
   });
 });
