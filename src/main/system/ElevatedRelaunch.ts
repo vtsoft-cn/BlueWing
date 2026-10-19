@@ -1,21 +1,38 @@
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import { app } from 'electron';
 import { Database } from '../db/Database';
 import { LogManager } from '../log/LogManager';
 
+const TASK_NAME = 'BlueWingElevateRelaunch';
+
 export class ElevatedRelaunch {
   /**
-   * 以管理员身份重启应用:由独立 PowerShell 守候,等本进程完全退出(含 before-quit
-   * 的核心停止/系统代理还原清理)后再拉起提权实例,避免新旧实例争抢单实例锁。
-   * 守候等待上限 60s,每步留痕到 logs/elevate-relaunch.log 便于排查;用户拒绝
-   * UAC 则回落普通权限重启,至少保证应用能回来(单实例锁侧另有 10s 重试兜底)。
+   * 以管理员身份重启应用。
+   *
+   * 守候进程必须脱离本应用的进程树承载:Electron 在 Windows 上以 kill-on-close
+   * 作业对象管理子进程,应用一退出,直接 spawn 的任何子进程都会被连带杀死
+   * (实测:子进程心跳在父进程退出瞬间戛然而止,守候脚本只来得及写下
+   * "relaunch begin" 再无下文)。因此守候脚本经一次性计划任务承载——由任务
+   * 计划程序服务拉起,完全独立于本应用的作业对象,应用退出后依然存活;以
+   * Register-ScheduledTask cmdlet + EncodedCommand 注册,绕开 schtasks /tr
+   * 的引号与长度限制。注册+触发完成(应用尚存活)后才退出应用。
+   *
+   * 守候脚本等本进程完全退出(含 before-quit 的核心停止/代理还原,上限 60s)
+   * 后再以 RunAs 拉起提权实例(管理员 + ConsentPromptBehaviorAdmin=0 的机器
+   * 静默提升、无 UAC 弹窗属正常),每步留痕 logs/elevate-relaunch.log;
+   * UAC 被拒则回落普通权限重启,保证应用至少能回来;结束自删计划任务。
    */
   public static relaunch(): void {
     const execPath = process.execPath.replace(/'/g, "''");
-    const elevateLog = path
-      .join(Database.getInstance().getDataDir(), 'logs', 'elevate-relaunch.log')
-      .replace(/'/g, "''");
+    const logsDir = path.join(Database.getInstance().getDataDir(), 'logs');
+    const elevateLog = path.join(logsDir, 'elevate-relaunch.log').replace(/'/g, "''");
+    const scriptPath = path.join(logsDir, 'elevate-relaunch.ps1');
+    try {
+      fs.mkdirSync(logsDir, { recursive: true });
+    } catch {}
+
     const script = [
       `try { Add-Content -Path '${elevateLog}' -Value ("[{0}] relaunch begin, oldPid=${process.pid}" -f (Get-Date -Format o)) } catch {}`,
       `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue`,
@@ -26,19 +43,53 @@ export class ElevatedRelaunch {
       '  Start-Sleep -Seconds 1',
       `  try { Start-Process -FilePath '${execPath}' } catch {}`,
       '}',
+      `try { Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction Stop } catch { try { schtasks /delete /tn ${TASK_NAME} /f | Out-Null } catch {} }`,
     ].join('\n');
-    const encoded = Buffer.from(script, 'utf16le').toString('base64');
-    // 注意不能用 detached: true——DETACHED_PROCESS 让 PowerShell 这类控制台程序
-    // 拿不到控制台与标准句柄,启动即死(UAC 根本不出现,应用退出后再也不回来;
-    // 本机矩阵实测:detached+stdio:ignore 四种组合全灭,windowsHide+非 detached
-    // 父进程立即退出后仍稳定执行)。Windows 子进程本就不随父进程退出而终止,
-    // windowsHide 提供隐藏控制台即可。
-    spawn(
+
+    try {
+      fs.writeFileSync(scriptPath, script, 'utf8');
+    } catch (e: any) {
+      LogManager.getInstance().addLog('warn', `提权重启:守候脚本写入失败(${e?.message}),退回直接拉起`, 'app');
+      this.directSpawn(script);
+      return;
+    }
+
+    // 注册并触发一次性任务(经 cmdlet,避开 schtasks /tr 引号坑);EncodedCommand 传参零转义
+    const escScriptPath = scriptPath.replace(/'/g, "''");
+    const registerScript = [
+      `$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${escScriptPath}"'`,
+      `Register-ScheduledTask -TaskName '${TASK_NAME}' -Action $a -Force -ErrorAction Stop | Out-Null`,
+      `Start-ScheduledTask -TaskName '${TASK_NAME}'`,
+    ].join('\n');
+    const encoded = Buffer.from(registerScript, 'utf16le').toString('base64');
+    execFile(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded],
-      { windowsHide: true, stdio: 'ignore' }
-    ).unref();
-    LogManager.getInstance().addLog('info', '正在请求管理员权限并重启应用...', 'app');
+      ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+      { windowsHide: true, timeout: 15_000 },
+      (err) => {
+        if (err) {
+          LogManager.getInstance().addLog(
+            'warn',
+            `提权重启:计划任务注册/触发失败(${err.message}),退回直接拉起(应用退出时守候可能被终止)`,
+            'app'
+          );
+          this.directSpawn(script);
+          return;
+        }
+        // 任务已由任务计划程序承载(独立于本应用作业对象),现在退出是安全的
+        LogManager.getInstance().addLog('info', '正在请求管理员权限并重启应用...', 'app');
+        setTimeout(() => app.quit(), 200);
+      }
+    );
+  }
+
+  /** 兜底:直接拉起守候 PowerShell(受本应用作业对象约束,退出时可能被终止) */
+  private static directSpawn(script: string): void {
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], {
+      windowsHide: true,
+      stdio: 'ignore',
+    }).unref();
     setTimeout(() => app.quit(), 200);
   }
 }
