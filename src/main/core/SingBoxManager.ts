@@ -24,6 +24,8 @@ export class SingBoxManager extends EventEmitter {
   private state: CoreState = 'stopped';
   private configPath: string;
   private binaryPath: string;
+  /** 本次 start() 是否因非管理员权限剥除了配置中的 TUN 入站(供上层兜底联动) */
+  private tunStrippedLastStart = false;
 
   // Lifecycle concurrency mutex
   private mutex: Promise<void> = Promise.resolve();
@@ -66,6 +68,11 @@ export class SingBoxManager extends EventEmitter {
 
   public getState(): CoreState {
     return this.state;
+  }
+
+  /** 最近一次 start():配置含 TUN 但因非管理员权限被剥除时为 true */
+  public wasTunStrippedLastStart(): boolean {
+    return this.tunStrippedLastStart;
   }
 
   public getPid(): number | undefined {
@@ -231,10 +238,12 @@ export class SingBoxManager extends EventEmitter {
       try {
         // Safety Check: If TUN mode is in config but not elevated, gracefully remove it to prevent fatal crash
         const admin = this.isAdmin();
+        this.tunStrippedLastStart = false;
         if (!admin && config.inbounds) {
           const hasTun = config.inbounds.some((i: any) => i.type === 'tun');
           if (hasTun) {
             config.inbounds = config.inbounds.filter((i: any) => i.type !== 'tun');
+            this.tunStrippedLastStart = true;
             this.log(
               'warn',
               '【权限保护】检测到当前以普通用户权限运行，已安全回退为系统代理模式（可在设置中以管理员身份重启启用 TUN 全局网卡）。',

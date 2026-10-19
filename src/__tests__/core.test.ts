@@ -9,6 +9,7 @@ import { UniversalSubscriptionParser } from '../main/net/UniversalSubscriptionPa
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { ProxySelectionService } from '../main/core/ProxySelectionService';
 import { SystemProxy } from '../main/system/SystemProxy';
+import { TakeoverLinkage } from '../main/system/TakeoverLinkage';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
 import { isValidIpLiteral, isValidDomain } from '../utils/ip';
 
@@ -561,6 +562,51 @@ describe('SystemProxy.shouldAutoEnableSystemProxy (连接意图保护判定)', (
     assert.equal(
       SystemProxy.shouldAutoEnableSystemProxy(true, { systemProxyEnabled: false, tunEnabled: true }),
       false
+    );
+  });
+});
+
+describe('TakeoverLinkage.exclusivityPatch (TUN↔系统代理互斥联动)', () => {
+  test('TUN 关→开 且系统代理开 → 联动关闭系统代理(空闲/连接中均生效)', () => {
+    assert.deepEqual(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: false, systemProxyEnabled: true }, { tunEnabled: true, systemProxyEnabled: true }, true),
+      { systemProxyEnabled: false }
+    );
+    assert.deepEqual(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: false, systemProxyEnabled: true }, { tunEnabled: true, systemProxyEnabled: true }, false),
+      { systemProxyEnabled: false }
+    );
+  });
+
+  test('连接中 TUN 开→关 且系统代理关 → 联动开启系统代理(避免两种接管同时为空)', () => {
+    assert.deepEqual(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: true, systemProxyEnabled: false }, { tunEnabled: false, systemProxyEnabled: false }, true),
+      { systemProxyEnabled: true }
+    );
+  });
+
+  test('空闲时 TUN 开→关 不联动开代理——否则关个 TUN 会触发自动连接', () => {
+    assert.equal(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: true, systemProxyEnabled: false }, { tunEnabled: false, systemProxyEnabled: false }, false),
+      null
+    );
+  });
+
+  test('TUN 未变化 → 不联动', () => {
+    assert.equal(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: false, systemProxyEnabled: true }, { tunEnabled: false, systemProxyEnabled: false }, true),
+      null
+    );
+  });
+
+  test('系统代理已处于目标状态 → 不联动', () => {
+    assert.equal(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: false, systemProxyEnabled: false }, { tunEnabled: true, systemProxyEnabled: false }, true),
+      null
+    );
+    assert.equal(
+      TakeoverLinkage.exclusivityPatch({ tunEnabled: true, systemProxyEnabled: true }, { tunEnabled: false, systemProxyEnabled: true }, true),
+      null
     );
   });
 });

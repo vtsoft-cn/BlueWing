@@ -12,6 +12,7 @@ import { ConfigGenerator } from './core/ConfigGenerator';
 import { ProxySelectionService } from './core/ProxySelectionService';
 import { RuleSetUpdater } from './core/RuleSetUpdater';
 import { SystemProxy } from './system/SystemProxy';
+import { TakeoverLinkage } from './system/TakeoverLinkage';
 import { ProcessScanner } from './system/ProcessScanner';
 import { TcpPing } from './net/TcpPing';
 import { SpeedTestRunner } from './net/SpeedTestRunner';
@@ -62,34 +63,20 @@ if (appDataDir === portableDataDir) {
 }
 
 // 单实例锁:已有实例在跑时,二次启动直接退出(不做任何清理,那是已运行实例的职责),
-// 并由已运行实例在 second-instance 事件里弹出/聚焦已有窗口,而不是创建新窗口
-const gotTheLock = app.requestSingleInstanceLock();
+// 并由已运行实例在 second-instance 事件里弹出/聚焦已有窗口,而不是创建新窗口。
+// 锁竞争兜底:提权重启等场景下,新实例可能在旧实例(退出清理含核心停止/代理还原,
+// 偶发可达数十秒)完全释放锁之前启动——立即退出会表现为"应用退出后再也没起来"。
+// 短等重试吸收时序抖动,10 秒仍拿不到锁才放弃;whenReady 在锁落定前绝不初始化,
+// 保证重试期间不闪窗(与 --bb-shutdown 的零闪窗承诺同一约束)。
 let isSecondaryInstance = false;
-if (!gotTheLock) {
-  isSecondaryInstance = true;
-  app.exit(0);
-} else if (process.argv.includes('--bb-shutdown')) {
-  // --bb-shutdown 作为首实例 = 没有运行中的实例可通知;立即退出,绝不启动完整
-  // 应用(否则安装器的信号任务会凭空拉起应用主窗口一闪而过,用户看到"闪退")
-  app.exit(0);
-} else {
-  app.on('second-instance', (_e, commandLine) => {
-    // 安装器升级信号:让位于安装流程,退出前由 before-quit 统一清理
-    // (还原系统代理、停止核心),避免被强杀导致系统代理残留断网
-    if (commandLine.includes('--bb-shutdown')) {
-      LogManager.getInstance().addLog('info', '收到安装器升级请求,还原系统代理后退出', 'system');
-      app.quit();
-      return;
-    }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      // 窗口可能处于关闭进托盘的隐藏状态(任务栏按钮已摘除),显示前挂回
-      mainWindow.setSkipTaskbar(false);
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-}
+const lockSettled = (async (): Promise<boolean> => {
+  if (app.requestSingleInstanceLock()) return true;
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if (app.requestSingleInstanceLock()) return true;
+  }
+  return false;
+})();
 
 /**
  * 检测其他安装路径的青翼连接实例(如尚未卸载的旧版本)。
@@ -230,6 +217,35 @@ function createWindow(): void {
 let isAppQuitting = false;
 
 app.whenReady().then(async () => {
+  // 锁未落定前不得做任何初始化(重试期间 app 可能已 ready,必须在此等待)
+  if (!(await lockSettled)) {
+    isSecondaryInstance = true;
+    app.exit(0);
+    return;
+  }
+  if (process.argv.includes('--bb-shutdown')) {
+    // --bb-shutdown 作为首实例 = 没有运行中的实例可通知;立即退出,绝不启动完整
+    // 应用(否则安装器的信号任务会凭空拉起应用主窗口一闪而过,用户看到"闪退")
+    app.exit(0);
+    return;
+  }
+  app.on('second-instance', (_e, commandLine) => {
+    // 安装器升级信号:让位于安装流程,退出前由 before-quit 统一清理
+    // (还原系统代理、停止核心),避免被强杀导致系统代理残留断网
+    if (commandLine.includes('--bb-shutdown')) {
+      LogManager.getInstance().addLog('info', '收到安装器升级请求,还原系统代理后退出', 'system');
+      app.quit();
+      return;
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      // 窗口可能处于关闭进托盘的隐藏状态(任务栏按钮已摘除),显示前挂回
+      mainWindow.setSkipTaskbar(false);
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
   await warnAndExitIfForeignInstance();
 
   createWindow();
@@ -541,6 +557,11 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
       );
       LogManager.getInstance().addLog('info', `Windows 系统代理已开启 (127.0.0.1:${settings.mixedPort})`, 'system');
     }
+    // 保护性兜底:配置含 TUN 但因非管理员权限被剥除,且系统代理为关——自动开启
+    // 系统代理,兑现"已安全回退为系统代理模式"的日志承诺,避免连接空转无出口
+    if (core.wasTunStrippedLastStart() && (await TakeoverLinkage.ensureProxyWhenTunStripped())) {
+      broadcastSettingsChanged();
+    }
   } else {
     LogManager.getInstance().addLog('error', 'Sing-box 核心启动失败，请检查配置或日志详情', 'core');
   }
@@ -613,17 +634,26 @@ ipcMain.handle('system:openExternal', (_, url: string) => {
 ipcMain.handle('system:isAdmin', () => SingBoxManager.getInstance().isAdmin());
 ipcMain.handle('system:relaunchAsAdmin', () => {
   const execPath = process.execPath.replace(/'/g, "''");
-  // 由独立 PowerShell 守候:等本进程退出后再拉起提权实例,
-  // 避免新旧实例争抢单实例锁;若用户拒绝 UAC 则以普通权限重启回到原状态。
-  // 用 -EncodedCommand 传递脚本,彻底规避多层引号转义导致的静默失败
+  const elevateLog = path.join(Database.getInstance().getDataDir(), 'logs', 'elevate-relaunch.log').replace(/'/g, "''");
+  // 由独立 PowerShell 守候:等本进程完全退出(含 before-quit 的核心停止/系统代理
+  // 还原清理)后再拉起提权实例,避免新旧实例争抢单实例锁。
+  // 修复:旧实现仅等 15s,清理偶发超时(核心停止挂起等)时提权实例过早启动,
+  // 撞单实例锁后静默退出——表现为"应用退出了但没以管理员启动"。现等待上限提至
+  // 60s,每步留痕到 logs/elevate-relaunch.log 便于排查;用户拒绝 UAC 则回落
+  // 普通权限重启,至少保证应用能回来(单实例锁侧另有 10s 重试兜底吸收残余抖动)。
   const script = [
-    `Wait-Process -Id ${process.pid} -Timeout 15 -ErrorAction SilentlyContinue`,
-    'Start-Sleep -Milliseconds 400',
+    `try { Add-Content -Path '${elevateLog}' -Value ("[{0}] relaunch begin, oldPid=${process.pid}" -f (Get-Date -Format o)) } catch {}`,
+    `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue`,
+    'Start-Sleep -Milliseconds 800',
     `try { Start-Process -FilePath '${execPath}' -Verb RunAs -ErrorAction Stop }`,
-    `catch { Start-Process -FilePath '${execPath}' }`,
-  ].join('; ');
+    'catch {',
+    `  try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas failed: {1}" -f (Get-Date -Format o), $_.Exception.Message) } catch {}`,
+    '  Start-Sleep -Seconds 1',
+    `  try { Start-Process -FilePath '${execPath}' } catch {}`,
+    '}',
+  ].join('\n');
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], {
+  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], {
     detached: true,
     stdio: 'ignore',
   }).unref();
@@ -1057,8 +1087,39 @@ ipcMain.handle('settings:get', () => Database.getInstance().getSettings());
 ipcMain.handle('settings:save', async (_, s) => {
   const db = Database.getInstance();
   const prevSettings = { ...db.getSettings() };
+
+  // TUN↔系统代理互斥联动(二选一):用户切换 TUN 的这次保存,联动调整系统代理开关。
+  // 在落库前归一化,后续既有的 proxyChanged 分支自然完成注册表开关/核心拉起;
+  // 核心重载路径不经过此处,不会触碰开关(与连接意图保护同一约束)。
+  let linkageApplied = false;
+  if (s.tunEnabled !== undefined && s.tunEnabled !== prevSettings.tunEnabled) {
+    const patch = TakeoverLinkage.exclusivityPatch(
+      prevSettings,
+      {
+        tunEnabled: s.tunEnabled,
+        systemProxyEnabled: s.systemProxyEnabled ?? prevSettings.systemProxyEnabled,
+      },
+      SingBoxManager.getInstance().getState() === 'running'
+    );
+    if (patch) {
+      Object.assign(s, patch);
+      linkageApplied = true;
+      LogManager.getInstance().addLog(
+        'info',
+        patch.systemProxyEnabled === false
+          ? 'TUN 已开启,系统代理已联动关闭(TUN 全量接管流量)'
+          : 'TUN 已关闭,系统代理已联动开启',
+        'app'
+      );
+    }
+  }
   db.saveSettings(s);
   const currentSettings = db.getSettings();
+
+  // 联动改写了渲染层未提交的字段(其本地乐观状态已过期),回推全量设置纠正
+  if (linkageApplied) {
+    broadcastSettingsChanged();
+  }
 
   // 主题变化 → 立即刷新托盘/任务栏图标(图标随主题 × 代理状态)
   if (prevSettings.theme !== currentSettings.theme) {

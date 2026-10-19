@@ -2,6 +2,7 @@ import { Tray, Menu, nativeImage, NativeImage, BrowserWindow, app } from 'electr
 import { Database } from '../db/Database';
 import { SingBoxManager } from '../core/SingBoxManager';
 import { SystemProxy } from '../system/SystemProxy';
+import { TakeoverLinkage } from '../system/TakeoverLinkage';
 import { ConfigGenerator } from '../core/ConfigGenerator';
 import { resourcePath, trayIconPath } from '../branding';
 
@@ -134,6 +135,11 @@ export class TrayManager {
             if (started && settings.systemProxyEnabled) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
             }
+            // 与主进程 handleCoreStart 同一套 TUN 剥除兜底:权限不足被剥除且代理为关时
+            // 自动开启系统代理,避免托盘连接后无任何流量出口
+            if (started && core.wasTunStrippedLastStart() && (await TakeoverLinkage.ensureProxyWhenTunStripped())) {
+              this.mainWindow?.webContents.send('settings:changed', db.getSettings());
+            }
           }
           this.updateMenu();
           this.mainWindow?.webContents.send('core:stateChange', core.getState());
@@ -192,7 +198,19 @@ export class TrayManager {
         checked: settings.tunEnabled,
         click: async () => {
           const newState = !settings.tunEnabled;
-          db.saveSettings({ tunEnabled: newState });
+          // TUN↔系统代理互斥联动(二选一):切 TUN 时联动拨系统代理开关,
+          // 与设置页 settings:save 的归一化同一规则
+          const patch = TakeoverLinkage.exclusivityPatch(
+            settings,
+            { tunEnabled: newState, systemProxyEnabled: settings.systemProxyEnabled },
+            core.getState() === 'running'
+          );
+          db.saveSettings({ tunEnabled: newState, ...(patch || {}) });
+          if (patch?.systemProxyEnabled === false) {
+            await SystemProxy.disable();
+          } else if (patch?.systemProxyEnabled === true && core.getState() === 'running') {
+            await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
+          }
           if (core.getState() === 'running') {
             const config = ConfigGenerator.generate(
               activeNodeId,
@@ -200,7 +218,7 @@ export class TrayManager {
               db.getRules(),
               db.getAppRules(),
               db.getDns(),
-              { ...settings, tunEnabled: newState }
+              db.getSettings()
             );
             await core.start(config);
           }
