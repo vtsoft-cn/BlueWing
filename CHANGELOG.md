@@ -2,6 +2,11 @@
 
 ## [未发布]
 
+### 🔍 可诊断性与分流修正
+- 修复"节点 ping 通但不可用"被掩盖:HTTP 延迟探测失败时旧逻辑回退 TCP ping 并把 TCP 时延当代理时延展示,代理通道真实故障(如 REALITY 握手失败)被完全遮蔽——本次故障即节点域名被 Cloudflare CDN 接管、REALITY 无法穿透,但界面全部显示正常。现 testLatency 返回结构化结果(时延/探测路径/失败原因),仅"核心未运行"才回退 TCP 并明确标注"TCP 兜底(不代表代理可用)";失败原因按 REALITY/TLS/超时/域名解析/拒连归类,REALITY 类直接提示"节点域名可能被 CDN(如 Cloudflare)接管,可将节点地址改为服务器 IP 试探"。单节点测速弹窗新增红色警示横幅,测速中心卡片/表格以"HTTP 握手失败"徽标+悬停原因呈现。
+- 修复应用分流规则抢先于域名/IP 分流规则:进程规则(chrome.exe→proxy 等)此前排在分流规则之前,导致"浏览器走代理"时国内站(实测 cn.bing.com)与广告拦截以外的全部分流让位、国内流量也被送进代理浪费节点带宽;现进程规则统一置于全部分流规则之后(仅决定未命中分流规则的流量去向),核心日志实测 baidu.com 走 direct、example.com 经代理,行为符合"规则分流(绕过大陆与局域网)"语义,应用分流页文案同步说明优先级。
+- 修复本地规则文件缺失时的远程规则集回退配置无法启动:回退生成的远程 rule-set 同时携带 `http_client` 与 sing-box 1.14 已废弃的 `download_detour`,核心启动即 `FATAL: http_client is conflict with deprecated download_detour field`(且 `sing-box check` 校验不出,仅运行时暴露,实测复现);现移除 `download_detour`(default http_client 本就直连下载,行为不变),附回归单测强制走回退路径断言无冲突字段。
+
 ### 🛡 数据与稳定性
 - 修复「界面已切换节点、核心仍走旧节点」导致的全网络极慢:节点热切换失败时(如订阅刚导入、新节点尚未在运行中的核心里)会走"安全重载核心"兜底,但 sing-box 的 `cache_file` 会跨重启恢复上次持久化的选择器状态,静默覆盖配置中的 selector default——重启后核心继续用旧节点,而界面显示的是新节点,旧节点不可用时表现为"换了节点依然极慢/不可用"且无任何报错(线上实证:切至 AnyTLS 节点后核心仍走 vtsoft.cn:443 死节点,单连接 1~15 秒、批量超时)。现核心就绪后自动按应用记录的活跃节点校正选择器(Clash API GET 比对、不一致才 PUT,带 10×300ms 重试等待 API 就绪,不阻塞启动);附回归单测(模拟缓存残留选择被校正、已一致时不重复下发)。
 - 修复「开启代理后全部断网」:CDN(IP 直连)节点缺失传输 Host 时,sing-box 以裸 IP 作 WebSocket 升级的 HTTP Host,被 Cloudflare 一律以 403 (Direct IP access not allowed) 拒绝——实测同 IP 同端口 Host 为域名即 101 握手成功、Host 为 IP 精确复现 403,且测速仅计时不校验状态码,403 响应(约 600ms)被记为正常延迟,节点"看着活的实则全断"。现 ws / httpupgrade(xhttp) / http 传输的 Host 统一在生成期回退 SNI(`transportHost || sni`),订阅未携带 host 参数或旧版导入的无 transportHost 节点无需重新订阅即恢复可用(已用生产配置打补丁实测:同节点补 Host 前 100% 403、补后 gstatic 204 / Google 首页正常拉取,0 错误);附回归单测。

@@ -5,6 +5,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
+import { SpeedTestRunner } from '../main/net/SpeedTestRunner';
 import { ProcessScanner } from '../main/system/ProcessScanner';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
 
@@ -224,5 +225,89 @@ describe('Routing and App Rules in ConfigGenerator', () => {
         fs.unlinkSync(tempConfigPath);
       }
     }
+  });
+
+  test('App process rules are generated after all domain/IP routing rules', () => {
+    // 修复回归:进程规则(chrome.exe→proxy)此前排在分流规则之前,导致国内站也被送进代理
+    const dns: DnsConfig = {
+      mode: 'standard',
+      remoteDns: 'https://1.1.1.1/dns-query',
+      directDns: '223.5.5.5',
+      fakeIpRange: '198.18.0.0/15',
+      enableDnsRouting: true,
+      servers: [],
+    };
+    const rules: RouteRule[] = [
+      { id: 'rule-lan', name: '局域网直连', enabled: true, ip: ['geoip:private'], outbound: 'direct' },
+      { id: 'rule-cn', name: '国内直连', enabled: true, domains: ['geosite:cn'], outbound: 'direct' },
+    ];
+    const appRules: AppRule[] = [
+      { id: '1', name: 'Google Chrome', exePath: 'chrome.exe', action: 'proxy', enabled: true },
+    ];
+    const settings = { ...defaultSettings, routingMode: 'rule' as const };
+
+    const config = ConfigGenerator.generate('node-test', [sampleNode], rules, appRules, dns, settings);
+    const gen: any[] = config.route.rules;
+
+    const appIdx = gen.findIndex((r) => r.process_name && r.process_name.includes('chrome.exe'));
+    assert.ok(appIdx > -1, 'Chrome app rule must exist');
+
+    // 所有 rule_set 类分流规则(自定义 geoip/geosite 与模式规则)必须排在进程规则之前
+    const lastRuleSetIdx = Math.max(...gen.map((r, i) => (r.rule_set ? i : -1)));
+    assert.ok(
+      appIdx > lastRuleSetIdx,
+      `app rule (index ${appIdx}) must come after the last routing rule (index ${lastRuleSetIdx})`
+    );
+
+    // 进程规则是路由表最后一条,其后仅剩 final 出站
+    assert.equal(appIdx, gen.length - 1, 'app rule must be the final rule');
+  });
+  test('Remote rule-set fallback never mixes download_detour with http_client', () => {
+    // 回归:本地规则文件缺失时回退远程规则集,旧代码同时写 http_client + 已废弃的
+    // download_detour,sing-box 1.14.3 启动即 FATAL"http_client is conflict with
+    // deprecated download_detour field"(sing-box check 查不出,仅启动时暴露)
+    const dns: DnsConfig = {
+      mode: 'standard',
+      remoteDns: 'https://1.1.1.1/dns-query',
+      directDns: '223.5.5.5',
+      fakeIpRange: '198.18.0.0/15',
+      enableDnsRouting: true,
+      servers: [],
+    };
+    const rules: RouteRule[] = [
+      { id: 'r1', name: 'geosite telegram', enabled: true, domains: ['geosite:telegram'], outbound: 'proxy' },
+      { id: 'r2', name: 'geoip google', enabled: true, ip: ['geoip:google'], outbound: 'proxy' },
+    ];
+
+    const origExists = fs.existsSync;
+    (fs as any).existsSync = (p: any) =>
+      typeof p === 'string' && /[\\/]rules([\\/]|$)/.test(p) ? false : origExists(p);
+    try {
+      const config = ConfigGenerator.generate('node-test', [sampleNode], rules, [], dns, defaultSettings);
+      const remotes: any[] = config.route.rule_set.filter((rs: any) => rs.type === 'remote');
+      assert.ok(remotes.length >= 4, `expected remote fallback rule-sets, got ${remotes.length}`);
+      for (const rs of remotes) {
+        assert.equal(rs.download_detour, undefined, `rule-set ${rs.tag} must not carry deprecated download_detour`);
+        assert.equal(rs.http_client, 'default', `rule-set ${rs.tag} must keep default http_client`);
+      }
+    } finally {
+      (fs as any).existsSync = origExists;
+    }
+  });
+});
+
+describe('SpeedTestRunner.classifyProbeFailure', () => {
+  test('Classifies probe failures into actionable Chinese reasons', () => {
+    assert.match(
+      SpeedTestRunner.classifyProbeFailure('open connection to x:443: reality verification failed'),
+      /REALITY/
+    );
+    assert.match(SpeedTestRunner.classifyProbeFailure('tls: certificate verification failure'), /TLS/);
+    assert.match(SpeedTestRunner.classifyProbeFailure('exchange4: context deadline exceeded'), /超时/);
+    assert.match(SpeedTestRunner.classifyProbeFailure('lookup node.example.com: no such host'), /域名解析/);
+    assert.match(SpeedTestRunner.classifyProbeFailure('dial tcp: connection refused'), /拒绝/);
+    assert.match(SpeedTestRunner.classifyProbeFailure(''), /未知/);
+    // 未归类的原始错误应原样透出,不吞信息
+    assert.match(SpeedTestRunner.classifyProbeFailure('something odd happened'), /something odd happened/);
   });
 });

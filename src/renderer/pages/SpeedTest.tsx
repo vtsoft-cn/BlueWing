@@ -22,6 +22,7 @@ interface TestRow {
   node: ProxyNode;
   tcpPing?: number;
   httpLatency?: number;
+  httpError?: string; // HTTP 延迟探测失败原因(如 REALITY 握手失败)
   downloadSpeed?: number; // bits/s
   uploadSpeed?: number;
   status: 'idle' | 'testing' | 'success' | 'timeout' | 'error';
@@ -137,6 +138,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
 
         let tcpPing = row.tcpPing;
         let httpLatency = row.httpLatency;
+        let httpError = row.httpError;
         let downloadSpeed = row.downloadSpeed;
 
         try {
@@ -148,8 +150,9 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
           // 2. HTTP Latency test
           if (testMode === 'latency' || testMode === 'full') {
             if (isPingReachable) {
-              const lat = await window.electronAPI.speedTest.testLatency(undefined, item.id);
-              httpLatency = lat > 0 ? lat : undefined;
+              const res = await window.electronAPI.speedTest.testLatency(undefined, item.id);
+              httpLatency = res.latency > 0 ? res.latency : undefined;
+              httpError = res.reason;
             } else {
               httpLatency = undefined;
             }
@@ -185,6 +188,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                     ...r,
                     tcpPing,
                     httpLatency,
+                    httpError,
                     downloadSpeed,
                     status: finalStatus,
                   }
@@ -242,12 +246,14 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
       const pingRes = await window.electronAPI.nodes.ping(targetNode.server, targetNode.port);
       const isReachable = pingRes.time > 0;
       let lat: number | undefined;
+      let httpErr: string | undefined;
       let dl: number | undefined;
 
       if (isReachable) {
         if (testMode === 'latency' || testMode === 'full') {
-          const l = await window.electronAPI.speedTest.testLatency(undefined, targetNode.id);
-          lat = l > 0 ? l : undefined;
+          const res = await window.electronAPI.speedTest.testLatency(undefined, targetNode.id);
+          lat = res.latency > 0 ? res.latency : undefined;
+          httpErr = res.reason;
         }
         if (testMode === 'download' || testMode === 'full') {
           const s = await window.electronAPI.speedTest.testDownload(undefined, targetNode.id);
@@ -264,6 +270,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                 ...r,
                 tcpPing: pingRes.time,
                 httpLatency: lat,
+                httpError: httpErr,
                 downloadSpeed: dl,
                 status: isSuccess ? ('success' as const) : ('timeout' as const),
               }
@@ -500,6 +507,16 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                       </span>
                     )}
 
+                    {/* HTTP 探测失败 Pill:TCP 可达但代理通道故障(悬停看原因) */}
+                    {row.httpError && (
+                      <span
+                        title={row.httpError}
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25"
+                      >
+                        HTTP 握手失败
+                      </span>
+                    )}
+
                     {/* Download Bandwidth Pill */}
                     {row.downloadSpeed !== undefined && row.downloadSpeed > 0 && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center space-x-1">
@@ -526,7 +543,9 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                         </span>
                       </span>
                     ) : row.status === 'timeout' ? (
-                      <span className="text-rose-500 text-[11px] font-medium">超时不可达</span>
+                      <span className="text-rose-500 text-[11px] font-medium" title={row.httpError}>
+                        {row.httpError ? '代理握手失败' : '超时不可达'}
+                      </span>
                     ) : (
                       <span className="text-slate-400 text-[11px]">就绪</span>
                     )}
@@ -618,7 +637,15 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                         )}
                       </td>
                       <td className="py-3 px-4 font-mono">
-                        {row.httpLatency ? `${row.httpLatency} ms` : '-'}
+                        {row.httpLatency ? (
+                          `${row.httpLatency} ms`
+                        ) : row.httpError ? (
+                          <span className="text-rose-500" title={row.httpError}>
+                            握手失败
+                          </span>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="py-3 px-4 font-semibold text-blue-600 dark:text-blue-400 font-mono">
                         {formatSpeed(row.downloadSpeed)}
@@ -637,7 +664,9 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                             </span>
                           </span>
                         ) : row.status === 'timeout' ? (
-                          <span className="text-rose-500 font-medium">超时不可达</span>
+                          <span className="text-rose-500 font-medium" title={row.httpError}>
+                            {row.httpError ? '代理握手失败' : '超时不可达'}
+                          </span>
                         ) : (
                           <span className="text-slate-400">未测试</span>
                         )}

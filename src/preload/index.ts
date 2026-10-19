@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings, LogEntry } from '../types';
+import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings, LogEntry, LatencyResult } from '../types';
 
 export const api = {
   // Window controls
@@ -137,7 +137,7 @@ export const api = {
 
   // Speed test
   speedTest: {
-    testLatency: (url?: string, nodeId?: string): Promise<number> =>
+    testLatency: (url?: string, nodeId?: string): Promise<LatencyResult> =>
       ipcRenderer.invoke('speedtest:latency', url, nodeId),
     testDownload: (url?: string, nodeId?: string): Promise<number> =>
       ipcRenderer.invoke('speedtest:download', url, nodeId),

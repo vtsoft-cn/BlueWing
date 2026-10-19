@@ -223,10 +223,11 @@ export class ConfigGenerator {
         type: 'remote',
         format: 'binary',
         url: `https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/${remotePath}`,
+        // 下载走 default http_client(未设 detour 即直连,不依赖尚未就绪的代理出站),
+        // 成功后随 experimental.cache_file 落盘缓存,后续启动零网络依赖(冷缓存遇
+        // CDN 阻断会 FATAL,由应用重试)。注意不能同时写 download_detour:
+        // sing-box 1.14 起与 http_client 字段冲突,启动即 FATAL(check 查不出来)
         http_client: 'default',
-        // 直连下载规则集:不走尚未就绪的代理出站;成功后随 experimental.cache_file
-        // 落盘缓存,后续启动零网络依赖(冷缓存遇 CDN 阻断会 FATAL,由应用重试)
-        download_detour: 'direct',
       };
     };
 
@@ -326,7 +327,6 @@ export class ConfigGenerator {
                 format: 'binary',
                 url: `https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/${g}.srs`,
                 http_client: 'default',
-                download_detour: 'direct',
               });
             }
           }
@@ -353,7 +353,6 @@ export class ConfigGenerator {
                 format: 'binary',
                 url: `https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/${g}.srs`,
                 http_client: 'default',
-                download_detour: 'direct',
               });
             }
           }

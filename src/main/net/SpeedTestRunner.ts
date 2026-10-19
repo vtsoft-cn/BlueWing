@@ -5,6 +5,7 @@ import net from 'net';
 import { URL } from 'url';
 import { app } from 'electron';
 import { TcpPing } from './TcpPing';
+import { LatencyResult } from '../../types';
 
 export interface NodeSpeedResult {
   nodeId: string;
@@ -49,6 +50,10 @@ export class SpeedTestRunner {
   /**
    * Test node latency without touching user's active proxy selector.
    * Uses Sing-box Clash API node outbound probe directly, or fallback TCP ping.
+   *
+   * 关键区分:Clash API「连不上」(核心未运行)才回退 TCP ping;
+   * API 正常应答但探测失败(节点出站真实报错)时如实返回 -1 + 分类原因,
+   * 绝不用 TCP ping 的成功掩盖"代理通道已坏"(用户所见"ping 通但节点不可用"即此)。
    */
   public static async testLatency(
     testUrl: string = 'http://cp.cloudflare.com/generate_204',
@@ -58,7 +63,7 @@ export class SpeedTestRunner {
     clashPort: number = 9090,
     nodeServer?: string,
     nodePort?: number
-  ): Promise<number> {
+  ): Promise<LatencyResult> {
     const taskId = nodeId || `latency-${Date.now()}-${Math.random()}`;
     const abortCtrl = new AbortController();
     this.activeTasks.set(taskId, abortCtrl);
@@ -68,18 +73,22 @@ export class SpeedTestRunner {
       if (nodeId) {
         try {
           const clashDelay = await this.testViaClashApi(nodeId, testUrl, timeoutMs, clashPort, abortCtrl.signal);
-          if (clashDelay > 0) return clashDelay;
-        } catch {
-          // If Clash API probe fails (e.g. core is stopped), fallback to direct TCP ping if server info provided
+          if (clashDelay > 0) return { latency: clashDelay, via: 'proxy-probe' };
+        } catch (err: any) {
+          // API 已应答但该节点出站探测失败:节点代理通道真实故障,带核心原始错误返回
+          if (err?.probeFailed) {
+            return { latency: -1, via: 'proxy-probe', reason: this.classifyProbeFailure(err.message) };
+          }
+          // Clash API 本身连不上(核心未运行等):回退直连 TCP ping,仅衡量服务器可达性
           if (nodeServer && nodePort) {
             try {
               const tcpRes = await TcpPing.ping(nodeServer, nodePort, timeoutMs);
-              return tcpRes.time;
+              return { latency: tcpRes.time, via: 'tcp-fallback' };
             } catch {
-              return -1;
+              return { latency: -1, via: 'tcp-fallback' };
             }
           }
-          return -1;
+          return { latency: -1, via: 'tcp-fallback' };
         }
       }
 
@@ -87,17 +96,43 @@ export class SpeedTestRunner {
       if (proxyPort) {
         try {
           const proxyDelay = await this.testViaHttp(testUrl, timeoutMs, proxyPort, abortCtrl.signal);
-          if (proxyDelay > 0) return proxyDelay;
+          if (proxyDelay > 0) return { latency: proxyDelay, via: 'proxy-port' };
         } catch {
           // Fall through to direct
         }
       }
 
       // 3. Fallback direct test
-      return await this.testViaHttp(testUrl, timeoutMs, undefined, abortCtrl.signal);
+      return { latency: await this.testViaHttp(testUrl, timeoutMs, undefined, abortCtrl.signal), via: 'direct' };
     } finally {
       this.activeTasks.delete(taskId);
     }
+  }
+
+  /**
+   * 把节点出站探测的真实失败原因归类为可操作的中文提示。
+   * Clash API 的 delay 探测失败会把 sing-box 核心错误原样带回,
+   * 如 "reality verification failed"——REALITY 无法穿透 CDN(域名被 Cloudflare
+   * 等接管后 TLS 在边缘终结),是"TCP 可达但节点不可用"的最常见根因。
+   */
+  public static classifyProbeFailure(msg: string): string {
+    const m = String(msg || '');
+    if (/reality verification failed/i.test(m)) {
+      return 'REALITY 握手失败:节点域名可能被 CDN(如 Cloudflare)接管或服务端参数变更,可将节点地址改为服务器 IP 试探';
+    }
+    if (/tls|certificate|x509|handshake/i.test(m)) {
+      return 'TLS 握手失败:节点证书或加密参数可能已变更';
+    }
+    if (/timeout|context deadline/i.test(m)) {
+      return '代理通道超时:服务器可达但代理无响应';
+    }
+    if (/lookup|no such host|ENOTFOUND|dns/i.test(m)) {
+      return '节点域名解析失败:核心无法解析节点服务器地址';
+    }
+    if (/refused/i.test(m)) {
+      return '节点拒绝连接:服务端可能未监听或已封禁本机 IP';
+    }
+    return m ? `探测失败:${m}` : '探测失败:未知原因';
   }
 
   /**
@@ -183,9 +218,13 @@ export class SpeedTestRunner {
             if (typeof data.delay === 'number' && data.delay > 0) {
               resolve(data.delay);
             } else {
-              reject(new Error(data.message || 'No delay data'));
+              // API 正常应答但探测失败:打上标记,调用方不得用 TCP ping 掩盖
+              const err = new Error(data.message || 'No delay data');
+              (err as any).probeFailed = true;
+              reject(err);
             }
           } catch (e) {
+            (e as any).probeFailed = true;
             reject(e);
           }
         });

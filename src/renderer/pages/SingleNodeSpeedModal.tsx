@@ -13,6 +13,7 @@ import {
   Server,
   Save,
   Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { ProxyNode } from '../../types';
 import { detectRegion } from './Nodes';
@@ -34,6 +35,8 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
 }) => {
   const [tcpPing, setTcpPing] = useState<number | null>(node.ping !== undefined ? node.ping : null);
   const [httpLatency, setHttpLatency] = useState<number | null>(null);
+  /** HTTP 探测附注:失败原因,或"核心未运行仅 TCP 兜底"说明 */
+  const [httpNote, setHttpNote] = useState<string | null>(null);
   const [downloadSpeed, setDownloadSpeed] = useState<number | null>(null);
 
   const [isTestingTcp, setIsTestingTcp] = useState(false);
@@ -64,10 +67,15 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
     if (!window.electronAPI || isTestingHttp) return;
     setIsTestingHttp(true);
     try {
-      const delay = await window.electronAPI.speedTest.testLatency(undefined, node.id);
-      setHttpLatency(delay);
+      const res = await window.electronAPI.speedTest.testLatency(undefined, node.id);
+      setHttpLatency(res.latency);
+      setHttpNote(
+        res.reason ||
+          (res.via === 'tcp-fallback' && res.latency > 0 ? '核心未运行,当前为 TCP 兜底时延(不代表代理可用)' : null)
+      );
     } catch {
       setHttpLatency(-1);
+      setHttpNote('探测请求失败');
     } finally {
       setIsTestingHttp(false);
     }
@@ -115,10 +123,15 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
     // Step 2: HTTP Latency
     setIsTestingHttp(true);
     try {
-      const delay = await window.electronAPI.speedTest.testLatency(undefined, node.id);
-      setHttpLatency(delay);
+      const res = await window.electronAPI.speedTest.testLatency(undefined, node.id);
+      setHttpLatency(res.latency);
+      setHttpNote(
+        res.reason ||
+          (res.via === 'tcp-fallback' && res.latency > 0 ? '核心未运行,当前为 TCP 兜底时延(不代表代理可用)' : null)
+      );
     } catch {
       setHttpLatency(-1);
+      setHttpNote('探测请求失败');
     } finally {
       setIsTestingHttp(false);
     }
@@ -305,7 +318,9 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
                 <div className="text-xs text-blue-500 animate-pulse font-medium">请求中...</div>
               ) : httpLatency !== null ? (
                 httpLatency === -1 ? (
-                  <div className="text-base font-bold text-rose-500">超时</div>
+                  <div className="text-base font-bold text-rose-500" title={httpNote ?? undefined}>
+                    握手失败
+                  </div>
                 ) : (
                   <div className="flex items-baseline space-x-1">
                     <span
@@ -327,7 +342,18 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
               )}
             </div>
 
-            <div className="text-[10px] text-slate-400 leading-tight">代理真实响应时延</div>
+            <div
+              className={`text-[10px] leading-tight ${
+                httpLatency === -1 && httpNote
+                  ? 'text-rose-500'
+                  : httpNote
+                  ? 'text-amber-500'
+                  : 'text-slate-400'
+              }`}
+              title={httpNote ?? undefined}
+            >
+              {httpNote ? (httpNote.length > 42 ? `${httpNote.slice(0, 42)}…` : httpNote) : '代理真实响应时延'}
+            </div>
           </div>
 
           {/* Card 3: Download Speed */}
@@ -367,6 +393,14 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Proxy handshake failure banner: TCP 可达但代理通道故障(如 REALITY 被 CDN 拦截) */}
+        {httpLatency === -1 && httpNote && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-600 dark:text-rose-400 leading-relaxed flex items-start space-x-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>{httpNote}</span>
+          </div>
+        )}
 
         {/* Progress Bar when testing all */}
         {isAnyRunning && (

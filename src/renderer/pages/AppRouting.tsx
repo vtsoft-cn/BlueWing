@@ -88,7 +88,8 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
             Windows 应用分流
           </h3>
           <p className="text-xs text-slate-400">
-            根据程序可执行文件 (.exe) 独立控制走代理、直连或阻止连接
+            根据程序可执行文件 (.exe) 独立控制走代理、直连或阻止连接;分流规则(国内直连/局域网等)优先级更高,
+            应用规则只决定未命中分流规则的流量去向
           </p>
         </div>
 

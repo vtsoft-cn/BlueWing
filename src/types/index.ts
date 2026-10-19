@@ -203,6 +203,14 @@ export interface AppSettings {
 
 export type CoreState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error' | 'crashed';
 
+/** 节点延迟探测结果:latency=-1 时 reason 携带分类后的失败原因;
+ *  via=tcp-fallback 表示核心未运行、仅 TCP 兜底(不代表代理通道可用) */
+export interface LatencyResult {
+  latency: number; // ms; -1 = 失败
+  via: 'proxy-probe' | 'tcp-fallback' | 'proxy-port' | 'direct';
+  reason?: string;
+}
+
 export interface TrafficStats {
   uploadSpeed: number; // bytes/s
   downloadSpeed: number; // bytes/s
