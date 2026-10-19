@@ -98,3 +98,71 @@ describe('DataDirResolver', () => {
     } finally { cleanup([portable, fallback]); }
   });
 });
+
+describe('DataDirResolver elevation semantics (提权不改数据归属)', () => {
+  test('elevated + writable + both have data (installer stash residue) -> fallback, no split-brain', () => {
+    const portable = tmpDir('e1');
+    const fallback = tmpDir('e1f');
+    try {
+      // 场景即本次线上事故:Program Files 安装,管理员运行时目录"变得可写",
+      // 安装目录 data/ 里有安装器暂存的旧库,%APPDATA% 是真实新数据
+      fs.writeFileSync(path.join(portable, 'bluewing.json'), '{"stale":true}');
+      fs.writeFileSync(path.join(fallback, 'bluewing.json'), '{"real":true}');
+      const r = resolveDataDir(portable, fallback, () => true, true);
+      assert.equal(r.dir, fallback, 'elevated run must not flip data home to stale stash');
+      assert.equal(r.migrated, false);
+    } finally { cleanup([portable, fallback]); }
+  });
+
+  test('elevated + marker -> stays portable (sticky)', () => {
+    const portable = tmpDir('e2');
+    const fallback = tmpDir('e2f');
+    try {
+      fs.writeFileSync(path.join(portable, 'bluewing.json'), '{}');
+      fs.writeFileSync(path.join(portable, '.portable-mode'), 'portable data home\n');
+      fs.writeFileSync(path.join(fallback, 'bluewing.json'), '{}');
+      const r = resolveDataDir(portable, fallback, () => true, true);
+      assert.equal(r.dir, portable, 'deliberate portable mode survives elevation');
+    } finally { cleanup([portable, fallback]); }
+  });
+
+  test('elevated + no marker + portable-only data (legacy portable) -> stranding recovery to fallback', () => {
+    const portable = tmpDir('e3');
+    const fallback = tmpDir('e3f');
+    try {
+      fs.writeFileSync(path.join(portable, 'bluewing.json'), '{"schemaVersion":2}');
+      fs.writeFileSync(path.join(portable, 'bluewing.json.bak'), '{}');
+      const r = resolveDataDir(portable, fallback, () => true, true);
+      assert.equal(r.dir, fallback);
+      assert.equal(r.migrated, true, 'user data copied so app is not empty');
+      assert.ok(fs.existsSync(path.join(fallback, 'bluewing.json')));
+    } finally { cleanup([portable, fallback]); }
+  });
+
+  test('non-elevated portable choice writes marker; later elevated run stays portable', () => {
+    const portable = tmpDir('e4');
+    const fallback = tmpDir('e4f');
+    try {
+      fs.writeFileSync(path.join(portable, 'bluewing.json'), '{}');
+      const first = resolveDataDir(portable, fallback, () => true, false);
+      assert.equal(first.dir, portable);
+      assert.ok(fs.existsSync(path.join(portable, '.portable-mode')), 'marker written on portable choice');
+      const second = resolveDataDir(portable, fallback, () => true, true);
+      assert.equal(second.dir, portable, 'elevated run sticks to portable via marker');
+    } finally { cleanup([portable, fallback]); }
+  });
+
+  test('forward migration writes marker (换装后提权运行仍稳定便携)', () => {
+    const portable = tmpDir('e5');
+    const fallback = tmpDir('e5f');
+    try {
+      fs.writeFileSync(path.join(fallback, 'bluewing.json'), '{"schemaVersion":2}');
+      const r = resolveDataDir(portable, fallback, () => true, false);
+      assert.equal(r.dir, portable);
+      assert.equal(r.migrated, true);
+      assert.ok(fs.existsSync(path.join(portable, '.portable-mode')), 'marker written after migration');
+      const elevated = resolveDataDir(portable, path.join(fallback, 'recreated'), () => true, true);
+      assert.equal(elevated.dir, portable);
+    } finally { cleanup([portable, fallback]); }
+  });
+});

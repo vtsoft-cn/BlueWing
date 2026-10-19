@@ -7,16 +7,7 @@ import { EventEmitter } from 'events';
 import { CoreState } from '../../types';
 import { LogManager } from '../log/LogManager';
 import { Database } from '../db/Database';
-
-export function isRunningAsAdmin(): boolean {
-  if (process.platform !== 'win32') return true;
-  try {
-    execSync('net session', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { isRunningAsAdmin } from '../system/Elevation';
 
 export class SingBoxManager extends EventEmitter {
   private static instance: SingBoxManager;

@@ -6,6 +6,7 @@ import dns from 'dns';
 import { spawn } from 'child_process';
 import { Database } from './db/Database';
 import { resolveDataDir } from './system/DataDirResolver';
+import { isRunningAsAdmin } from './system/Elevation';
 import { resourcePath } from './branding';
 import { SingBoxManager } from './core/SingBoxManager';
 import { ConfigGenerator } from './core/ConfigGenerator';
@@ -41,7 +42,7 @@ const fallbackDataDir = path.join(
   process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'),
   'BlueWingConnect'
 );
-const { dir: appDataDir } = resolveDataDir(portableDataDir, fallbackDataDir);
+const { dir: appDataDir } = resolveDataDir(portableDataDir, fallbackDataDir, undefined, isRunningAsAdmin());
 process.env.BLUEWING_DATA_DIR = appDataDir;
 app.setPath('userData', appDataDir);
 

@@ -5,17 +5,21 @@ import path from 'path';
  * 数据目录解析与一次性迁移(应用启动最早期调用,早于 Database/LogManager 初始化)。
  *
  * 规则(按序):
- * 1. 便携优先:安装目录同级 data/ 可写即用之;
- *    前向迁移:可写但本地无数据库而 %APPDATA% 已有数据(从 Program Files 换装到
- *    其它位置的 reinstall)→ 把 %APPDATA% 整目录(含 Chromium 用户资料)迁到本地
- *    data/ 并删除 %APPDATA% 原目录,数据跟着安装位置走、不留副本;迁移失败则
- *    沿用 %APPDATA%(不丢数据);
- * 2. 不可写(如 per-machine 装在 Program Files)→ 回退 %APPDATA%;
- *    接续修正(数据搁浅修复):回退目录无数据库而安装目录 data/ 里有(安装器把旧数据
- *    还原到了新安装目录,但普通权限读不到也不可写)→ 把用户数据迁移到 %APPDATA%,
- *    配置接续不断;安装目录内残留副本普通权限删不动,留置无害。
- * 3. 迁移内容为用户数据(数据库/回退/核心配置/规则缓存/日志),Chromium 缓存类
- *    目录可再生,搁浅方向不搬;前向迁移整目录搬迁(保留登录态等资料)。
+ * 0. 便携模式显式粘滞:仅当安装目录 data/ 存在 .portable-mode 标记,或本次为
+ *    非提权运行且目录真实可写时,才选择便携目录。提权运行绝不由"目录变得可写"
+ *    改变数据归属——管理员令牌让 Program Files 可写只是副作用,普通权限下次启动
+ *    又不可写;若据此切换数据目录,应用会在两份数据间脑裂(实测:以管理员重启后
+ *    应用切到安装器暂存在安装目录的旧数据,界面整体回到旧配置、TUN/节点全不对)。
+ * 1. 有标记 → 便携(换装前向迁移/长期便携已写入标记,提权与否都稳定)。
+ * 2. 无标记 + 提权运行 → 一律回退 %APPDATA%;若回退目录无数据而安装目录有
+ *    (标记机制引入前的老便携用户提权运行),按搁浅恢复把用户数据拷到 %APPDATA%
+ *    接续,绝不展示空应用。
+ * 3. 无标记 + 非提权 + 可写 → 便携:全新自定义目录安装直接落位;换装场景
+ *    (本地无库而 %APPDATA% 有数据)整目录前向迁移(含 Chromium 用户资料)并删除
+ *    %APPDATA% 源目录;选择便携时写入标记,此后提权运行也稳定便携。
+ * 4. 无标记 + 非提权 + 不可写(如 per-machine 装在 Program Files)→ 回退
+ *    %APPDATA%;安装器还原到安装目录的旧数据按搁浅恢复(数据库/回退/核心配置/
+ *    规则缓存/日志)迁移接续,Chromium 缓存类可再生目录不搬。
  */
 export interface DataDirResult {
   dir: string;
@@ -23,11 +27,29 @@ export interface DataDirResult {
   migrated: boolean;
 }
 
+const PORTABLE_MARKER = '.portable-mode';
+
 function hasDatabase(dir: string): boolean {
   try {
     return fs.existsSync(path.join(dir, 'bluewing.json'));
   } catch {
     return false;
+  }
+}
+
+function hasPortableMarker(dir: string): boolean {
+  try {
+    return fs.existsSync(path.join(dir, PORTABLE_MARKER));
+  } catch {
+    return false;
+  }
+}
+
+function writePortableMarker(dir: string): void {
+  try {
+    fs.writeFileSync(path.join(dir, PORTABLE_MARKER), 'portable data home\n');
+  } catch {
+    // 标记写失败不阻断:下次非提权运行会再写
   }
 }
 
@@ -47,33 +69,64 @@ function copyTreeIfExists(src: string, dest: string, sub: string): void {
   fs.cpSync(s, d, { recursive: true });
 }
 
+/** 搁浅恢复:把安装目录 data/ 里的用户数据(不含可再生缓存)拷到回退目录,数据库写入成功才算完成 */
+function strandingRecovery(portableDataDir: string, fallbackDataDir: string): boolean {
+  copyIfExists(portableDataDir, fallbackDataDir, 'bluewing.json');
+  copyIfExists(portableDataDir, fallbackDataDir, 'bluewing.json.bak');
+  copyIfExists(portableDataDir, fallbackDataDir, 'config.json');
+  copyTreeIfExists(portableDataDir, fallbackDataDir, 'rules');
+  copyTreeIfExists(portableDataDir, fallbackDataDir, 'logs');
+  return hasDatabase(fallbackDataDir);
+}
+
 export function resolveDataDir(
   portableDataDir: string,
   fallbackDataDir: string,
-  canWrite?: (dir: string) => boolean
+  canWrite?: (dir: string) => boolean,
+  isElevated?: boolean
 ): DataDirResult {
-  const writable = canWrite ?? ((dir: string) => {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      const probe = path.join(dir, '.write-probe');
-      fs.writeFileSync(probe, 'ok');
-      fs.unlinkSync(probe);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  const writable =
+    canWrite ??
+    ((dir: string) => {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        const probe = path.join(dir, '.write-probe');
+        fs.writeFileSync(probe, 'ok');
+        fs.unlinkSync(probe);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  const elevated = isElevated ?? false;
 
   const fallbackHasData = hasDatabase(fallbackDataDir);
+  const portableHasData = hasDatabase(portableDataDir);
 
+  // 1. 标记粘滞:此前已明确选择便携模式(换装迁移/长期便携),提权与否都稳定
+  if (hasPortableMarker(portableDataDir) && portableHasData) {
+    return { dir: portableDataDir, migrated: false };
+  }
+
+  // 2. 提权运行:不由临时可写性改变数据归属,一律回退 %APPDATA%
+  if (elevated) {
+    fs.mkdirSync(fallbackDataDir, { recursive: true });
+    if (!fallbackHasData && portableHasData && strandingRecovery(portableDataDir, fallbackDataDir)) {
+      return { dir: fallbackDataDir, migrated: true };
+    }
+    return { dir: fallbackDataDir, migrated: false };
+  }
+
+  // 3. 非提权 + 可写 → 便携(全新落位或换装前向迁移),写入标记
   if (writable(portableDataDir)) {
-    if (!hasDatabase(portableDataDir) && fallbackHasData) {
+    if (!portableHasData && fallbackHasData) {
       // 前向迁移:整目录搬迁到安装目录 data/(含 Chromium 用户资料,保留登录态),
       // 成功后删除 %APPDATA% 原目录;任一步失败则沿用 %APPDATA%,绝不丢数据
       try {
         fs.cpSync(fallbackDataDir, portableDataDir, { recursive: true });
         if (hasDatabase(portableDataDir)) {
           fs.rmSync(fallbackDataDir, { recursive: true, force: true });
+          writePortableMarker(portableDataDir);
           return { dir: portableDataDir, migrated: true };
         }
       } catch {
@@ -81,21 +134,14 @@ export function resolveDataDir(
       }
       return { dir: fallbackDataDir, migrated: false };
     }
+    writePortableMarker(portableDataDir);
     return { dir: portableDataDir, migrated: false };
   }
 
-  // 安装目录不可写:回退 %APPDATA%
+  // 4. 安装目录不可写:回退 %APPDATA%(安装器还原的旧数据按搁浅恢复接续)
   fs.mkdirSync(fallbackDataDir, { recursive: true });
-  if (!fallbackHasData && hasDatabase(portableDataDir)) {
-    // 数据搁浅:安装器还原到安装目录的旧数据迁移到 %APPDATA%(数据库写入成功才视为迁移完成)
-    copyIfExists(portableDataDir, fallbackDataDir, 'bluewing.json');
-    copyIfExists(portableDataDir, fallbackDataDir, 'bluewing.json.bak');
-    copyIfExists(portableDataDir, fallbackDataDir, 'config.json');
-    copyTreeIfExists(portableDataDir, fallbackDataDir, 'rules');
-    copyTreeIfExists(portableDataDir, fallbackDataDir, 'logs');
-    if (hasDatabase(fallbackDataDir)) {
-      return { dir: fallbackDataDir, migrated: true };
-    }
+  if (!fallbackHasData && portableHasData && strandingRecovery(portableDataDir, fallbackDataDir)) {
+    return { dir: fallbackDataDir, migrated: true };
   }
   return { dir: fallbackDataDir, migrated: false };
 }
