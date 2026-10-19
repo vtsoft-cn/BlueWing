@@ -20,7 +20,7 @@ export class ElevatedRelaunch {
       `try { Add-Content -Path '${elevateLog}' -Value ("[{0}] relaunch begin, oldPid=${process.pid}" -f (Get-Date -Format o)) } catch {}`,
       `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue`,
       'Start-Sleep -Milliseconds 800',
-      `try { Start-Process -FilePath '${execPath}' -Verb RunAs -ErrorAction Stop }`,
+      `try { Start-Process -FilePath '${execPath}' -Verb RunAs -ErrorAction Stop; try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas-ok (部分机器 UAC 策略为静默提升,无弹窗属正常)" -f (Get-Date -Format o)) } catch {} }`,
       'catch {',
       `  try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas failed: {1}" -f (Get-Date -Format o), $_.Exception.Message) } catch {}`,
       '  Start-Sleep -Seconds 1',

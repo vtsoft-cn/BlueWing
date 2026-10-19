@@ -44,6 +44,19 @@ const fallbackDataDir = path.join(
 );
 const { dir: appDataDir } = resolveDataDir(portableDataDir, fallbackDataDir, undefined, isRunningAsAdmin());
 process.env.BLUEWING_DATA_DIR = appDataDir;
+
+// 启动黑匣子:早于一切子系统(LogManager 尚未就绪)用裸 fs 记面包屑,
+// 提权重启等"退出后再也没起来"类故障在每一步留下定位证据
+const bootLog = (msg: string): void => {
+  try {
+    fs.mkdirSync(appDataDir, { recursive: true });
+    fs.appendFileSync(
+      path.join(appDataDir, 'boot.log'),
+      `[${new Date().toISOString()}] pid=${process.pid} admin=${isRunningAsAdmin()} ${msg}\n`
+    );
+  } catch {}
+};
+bootLog(`boot: dataDir=${appDataDir}`);
 app.setPath('userData', appDataDir);
 
 // 安装器在向导阶段被取消时,data/ 可能仍留在同级 BlueWingDataUpgrade 暂存里
@@ -72,11 +85,19 @@ if (appDataDir === portableDataDir) {
 // 保证重试期间不闪窗(与 --bb-shutdown 的零闪窗承诺同一约束)。
 let isSecondaryInstance = false;
 const lockSettled = (async (): Promise<boolean> => {
-  if (app.requestSingleInstanceLock()) return true;
+  if (app.requestSingleInstanceLock()) {
+    bootLog('single-instance lock acquired (first try)');
+    return true;
+  }
+  bootLog('single-instance lock held by another instance, retrying');
   for (let i = 0; i < 10; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    if (app.requestSingleInstanceLock()) return true;
+    if (app.requestSingleInstanceLock()) {
+      bootLog(`single-instance lock acquired on retry ${i + 1}`);
+      return true;
+    }
   }
+  bootLog('single-instance lock NOT acquired after 10s retries, exiting');
   return false;
 })();
 
@@ -220,6 +241,7 @@ let isAppQuitting = false;
 
 app.whenReady().then(async () => {
   // 锁未落定前不得做任何初始化(重试期间 app 可能已 ready,必须在此等待)
+  bootLog('whenReady');
   if (!(await lockSettled)) {
     isSecondaryInstance = true;
     app.exit(0);
@@ -228,6 +250,7 @@ app.whenReady().then(async () => {
   if (process.argv.includes('--bb-shutdown')) {
     // --bb-shutdown 作为首实例 = 没有运行中的实例可通知;立即退出,绝不启动完整
     // 应用(否则安装器的信号任务会凭空拉起应用主窗口一闪而过,用户看到"闪退")
+    bootLog('bb-shutdown first instance, exiting');
     app.exit(0);
     return;
   }
@@ -249,8 +272,10 @@ app.whenReady().then(async () => {
   });
 
   await warnAndExitIfForeignInstance();
+  bootLog('foreign-instance check passed');
 
   createWindow();
+  bootLog('main window created');
 
   let lastSampleTime = 0;
   let lastDownloadTotal = 0;

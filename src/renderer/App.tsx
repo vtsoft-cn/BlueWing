@@ -285,7 +285,7 @@ export const App: React.FC = () => {
     const ok = await confirmDialog({
       title: '启用 TUN 需要管理员权限',
       message:
-        '当前应用以普通用户权限运行,TUN 无法生效。可以管理员身份重启应用后启用 TUN(系统将弹出 UAC 确认);选择取消则不开启 TUN,继续使用系统代理。',
+        '当前应用以普通用户权限运行,TUN 无法生效。可以管理员身份重启应用后启用 TUN(若系统开启 UAC 提示会请求确认一次,静默提升的系统则直接重启);选择取消则不开启 TUN,继续使用系统代理。',
       confirmText: '以管理员身份重启',
       cancelText: '取消',
     });
