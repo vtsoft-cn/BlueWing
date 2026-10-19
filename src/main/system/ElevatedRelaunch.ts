@@ -47,7 +47,16 @@ export class ElevatedRelaunch {
     ].join('\n');
 
     try {
-      fs.writeFileSync(scriptPath, script, 'utf8');
+      // 带 BOM 的 UTF-8:PowerShell 5.1 无 BOM 时按 ANSI 解析,中文留痕会乱码
+      fs.writeFileSync(scriptPath, '\ufeff' + script, 'utf8');
+
+      // VBS 启动器:wscript 为 GUI 子系统(自身零控制台),Run 窗口样式 0 再彻底隐藏
+      // PowerShell——否则计划任务承载的守候脚本会弹出可见控制台窗口(用户实测所见)。
+      // VBS 字符串内嵌引号必须双写("" 转义),路径两侧的引号也不例外
+      const vbsPath = path.join(logsDir, 'elevate-relaunch.vbs');
+      const vbs =
+        `CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File ""${scriptPath}""", 0, False\n`;
+      fs.writeFileSync(vbsPath, '\ufeff' + vbs, 'utf16le');
     } catch (e: any) {
       LogManager.getInstance().addLog('warn', `提权重启:守候脚本写入失败(${e?.message}),退回直接拉起`, 'app');
       this.directSpawn(script);
@@ -55,9 +64,9 @@ export class ElevatedRelaunch {
     }
 
     // 注册并触发一次性任务(经 cmdlet,避开 schtasks /tr 引号坑);EncodedCommand 传参零转义
-    const escScriptPath = scriptPath.replace(/'/g, "''");
+    const escVbsPath = path.join(logsDir, 'elevate-relaunch.vbs').replace(/'/g, "''");
     const registerScript = [
-      `$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${escScriptPath}"'`,
+      `$a = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument '"${escVbsPath}"'`,
       `Register-ScheduledTask -TaskName '${TASK_NAME}' -Action $a -Force -ErrorAction Stop | Out-Null`,
       `Start-ScheduledTask -TaskName '${TASK_NAME}'`,
     ].join('\n');
