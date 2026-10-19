@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar';
 import { PageHeader } from './components/PageHeader';
 import { ToastHost, toast } from './components/Toast';
-import { ConfirmDialogHost } from './components/ConfirmDialog';
+import { ConfirmDialogHost, confirmDialog } from './components/ConfirmDialog';
 import { Dashboard } from './pages/Dashboard';
 import { Nodes } from './pages/Nodes';
 import { Subscriptions } from './pages/Subscriptions';
@@ -279,6 +279,28 @@ export const App: React.FC = () => {
     }
   };
 
+  // TUN 提权引导:统一走应用内自定义确认框(不使用系统原生对话框)。
+  // 覆盖三条入口:Dashboard/设置页开 TUN 的预检、托盘勾选、主进程兜底拦截事件
+  const handleRequestTunElevation = async () => {
+    const ok = await confirmDialog({
+      title: '启用 TUN 需要管理员权限',
+      message:
+        '当前应用以普通用户权限运行,TUN 无法生效。可以管理员身份重启应用后启用 TUN(系统将弹出 UAC 确认);选择取消则不开启 TUN,继续使用系统代理。',
+      confirmText: '以管理员身份重启',
+      cancelText: '取消',
+    });
+    if (ok && window.electronAPI?.tun) {
+      await window.electronAPI.tun.enableElevated();
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.tun?.onElevationRequired(() => {
+      handleRequestTunElevation();
+    });
+    return unsubscribe;
+  }, []);
+
   const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
 
   return (
@@ -314,6 +336,7 @@ export const App: React.FC = () => {
                 settings={settings}
                 onUpdateSettings={handleUpdateSettings}
                 onNavigate={setCurrentTab}
+                onRequestTunElevation={handleRequestTunElevation}
               />
             )}
 
@@ -373,6 +396,7 @@ export const App: React.FC = () => {
                 settings={settings}
                 onUpdateSettings={handleUpdateSettings}
                 coreVersion={coreVersion}
+                onRequestTunElevation={handleRequestTunElevation}
               />
             )}
 

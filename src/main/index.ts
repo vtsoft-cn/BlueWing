@@ -638,6 +638,23 @@ ipcMain.handle('system:relaunchAsAdmin', () => {
   ElevatedRelaunch.relaunch();
   return true;
 });
+
+// TUN 提权引导弹窗的"以管理员身份重启"确认:落库(含互斥联动)→广播→提权重启。
+// 由渲染层自定义弹窗触发(不再使用系统原生对话框)
+ipcMain.handle('tun:enableElevated', () => {
+  const db = Database.getInstance();
+  const settings = db.getSettings();
+  const patch = TakeoverLinkage.exclusivityPatch(
+    settings,
+    { tunEnabled: true, systemProxyEnabled: settings.systemProxyEnabled },
+    true
+  );
+  db.saveSettings({ tunEnabled: true, ...(patch || {}) });
+  broadcastSettingsChanged();
+  LogManager.getInstance().addLog('info', '已保存 TUN 设置,正在以管理员身份重启应用...', 'app');
+  ElevatedRelaunch.relaunch();
+  return true;
+});
 ipcMain.handle('system:flushDns', async () => {
   return new Promise((resolve) => {
     const cp = spawn('ipconfig.exe', ['/flushdns'], { windowsHide: true });
@@ -1069,17 +1086,14 @@ ipcMain.handle('settings:save', async (_, s) => {
   // 后续既有的 proxyChanged/coreConfigChanged 分支自然完成注册表开关与核心重载;
   // 核心重载路径不经过此处,不会触碰开关(与连接意图保护同一约束)。
   let linkageApplied = false;
-  // 非管理员下开 TUN:弹窗引导提权重启(该场景 TUN 不可能生效,静默剥除+代理回退
-  // 的三步舞曾让用户看到"系统代理怎么又开了");取消则本次不开启 TUN
-  let tunElevationRelaunch = false;
+  // 非管理员下开 TUN:还原本次开关并通过事件让渲染层弹自定义引导弹窗
+  // (TUN 不可能生效,静默剥除+代理回退的三步舞曾让用户看到"系统代理怎么又开了");
+  // 用户确认提权走 tun:enableElevated(落库+联动+提权重启),取消则现状不变
+  let tunElevationRequired = false;
   if (s.tunEnabled !== undefined && s.tunEnabled !== prevSettings.tunEnabled) {
     if (s.tunEnabled && !SingBoxManager.getInstance().isAdmin()) {
-      const choice = await TakeoverLinkage.promptTunElevation(mainWindow);
-      if (choice === 'elevate') {
-        tunElevationRelaunch = true; // 落库(含联动)后提权重启,重启后 TUN 生效
-      } else {
-        s.tunEnabled = prevSettings.tunEnabled; // 还原开关;渲染层乐观状态靠广播纠正
-      }
+      tunElevationRequired = true;
+      s.tunEnabled = prevSettings.tunEnabled; // 还原开关;渲染层乐观状态靠广播纠正
     }
     if (s.tunEnabled !== prevSettings.tunEnabled) {
       const patch = TakeoverLinkage.exclusivityPatch(
@@ -1128,11 +1142,10 @@ ipcMain.handle('settings:save', async (_, s) => {
     broadcastSettingsChanged();
   }
 
-  // 提权重启路径:设置已落库并广播,应用即将退出,跳过后续注册表/核心操作
-  if (tunElevationRelaunch) {
-    LogManager.getInstance().addLog('info', '已保存 TUN 设置,正在以管理员身份重启应用...', 'app');
-    ElevatedRelaunch.relaunch();
-    return true;
+  // 非管理员开 TUN 被拦截:通知渲染层弹自定义提权引导弹窗(设置页/Dashboard 的
+  // 正常路径会在保存前预检直接弹窗,此处兜底覆盖绕过预检的路径)
+  if (tunElevationRequired) {
+    mainWindow?.webContents.send('tun:elevation-required');
   }
 
   // 主题变化 → 立即刷新托盘/任务栏图标(图标随主题 × 代理状态)

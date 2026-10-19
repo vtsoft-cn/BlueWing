@@ -189,6 +189,20 @@ export const api = {
     flushDns: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke('system:flushDns'),
     getAppVersion: (): Promise<string> => ipcRenderer.invoke('system:getAppVersion'),
   },
+
+  // TUN 提权引导(自定义弹窗,不使用系统原生对话框)
+  tun: {
+    /** 弹窗确认"以管理员身份重启":落库(含互斥联动)并提权重启 */
+    enableElevated: (): Promise<boolean> => ipcRenderer.invoke('tun:enableElevated'),
+    /** 主进程拦截到非管理员开 TUN 时请求弹窗(兜底路径) */
+    onElevationRequired: (callback: () => void): (() => void) => {
+      const sub = () => callback();
+      ipcRenderer.on('tun:elevation-required', sub);
+      return () => {
+        ipcRenderer.removeListener('tun:elevation-required', sub);
+      };
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

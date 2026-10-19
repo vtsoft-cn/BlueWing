@@ -23,12 +23,15 @@ interface SettingsProps {
   settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void;
   coreVersion: string;
+  /** 非管理员开 TUN 时的自定义提权引导弹窗 */
+  onRequestTunElevation: () => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
   settings,
   onUpdateSettings,
   coreVersion,
+  onRequestTunElevation,
 }) => {
   const [formData, setFormData] = useState<AppSettings>(settings);
   const [activeCategory, setActiveCategory] = useState<'general' | 'proxy' | 'tun' | 'core'>('general');
@@ -308,7 +311,14 @@ export const Settings: React.FC<SettingsProps> = ({
               <input
                 type="checkbox"
                 checked={formData.tunEnabled}
-                onChange={(e) => setFormData({ ...formData, tunEnabled: e.target.checked })}
+                onChange={(e) => {
+                  // 非管理员勾选 TUN:弹自定义提权引导,勾选状态保持不变
+                  if (e.target.checked && !formData.tunEnabled && !isAdmin) {
+                    onRequestTunElevation();
+                    return;
+                  }
+                  setFormData({ ...formData, tunEnabled: e.target.checked });
+                }}
                 className="w-4 h-4 rounded text-blue-600 focus:ring-0"
               />
             </div>

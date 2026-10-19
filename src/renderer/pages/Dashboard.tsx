@@ -26,6 +26,8 @@ interface DashboardProps {
   settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void;
   onNavigate: (tab: any) => void;
+  /** 非管理员开 TUN 时的自定义提权引导弹窗 */
+  onRequestTunElevation: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -39,7 +41,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   settings,
   onUpdateSettings,
   onNavigate,
+  onRequestTunElevation,
 }) => {
+  // 开 TUN 前预检权限:非管理员弹自定义提权引导,不改变开关状态
+  const handleToggleTun = async () => {
+    if (!settings.tunEnabled) {
+      const admin = window.electronAPI ? await window.electronAPI.system.isAdmin() : true;
+      if (!admin) {
+        onRequestTunElevation();
+        return;
+      }
+    }
+    onUpdateSettings({ tunEnabled: !settings.tunEnabled });
+  };
+
   const isConnected = coreState === 'running';
   const isConnecting = coreState === 'starting' || coreState === 'stopping';
   const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
@@ -336,7 +351,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <button
-            onClick={() => onUpdateSettings({ tunEnabled: !settings.tunEnabled })}
+            onClick={handleToggleTun}
             className={`w-11 h-6 rounded-full transition-colors relative ${
               settings.tunEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
             }`}

@@ -3,7 +3,6 @@ import { Database } from '../db/Database';
 import { SingBoxManager } from '../core/SingBoxManager';
 import { SystemProxy } from '../system/SystemProxy';
 import { TakeoverLinkage } from '../system/TakeoverLinkage';
-import { ElevatedRelaunch } from '../system/ElevatedRelaunch';
 import { ConfigGenerator } from '../core/ConfigGenerator';
 import { resourcePath, trayIconPath } from '../branding';
 
@@ -215,22 +214,12 @@ export class TrayManager {
         checked: settings.tunEnabled,
         click: async () => {
           const newState = !settings.tunEnabled;
-          // 非管理员下开 TUN:与设置页同一套提权引导——TUN 不可能生效时明确告知,
-          // 而不是静默走"剥除+代理回退"三步舞;取消则完全不开启
+          // 非管理员下开 TUN:与设置页同一套引导——唤醒主窗口并通知渲染层弹
+          // 自定义提权引导弹窗(TUN 不可能生效时明确告知,而不是静默走
+          // "剥除+代理回退"三步舞);取消则完全不开启
           if (newState && !core.isAdmin()) {
-            const choice = await TakeoverLinkage.promptTunElevation(this.mainWindow);
-            if (choice === 'cancel') {
-              this.updateMenu();
-              return;
-            }
-            const elevatePatch = TakeoverLinkage.exclusivityPatch(
-              settings,
-              { tunEnabled: true, systemProxyEnabled: settings.systemProxyEnabled },
-              true
-            );
-            db.saveSettings({ tunEnabled: true, ...(elevatePatch || {}) });
-            this.mainWindow?.webContents.send('settings:changed', db.getSettings());
-            ElevatedRelaunch.relaunch();
+            this.showFromTray();
+            this.mainWindow?.webContents.send('tun:elevation-required');
             return;
           }
           // TUN↔系统代理互斥联动(二选一):切 TUN 时联动拨系统代理开关,

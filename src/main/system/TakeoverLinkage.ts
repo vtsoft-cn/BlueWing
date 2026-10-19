@@ -1,4 +1,3 @@
-import { dialog, BrowserWindow } from 'electron';
 import { SystemProxy } from './SystemProxy';
 import { Database } from '../db/Database';
 import { LogManager } from '../log/LogManager';
@@ -34,30 +33,6 @@ export class TakeoverLinkage {
       return { systemProxyEnabled: true };
     }
     return null;
-  }
-
-  /**
-   * 非管理员下用户要开 TUN:TUN 不可能生效,静默"剥除+代理回退"的三步舞
-   * (联动关代理→核心重载→TUN 被剥除→兜底又开代理)让用户看到"系统代理
-   * 怎么又开了",开关形同失灵。明确弹窗告知需要管理员权限并引导提权重启;
-   * 取消则完全不开启 TUN。返回 'elevate'(保存设置并提权重启)或 'cancel'。
-   */
-  public static async promptTunElevation(parent?: BrowserWindow | null): Promise<'elevate' | 'cancel'> {
-    const options = {
-      type: 'info' as const,
-      title: 'TUN 需要管理员权限',
-      message: '启用 TUN 虚拟网卡需要管理员权限',
-      detail:
-        '当前应用以普通用户权限运行,TUN 无法生效。可以管理员身份重启应用后启用 TUN;选择取消则不开启 TUN,继续使用系统代理。',
-      buttons: ['以管理员身份重启', '取消'],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-    };
-    const { response } = parent
-      ? await dialog.showMessageBox(parent, options)
-      : await dialog.showMessageBox(options);
-    return response === 0 ? 'elevate' : 'cancel';
   }
 
   /**
