@@ -85,7 +85,7 @@ export const Select: React.FC<SelectProps> = ({ value, options, onChange, classN
           <div
             ref={panelRef}
             style={panelStyle}
-            className="fixed z-[205] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl shadow-slate-900/10 dark:shadow-black/40 py-1 overflow-y-auto"
+            className="no-drag fixed z-[205] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl shadow-slate-900/10 dark:shadow-black/40 py-1 overflow-y-auto"
           >
             {options.map((o) => (
               <button

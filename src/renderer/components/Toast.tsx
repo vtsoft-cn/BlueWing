@@ -62,7 +62,8 @@ const ToastCard: React.FC<{ item: ToastItem; onClose: () => void }> = ({ item, o
 
   return (
     <div
-      className={`w-80 rounded-xl border border-slate-200 dark:border-slate-700/70 border-l-4 ${ACCENTS[item.type]} bg-white dark:bg-slate-900 shadow-lg shadow-slate-900/10 dark:shadow-black/30 p-3 flex items-start gap-2.5 transition-all duration-200 ease-out ${
+      onClick={onClose}
+      className={`cursor-pointer w-80 rounded-xl border border-slate-200 dark:border-slate-700/70 border-l-4 ${ACCENTS[item.type]} bg-white dark:bg-slate-900 shadow-lg shadow-slate-900/10 dark:shadow-black/30 p-3 flex items-start gap-2.5 transition-all duration-200 ease-out ${
         shown ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-5'
       }`}
     >
@@ -72,7 +73,7 @@ const ToastCard: React.FC<{ item: ToastItem; onClose: () => void }> = ({ item, o
       </div>
       <button
         onClick={onClose}
-        className="shrink-0 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
+        className="shrink-0 -m-1.5 p-1.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
       >
         <X className="w-3.5 h-3.5" />
       </button>
@@ -97,7 +98,10 @@ export const ToastHost: React.FC = () => {
   const remove = (id: number) => setItems((prev) => prev.filter((t) => t.id !== id));
 
   return (
-    <div className="fixed top-14 right-4 z-[220] flex flex-col gap-2 pointer-events-none">
+    /* no-drag:body 全局是 app-region 拖拽面,而滚动后区域缓存错位且不重发(electron#40610),
+       后挂载的卡片若落在拖拽面内,关闭按钮的点击会被原生拖拽层吞掉;容器常驻、
+       启动即注册为非拖拽区,卡片再挂载无需区域更新 */
+    <div className="no-drag fixed top-14 right-4 z-[220] flex flex-col gap-2 pointer-events-none">
       {items.map((item) => (
         <div key={item.id} className="pointer-events-auto">
           <ToastCard item={item} onClose={() => remove(item.id)} />
