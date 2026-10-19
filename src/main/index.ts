@@ -1113,6 +1113,23 @@ ipcMain.handle('settings:save', async (_, s) => {
       );
     }
   }
+  // 反向联动(单选语义另一半):TUN 开着时用户开系统代理 → 联动关 TUN;
+  // 落库前归一化,后续 coreConfigChanged(tunEnabled 变化)自然触发去 TUN 重载
+  if (s.systemProxyEnabled !== undefined && s.systemProxyEnabled !== prevSettings.systemProxyEnabled) {
+    const patch = TakeoverLinkage.proxyTogglePatch(prevSettings, {
+      tunEnabled: s.tunEnabled ?? prevSettings.tunEnabled,
+      systemProxyEnabled: s.systemProxyEnabled,
+    });
+    if (patch) {
+      Object.assign(s, patch);
+      linkageApplied = true;
+      LogManager.getInstance().addLog(
+        'info',
+        '系统代理已开启,TUN 已联动关闭(二选一)',
+        'app'
+      );
+    }
+  }
   db.saveSettings(s);
   const currentSettings = db.getSettings();
 

@@ -610,3 +610,33 @@ describe('TakeoverLinkage.exclusivityPatch (TUN↔系统代理互斥联动)', ()
     );
   });
 });
+
+describe('TakeoverLinkage.proxyTogglePatch (开代理反向联动关 TUN)', () => {
+  test('TUN 开着时开系统代理 → 联动关 TUN', () => {
+    assert.deepEqual(
+      TakeoverLinkage.proxyTogglePatch({ tunEnabled: true, systemProxyEnabled: false }, { tunEnabled: true, systemProxyEnabled: true }),
+      { tunEnabled: false }
+    );
+  });
+
+  test('关系统代理不反向开 TUN——关代理是"停止接管"的手势,静默拉起 TUN 出乎意料', () => {
+    assert.equal(
+      TakeoverLinkage.proxyTogglePatch({ tunEnabled: false, systemProxyEnabled: true }, { tunEnabled: false, systemProxyEnabled: false }),
+      null
+    );
+  });
+
+  test('TUN 本来就关 → 开代理无需联动', () => {
+    assert.equal(
+      TakeoverLinkage.proxyTogglePatch({ tunEnabled: false, systemProxyEnabled: false }, { tunEnabled: false, systemProxyEnabled: true }),
+      null
+    );
+  });
+
+  test('代理开关未变化 → 不联动', () => {
+    assert.equal(
+      TakeoverLinkage.proxyTogglePatch({ tunEnabled: true, systemProxyEnabled: true }, { tunEnabled: true, systemProxyEnabled: true }),
+      null
+    );
+  });
+});

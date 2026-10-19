@@ -36,6 +36,21 @@ export class TakeoverLinkage {
   }
 
   /**
+   * 反向联动(单选语义的另一半):TUN 开着时用户开系统代理 → 联动关 TUN。
+   * 关代理不反向开 TUN——关代理是"停止接管"的手势,自动拉起 TUN 出乎意料
+   * (且 TUN 需要管理员权限,静默开出来只会被剥除)。
+   */
+  public static proxyTogglePatch(
+    prev: Pick<AppSettings, 'tunEnabled' | 'systemProxyEnabled'>,
+    next: Pick<AppSettings, 'tunEnabled' | 'systemProxyEnabled'>
+  ): Partial<AppSettings> | null {
+    if (next.systemProxyEnabled && !prev.systemProxyEnabled && next.tunEnabled) {
+      return { tunEnabled: false };
+    }
+    return null;
+  }
+
+  /**
    * 保护性兜底:核心启动时 TUN 因非管理员权限被剥除,而系统代理开关为关——
    * 自动开启系统代理,兑现"安全回退系统代理模式"的承诺,避免连接空转无出口。
    * 返回是否发生了设置变更(调用方据此广播 settings:changed)。

@@ -166,12 +166,28 @@ export class TrayManager {
         checked: settings.systemProxyEnabled,
         click: async () => {
           const newState = !settings.systemProxyEnabled;
-          db.saveSettings({ systemProxyEnabled: newState });
+          // 反向联动(二选一):TUN 开着时开系统代理 → 联动关 TUN
+          const patch = newState
+            ? TakeoverLinkage.proxyTogglePatch(settings, { tunEnabled: settings.tunEnabled, systemProxyEnabled: newState })
+            : null;
+          db.saveSettings({ systemProxyEnabled: newState, ...(patch || {}) });
           if (core.getState() === 'running') {
             if (newState) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
             } else {
               await SystemProxy.disable();
+            }
+            // TUN 被联动关闭:按新设置重载核心(去掉 TUN 入站)
+            if (patch) {
+              const config = ConfigGenerator.generate(
+                activeNodeId,
+                nodes,
+                db.getRules(),
+                db.getAppRules(),
+                db.getDns(),
+                db.getSettings()
+              );
+              await core.start(config);
             }
           } else if (newState) {
             // 核心未运行时勾选系统代理:自动连接,确保开关真实生效而不是只改设置
@@ -181,7 +197,7 @@ export class TrayManager {
               db.getRules(),
               db.getAppRules(),
               db.getDns(),
-              settings
+              db.getSettings()
             );
             const started = await core.start(config);
             if (started) {
