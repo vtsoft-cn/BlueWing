@@ -28,10 +28,15 @@ export class ElevatedRelaunch {
       '}',
     ].join('\n');
     const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    // 注意不能用 detached: true——DETACHED_PROCESS 让 PowerShell 这类控制台程序
+    // 拿不到控制台与标准句柄,启动即死(UAC 根本不出现,应用退出后再也不回来;
+    // 本机矩阵实测:detached+stdio:ignore 四种组合全灭,windowsHide+非 detached
+    // 父进程立即退出后仍稳定执行)。Windows 子进程本就不随父进程退出而终止,
+    // windowsHide 提供隐藏控制台即可。
     spawn(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded],
-      { detached: true, stdio: 'ignore' }
+      { windowsHide: true, stdio: 'ignore' }
     ).unref();
     LogManager.getInstance().addLog('info', '正在请求管理员权限并重启应用...', 'app');
     setTimeout(() => app.quit(), 200);
