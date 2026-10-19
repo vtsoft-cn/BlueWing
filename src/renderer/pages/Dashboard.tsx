@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Server,
   Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import { ProxyNode, TrafficStats, AppSettings } from '../../types';
 
@@ -279,6 +280,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <canvas ref={canvasRef} width={680} height={128} className="w-full h-full" />
         </div>
       </div>
+
+      {/* 连接中但无任何接管方式:流量全部直连、节点空转,明确提示避免误以为已走代理 */}
+      {isConnected && !settings.systemProxyEnabled && !settings.tunEnabled && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed flex items-center space-x-2">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            已连接节点,但系统代理与 TUN 均未开启:本机流量不经节点,仅手动指向本地端口的程序走代理。请至少开启一个开关。
+          </span>
+        </div>
+      )}
 
       {/* 4. Quick Switches & Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { LogManager } from '../log/LogManager';
 import { Database } from '../db/Database';
+import { AppSettings } from '../../types';
 
 export interface ProxySnapshot {
   enabled: boolean;
@@ -20,6 +21,19 @@ interface OwnershipState {
 export class SystemProxy {
   private static REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
   private static stateFile: string = '';
+
+  /**
+   * 连接意图保护判定:仅当"用户显式发起连接"且系统代理与 TUN 全关时才自动补开
+   * 系统代理——否则连接后流量没有任何出口,界面却显示"已连接"。
+   * 设置/规则变更触发的核心重载必须传 userInitiated=false:连接中用户主动关闭
+   * 系统代理的意图不能被重载推翻(此前重载即被强制重开,UI 与注册表错位)。
+   */
+  public static shouldAutoEnableSystemProxy(
+    userInitiated: boolean,
+    settings: Pick<AppSettings, 'systemProxyEnabled' | 'tunEnabled'>
+  ): boolean {
+    return userInitiated && !settings.systemProxyEnabled && !settings.tunEnabled;
+  }
 
   private static getStateFilePath(): string {
     if (!this.stateFile) {

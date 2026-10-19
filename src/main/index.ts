@@ -320,7 +320,8 @@ app.whenReady().then(async () => {
   if (!settings.autoConnectOnLaunch) {
     SystemProxy.checkAndCleanResidual(settings.mixedPort || 2080);
   } else {
-    handleCoreStart();
+    // 自启连接是用户的常设意愿,等同显式发起(允许连接意图保护兜底)
+    handleCoreStart({ userInitiated: true });
   }
 });
 
@@ -448,6 +449,14 @@ function broadcastNodesChanged(): void {
 }
 
 /**
+ * 主进程侧改动设置(连接意图保护补开/托盘开关等)后同步渲染层,
+ * 避免 UI 开关与数据库/注册表真实状态错位(渲染层只知道自己发起的保存)。
+ */
+function broadcastSettingsChanged(): void {
+  mainWindow?.webContents.send('settings:changed', Database.getInstance().getSettings());
+}
+
+/**
  * 备份导入/恢复会整体替换节点(乃至订阅/规则/DNS/设置):成功后同步托盘与全部
  * 渲染层状态,并在活跃节点被替换时同步运行中核心(与删除路径同一套回落语义)。
  */
@@ -459,7 +468,7 @@ async function runBackupImport<T>(fn: () => Promise<T> | T): Promise<T> {
     TrayManager.getInstance().updateMenu();
     broadcastNodesChanged();
     mainWindow?.webContents.send('subs:changed', db.getSubscriptions());
-    mainWindow?.webContents.send('settings:changed', db.getSettings());
+    broadcastSettingsChanged();
     mainWindow?.webContents.send('rules:changed', db.getRules());
     mainWindow?.webContents.send('apprules:changed', db.getAppRules());
     mainWindow?.webContents.send('dns:changed', db.getDns());
@@ -474,7 +483,7 @@ async function runBackupImport<T>(fn: () => Promise<T> | T): Promise<T> {
   return res;
 }
 
-async function handleCoreStart(): Promise<boolean> {
+async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<boolean> {
   const db = Database.getInstance();
   const core = SingBoxManager.getInstance();
   const settings = db.getSettings();
@@ -489,11 +498,14 @@ async function handleCoreStart(): Promise<boolean> {
     );
   }
 
-  // 连接意图保护:系统代理与 TUN 都未启用时,点"连接"后流量没有任何出口,
-  // 界面却显示"已连接"。自动补开系统代理开关(TUN 用户不受影响,可随时手动关闭)。
-  if (!settings.systemProxyEnabled && !settings.tunEnabled) {
+  // 连接意图保护:仅用户显式发起的连接(core:start/重启/自启/托盘连接)且系统代理与
+  // TUN 都未启用时,才自动补开系统代理开关——否则点"连接"后流量没有任何出口,
+  // 界面却显示"已连接"。设置/规则变更触发的重载绝不能触碰用户的代理开关:
+  // 连接中主动关闭系统代理的意图必须被尊重(此前重载即被强制重开,注册表与 UI 错位)。
+  if (SystemProxy.shouldAutoEnableSystemProxy(options?.userInitiated === true, settings)) {
     settings.systemProxyEnabled = true;
     db.saveSettings({ systemProxyEnabled: true });
+    broadcastSettingsChanged();
     LogManager.getInstance().addLog(
       'info',
       '系统代理开关未启用,已自动开启以使本次连接生效(可在首页随时关闭)',
@@ -640,11 +652,11 @@ ipcMain.handle('system:flushDns', async () => {
 ipcMain.handle('system:getAppVersion', () => app.getVersion());
 
 // Core
-ipcMain.handle('core:start', async () => handleCoreStart());
+ipcMain.handle('core:start', async () => handleCoreStart({ userInitiated: true }));
 ipcMain.handle('core:stop', async () => handleCoreStop());
 ipcMain.handle('core:restart', async () => {
   await handleCoreStop();
-  return handleCoreStart();
+  return handleCoreStart({ userInitiated: true });
 });
 ipcMain.handle('core:getState', () => SingBoxManager.getInstance().getState());
 ipcMain.handle('core:getVersion', () => SingBoxManager.getInstance().getVersion());
@@ -1095,8 +1107,10 @@ ipcMain.handle('settings:save', async (_, s) => {
     }
   }
 
-  // 3. Core dynamic reload if running — 仅当影响核心配置的设置变化时重载
-  //    (修复:改主题/语言等无关设置也会导致核心重启)
+  // 3. Core dynamic reload if running — 仅当影响核心配置的设置变化时重载。
+  //    纯系统代理开关变化不重载核心(代理只改注册表,与核心配置无关;此前误重载,
+  //    还会经连接意图保护把刚关掉的代理又强制重开);"开代理但核心没跑"已在上方
+  //    分支单独拉起核心。
   const coreConfigChanged = valueChanged([
     'mixedPort',
     'allowLan',
@@ -1119,7 +1133,7 @@ ipcMain.handle('settings:save', async (_, s) => {
     'clashApiPort',
     'clashApiSecret',
   ]);
-  if (core.getState() === 'running' && !coreAutoStarted && (coreConfigChanged || proxyChanged)) {
+  if (core.getState() === 'running' && !coreAutoStarted && coreConfigChanged) {
     await handleCoreStart();
   }
 

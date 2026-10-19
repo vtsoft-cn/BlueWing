@@ -8,6 +8,7 @@ import { promisify } from 'util';
 import { UniversalSubscriptionParser } from '../main/net/UniversalSubscriptionParser';
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { ProxySelectionService } from '../main/core/ProxySelectionService';
+import { SystemProxy } from '../main/system/SystemProxy';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
 import { isValidIpLiteral, isValidDomain } from '../utils/ip';
 
@@ -535,5 +536,31 @@ describe('SingBoxManager selector re-sync after core start', () => {
       mgr.state = prevState;
       server.close();
     }
+  });
+});
+
+describe('SystemProxy.shouldAutoEnableSystemProxy (连接意图保护判定)', () => {
+  const bothOff = { systemProxyEnabled: false, tunEnabled: false };
+
+  test('用户显式发起连接且两开关全关 → 自动补开系统代理', () => {
+    assert.equal(SystemProxy.shouldAutoEnableSystemProxy(true, bothOff), true);
+  });
+
+  test('设置/规则变更触发的核心重载(非用户发起)绝不补开——回归:连接中关闭系统代理被强制重开', () => {
+    assert.equal(SystemProxy.shouldAutoEnableSystemProxy(false, bothOff), false);
+  });
+
+  test('系统代理已开启 → 不补开', () => {
+    assert.equal(
+      SystemProxy.shouldAutoEnableSystemProxy(true, { systemProxyEnabled: true, tunEnabled: false }),
+      false
+    );
+  });
+
+  test('TUN 已开启(TUN 用户不受影响) → 不补开', () => {
+    assert.equal(
+      SystemProxy.shouldAutoEnableSystemProxy(true, { systemProxyEnabled: false, tunEnabled: true }),
+      false
+    );
   });
 });

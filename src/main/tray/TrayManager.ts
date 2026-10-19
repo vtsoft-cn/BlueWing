@@ -116,10 +116,11 @@ export class TrayManager {
               await SystemProxy.disable();
             }
           } else {
-            // 连接意图保护:系统代理与 TUN 都未启用时自动补开,确保连接真实生效
-            if (!settings.systemProxyEnabled && !settings.tunEnabled) {
+            // 连接意图保护:用户显式连接且系统代理与 TUN 都未启用时自动补开,确保连接真实生效
+            if (SystemProxy.shouldAutoEnableSystemProxy(true, settings)) {
               settings.systemProxyEnabled = true;
               db.saveSettings({ systemProxyEnabled: true });
+              this.mainWindow?.webContents.send('settings:changed', db.getSettings());
             }
             const config = ConfigGenerator.generate(
               activeNodeId,
