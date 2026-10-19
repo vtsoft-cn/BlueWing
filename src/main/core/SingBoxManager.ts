@@ -94,8 +94,17 @@ export class SingBoxManager extends EventEmitter {
         }
         const proc = spawn(this.binaryPath, ['version']);
         let output = '';
+        // 子进程偶发挂起(杀软扫描/句柄泄漏)会拖死调用方并残留进程(被下次启动误清为
+        // "孤儿核心"),超时强杀兜底
+        const timer = setTimeout(() => {
+          try {
+            proc.kill();
+          } catch {}
+          resolve('检测超时');
+        }, 8000);
         proc.stdout?.on('data', (d) => (output += d.toString()));
         proc.on('close', () => {
+          clearTimeout(timer);
           const match = output.match(/sing-box version ([^\s\n]+)/i);
           if (match) {
             resolve(match[1]);
@@ -104,6 +113,7 @@ export class SingBoxManager extends EventEmitter {
           }
         });
         proc.on('error', (err) => {
+          clearTimeout(timer);
           LogManager.getInstance().addLog('warn', `获取核心版本异常: ${err.message}`, 'core');
           resolve('检测失败');
         });
@@ -177,8 +187,18 @@ export class SingBoxManager extends EventEmitter {
       return new Promise((resolve) => {
         const proc = spawn(this.binaryPath, ['check', '-c', testConfigPath]);
         let stderr = '';
+        // check 挂起会永久占住 start() 的互斥锁(state 卡 starting、stop 排队永不执行,
+        // 界面"无法停止"),超时强杀兜底
+        const timer = setTimeout(() => {
+          try {
+            proc.kill();
+          } catch {}
+          try { fs.unlinkSync(testConfigPath); } catch {}
+          resolve({ valid: false, error: '配置校验超时 (sing-box check 未退出)' });
+        }, 10000);
         proc.stderr?.on('data', (d) => (stderr += d.toString()));
         proc.on('close', (code) => {
+          clearTimeout(timer);
           try { fs.unlinkSync(testConfigPath); } catch {}
           if (code === 0) {
             resolve({ valid: true });
@@ -187,6 +207,7 @@ export class SingBoxManager extends EventEmitter {
           }
         });
         proc.on('error', (err) => {
+          clearTimeout(timer);
           try { fs.unlinkSync(testConfigPath); } catch {}
           resolve({ valid: false, error: err.message });
         });

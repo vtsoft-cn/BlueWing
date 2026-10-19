@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar';
 import { PageHeader } from './components/PageHeader';
 import { ToastHost, toast } from './components/Toast';
@@ -37,6 +37,8 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
 
   const [coreState, setCoreState] = useState<string>('stopped');
+  // stateChange 事件序号:loadAllData 的 core:getState 快照仅在拉取窗口内无新事件时应用
+  const coreEventSeqRef = useRef(0);
   const [coreVersion, setCoreVersion] = useState<string>('1.14.3');
   const [nodes, setNodes] = useState<ProxyNode[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<string>('');
@@ -104,6 +106,7 @@ export const App: React.FC = () => {
   // Load initial data
   const loadAllData = async () => {
     if (!window.electronAPI) return;
+    const seqBeforeFetch = coreEventSeqRef.current;
     try {
       const [
         loadedNodes,
@@ -134,7 +137,11 @@ export const App: React.FC = () => {
       if (loadedAppRules) setAppRules(loadedAppRules);
       if (loadedDns) setDns(loadedDns);
       if (loadedSettings) setSettings(loadedSettings);
-      if (loadedState) setCoreState(loadedState);
+      // coreState 快照仅在拉取期间没有任何 stateChange 事件到达时才应用:
+      // 事件是推送语义、必然不旧于快照;否则会出现"删除订阅触发停止→事件已到 stopped,
+      // 而被 getVersion 拖慢的 Promise.all 随后用过期的 starting/stopping 快照覆盖",
+      // 首页永久卡"连接中"且按钮禁用无法停止(主进程实际早已 stopped)。
+      if (loadedState && coreEventSeqRef.current === seqBeforeFetch) setCoreState(loadedState);
       if (loadedVer) setCoreVersion(loadedVer);
     } catch (e) {
       console.error('Error loading initial data:', e);
@@ -146,6 +153,7 @@ export const App: React.FC = () => {
 
     if (window.electronAPI) {
       const unsubState = window.electronAPI.core.onStateChange((state) => {
+        coreEventSeqRef.current++;
         setCoreState(state);
       });
       const unsubTraffic = window.electronAPI.core.onTraffic((t) => {
