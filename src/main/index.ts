@@ -13,6 +13,7 @@ import { ProxySelectionService } from './core/ProxySelectionService';
 import { RuleSetUpdater } from './core/RuleSetUpdater';
 import { SystemProxy } from './system/SystemProxy';
 import { TakeoverLinkage } from './system/TakeoverLinkage';
+import { ElevatedRelaunch } from './system/ElevatedRelaunch';
 import { ProcessScanner } from './system/ProcessScanner';
 import { TcpPing } from './net/TcpPing';
 import { SpeedTestRunner } from './net/SpeedTestRunner';
@@ -633,32 +634,7 @@ ipcMain.handle('system:openExternal', (_, url: string) => {
 });
 ipcMain.handle('system:isAdmin', () => SingBoxManager.getInstance().isAdmin());
 ipcMain.handle('system:relaunchAsAdmin', () => {
-  const execPath = process.execPath.replace(/'/g, "''");
-  const elevateLog = path.join(Database.getInstance().getDataDir(), 'logs', 'elevate-relaunch.log').replace(/'/g, "''");
-  // 由独立 PowerShell 守候:等本进程完全退出(含 before-quit 的核心停止/系统代理
-  // 还原清理)后再拉起提权实例,避免新旧实例争抢单实例锁。
-  // 修复:旧实现仅等 15s,清理偶发超时(核心停止挂起等)时提权实例过早启动,
-  // 撞单实例锁后静默退出——表现为"应用退出了但没以管理员启动"。现等待上限提至
-  // 60s,每步留痕到 logs/elevate-relaunch.log 便于排查;用户拒绝 UAC 则回落
-  // 普通权限重启,至少保证应用能回来(单实例锁侧另有 10s 重试兜底吸收残余抖动)。
-  const script = [
-    `try { Add-Content -Path '${elevateLog}' -Value ("[{0}] relaunch begin, oldPid=${process.pid}" -f (Get-Date -Format o)) } catch {}`,
-    `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue`,
-    'Start-Sleep -Milliseconds 800',
-    `try { Start-Process -FilePath '${execPath}' -Verb RunAs -ErrorAction Stop }`,
-    'catch {',
-    `  try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas failed: {1}" -f (Get-Date -Format o), $_.Exception.Message) } catch {}`,
-    '  Start-Sleep -Seconds 1',
-    `  try { Start-Process -FilePath '${execPath}' } catch {}`,
-    '}',
-  ].join('\n');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], {
-    detached: true,
-    stdio: 'ignore',
-  }).unref();
-  LogManager.getInstance().addLog('info', '正在请求管理员权限并重启应用...', 'app');
-  setTimeout(() => app.quit(), 200);
+  ElevatedRelaunch.relaunch();
   return true;
 });
 ipcMain.handle('system:flushDns', async () => {
@@ -1088,33 +1064,45 @@ ipcMain.handle('settings:save', async (_, s) => {
   const db = Database.getInstance();
   const prevSettings = { ...db.getSettings() };
 
-  // TUN↔系统代理互斥联动(二选一):用户切换 TUN 的这次保存,联动调整系统代理开关。
-  // 在落库前归一化,后续既有的 proxyChanged 分支自然完成注册表开关/核心拉起;
+  // TUN↔系统代理互斥联动(二选一):用户切换开关的这次保存,落库前归一化另一侧,
+  // 后续既有的 proxyChanged/coreConfigChanged 分支自然完成注册表开关与核心重载;
   // 核心重载路径不经过此处,不会触碰开关(与连接意图保护同一约束)。
   let linkageApplied = false;
+  // 非管理员下开 TUN:弹窗引导提权重启(该场景 TUN 不可能生效,静默剥除+代理回退
+  // 的三步舞曾让用户看到"系统代理怎么又开了");取消则本次不开启 TUN
+  let tunElevationRelaunch = false;
   if (s.tunEnabled !== undefined && s.tunEnabled !== prevSettings.tunEnabled) {
-    const patch = TakeoverLinkage.exclusivityPatch(
-      prevSettings,
-      {
-        tunEnabled: s.tunEnabled,
-        systemProxyEnabled: s.systemProxyEnabled ?? prevSettings.systemProxyEnabled,
-      },
-      SingBoxManager.getInstance().getState() === 'running'
-    );
-    if (patch) {
-      Object.assign(s, patch);
-      linkageApplied = true;
-      LogManager.getInstance().addLog(
-        'info',
-        patch.systemProxyEnabled === false
-          ? 'TUN 已开启,系统代理已联动关闭(TUN 全量接管流量)'
-          : 'TUN 已关闭,系统代理已联动开启',
-        'app'
+    if (s.tunEnabled && !SingBoxManager.getInstance().isAdmin()) {
+      const choice = await TakeoverLinkage.promptTunElevation(mainWindow);
+      if (choice === 'elevate') {
+        tunElevationRelaunch = true; // 落库(含联动)后提权重启,重启后 TUN 生效
+      } else {
+        s.tunEnabled = prevSettings.tunEnabled; // 还原开关;渲染层乐观状态靠广播纠正
+      }
+    }
+    if (s.tunEnabled !== prevSettings.tunEnabled) {
+      const patch = TakeoverLinkage.exclusivityPatch(
+        prevSettings,
+        {
+          tunEnabled: s.tunEnabled,
+          systemProxyEnabled: s.systemProxyEnabled ?? prevSettings.systemProxyEnabled,
+        },
+        SingBoxManager.getInstance().getState() === 'running'
       );
+      if (patch) {
+        Object.assign(s, patch);
+        linkageApplied = true;
+        LogManager.getInstance().addLog(
+          'info',
+          patch.systemProxyEnabled === false
+            ? 'TUN 已开启,系统代理已联动关闭(TUN 全量接管流量)'
+            : 'TUN 已关闭,系统代理已联动开启',
+          'app'
+        );
+      }
     }
   }
-  // 反向联动(单选语义另一半):TUN 开着时用户开系统代理 → 联动关 TUN;
-  // 落库前归一化,后续 coreConfigChanged(tunEnabled 变化)自然触发去 TUN 重载
+  // 反向联动(单选语义另一半):TUN 开着时用户开系统代理 → 联动关 TUN
   if (s.systemProxyEnabled !== undefined && s.systemProxyEnabled !== prevSettings.systemProxyEnabled) {
     const patch = TakeoverLinkage.proxyTogglePatch(prevSettings, {
       tunEnabled: s.tunEnabled ?? prevSettings.tunEnabled,
@@ -1130,12 +1118,20 @@ ipcMain.handle('settings:save', async (_, s) => {
       );
     }
   }
+
   db.saveSettings(s);
   const currentSettings = db.getSettings();
 
-  // 联动改写了渲染层未提交的字段(其本地乐观状态已过期),回推全量设置纠正
-  if (linkageApplied) {
+  // 联动或还原改写了渲染层未提交的字段(其本地乐观状态已过期),回推全量设置纠正
+  if (linkageApplied || (s.tunEnabled !== undefined && s.tunEnabled !== prevSettings.tunEnabled)) {
     broadcastSettingsChanged();
+  }
+
+  // 提权重启路径:设置已落库并广播,应用即将退出,跳过后续注册表/核心操作
+  if (tunElevationRelaunch) {
+    LogManager.getInstance().addLog('info', '已保存 TUN 设置,正在以管理员身份重启应用...', 'app');
+    ElevatedRelaunch.relaunch();
+    return true;
   }
 
   // 主题变化 → 立即刷新托盘/任务栏图标(图标随主题 × 代理状态)
