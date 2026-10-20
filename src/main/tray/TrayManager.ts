@@ -90,8 +90,9 @@ export class TrayManager {
         : '青翼连接 BlueWing Connect - 未连接'
     );
 
-    // 托盘图标:随代理状态切换(连接 on / 断开 off)
-    const proxyOn = isRunning && settings.systemProxyEnabled;
+    // 托盘图标:任一接管方式生效即视为开启(系统代理与 TUN 互斥二选一,
+    // 只看 systemProxyEnabled 会在 TUN 模式下误显"未开启"图标)
+    const proxyOn = isRunning && (settings.systemProxyEnabled || settings.tunEnabled);
     const statePng = trayIconPath(proxyOn);
     if (statePng) {
       try {
