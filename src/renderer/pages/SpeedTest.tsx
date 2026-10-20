@@ -3,6 +3,7 @@ import {Zap,
   Play,
   Square,
   Activity,
+  AlertTriangle,
   CheckCircle,
   Search,
   RotateCcw,
@@ -23,6 +24,7 @@ interface TestRow {
   tcpPing?: number;
   httpLatency?: number;
   httpError?: string; // HTTP 延迟探测失败原因(如 REALITY 握手失败)
+  httpViaFallback?: boolean; // 核心未运行时 HTTP 探测回退为 TCP 兜底时延(不代表代理可用)
   downloadSpeed?: number; // bits/s
   uploadSpeed?: number;
   status: 'idle' | 'testing' | 'success' | 'timeout' | 'error';
@@ -40,6 +42,24 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
   const [isRunning, setIsRunning] = useState(false);
   const stopRequestedRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // 核心运行态:HTTP/带宽测试依赖核心代理链路,未运行时需在 UI 上明确提示并禁用
+  const [coreState, setCoreState] = useState<string | null>(null);
+  const coreOff = coreState !== null && coreState !== 'running';
+
+  useEffect(() => {
+    let mounted = true;
+    window.electronAPI?.core
+      .getState()
+      .then((s) => {
+        if (mounted) setCoreState(s);
+      })
+      .catch(() => {});
+    const unsub = window.electronAPI?.core.onStateChange((s) => setCoreState(s));
+    return () => {
+      mounted = false;
+      unsub?.();
+    };
+  }, []);
 
   const [testRows, setTestRows] = useState<TestRow[]>(() =>
     nodes.map((n) => ({
@@ -61,6 +81,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
           node: n,
           tcpPing: existing?.tcpPing ?? (n.ping && n.ping > 0 ? n.ping : undefined),
           httpLatency: existing?.httpLatency ?? (n.httpLatency && n.httpLatency > 0 ? n.httpLatency : undefined),
+          httpViaFallback: existing?.httpViaFallback,
           downloadSpeed: existing?.downloadSpeed ?? (n.downloadSpeed && n.downloadSpeed > 0 ? n.downloadSpeed : undefined),
           status: existing?.status || 'idle',
         };
@@ -78,6 +99,8 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
   // Full speed test runner (batch accelerated for ping, sequential isolated for throughput)
   const handleStartTest = async () => {
     if (!window.electronAPI || isRunning) return;
+    // HTTP/带宽测试依赖核心代理链路,核心未运行时仅允许 TCP Ping 模式
+    if (testMode !== 'ping' && coreOff) return;
     setIsRunning(true);
     stopRequestedRef.current = false;
 
@@ -139,6 +162,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
         let tcpPing = row.tcpPing;
         let httpLatency = row.httpLatency;
         let httpError = row.httpError;
+        let httpViaFallback = false;
         let downloadSpeed = row.downloadSpeed;
 
         try {
@@ -153,6 +177,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
               const res = await window.electronAPI.speedTest.testLatency(undefined, item.id);
               httpLatency = res.latency > 0 ? res.latency : undefined;
               httpError = res.reason;
+              httpViaFallback = res.via === 'tcp-fallback';
             } else {
               httpLatency = undefined;
             }
@@ -169,13 +194,15 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
           }
 
           // Compute accurate status
+          // TCP 兜底时延不代表代理可用,不能作为 HTTP/综合模式的成功依据
+          const httpOk = Boolean(httpLatency && httpLatency > 0) && !httpViaFallback;
           let isSuccess = false;
           if (testMode === 'download') {
             isSuccess = Boolean(downloadSpeed && downloadSpeed > 0);
           } else if (testMode === 'latency') {
-            isSuccess = Boolean(httpLatency && httpLatency > 0);
+            isSuccess = httpOk;
           } else {
-            isSuccess = Boolean(isPingReachable || (httpLatency && httpLatency > 0));
+            isSuccess = Boolean(isPingReachable) || httpOk;
           }
 
           const finalStatus = isSuccess ? 'success' : 'timeout';
@@ -189,6 +216,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                     tcpPing,
                     httpLatency,
                     httpError,
+                    httpViaFallback,
                     downloadSpeed,
                     status: finalStatus,
                   }
@@ -213,7 +241,8 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
             patch: {
               // 未测出的项保留原值(与原全量回传语义一致)
               ping: r.tcpPing !== undefined ? r.tcpPing : cur?.ping,
-              httpLatency: r.httpLatency !== undefined ? r.httpLatency : cur?.httpLatency,
+              // TCP 兜底值不是真实 HTTP 时延,不落库以免节点页展示伪 HTTP 徽章
+              httpLatency: r.httpViaFallback ? cur?.httpLatency : (r.httpLatency !== undefined ? r.httpLatency : cur?.httpLatency),
               downloadSpeed: r.downloadSpeed !== undefined ? r.downloadSpeed : cur?.downloadSpeed,
               lastTested: Date.now(),
             },
@@ -238,6 +267,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
   // Test single row
   const handleTestSingleRow = async (targetNode: ProxyNode) => {
     if (!window.electronAPI || isRunning) return;
+    if (testMode !== 'ping' && coreOff) return;
     setTestRows((prev) =>
       prev.map((r) => (r.node.id === targetNode.id ? { ...r, status: 'testing' } : r))
     );
@@ -247,6 +277,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
       const isReachable = pingRes.time > 0;
       let lat: number | undefined;
       let httpErr: string | undefined;
+      let latFallback = false;
       let dl: number | undefined;
 
       if (isReachable) {
@@ -254,6 +285,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
           const res = await window.electronAPI.speedTest.testLatency(undefined, targetNode.id);
           lat = res.latency > 0 ? res.latency : undefined;
           httpErr = res.reason;
+          latFallback = res.via === 'tcp-fallback';
         }
         if (testMode === 'download' || testMode === 'full') {
           const s = await window.electronAPI.speedTest.testDownload(undefined, targetNode.id);
@@ -261,26 +293,29 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
         }
       }
 
-      const isSuccess = Boolean(isReachable || (lat && lat > 0) || (dl && dl > 0));
+      const httpOk = Boolean(lat && lat > 0) && !latFallback;
+      const isSuccess = Boolean(isReachable || httpOk || (dl && dl > 0));
 
       setTestRows((prev) => {
         const updated = prev.map((r) =>
-          r.node.id === targetNode.id
-            ? {
-                ...r,
-                tcpPing: pingRes.time,
-                httpLatency: lat,
-                httpError: httpErr,
-                downloadSpeed: dl,
-                status: isSuccess ? ('success' as const) : ('timeout' as const),
-              }
-            : r
+            r.node.id === targetNode.id
+              ? {
+                  ...r,
+                  tcpPing: pingRes.time,
+                  httpLatency: lat,
+                  httpError: httpErr,
+                  httpViaFallback: latFallback,
+                  downloadSpeed: dl,
+                  status: isSuccess ? ('success' as const) : ('timeout' as const),
+                }
+              : r
         );
 
         const cur = nodes.find((n) => n.id === targetNode.id);
         window.electronAPI?.nodes.update(targetNode.id, {
           ping: pingRes.time,
-          httpLatency: lat !== undefined ? lat : cur?.httpLatency,
+          // TCP 兜底值不是真实 HTTP 时延,不落库以免节点页展示伪 HTTP 徽章
+          httpLatency: latFallback ? cur?.httpLatency : (lat !== undefined ? lat : cur?.httpLatency),
           downloadSpeed: dl !== undefined ? dl : cur?.downloadSpeed,
           lastTested: Date.now(),
         });
@@ -353,7 +388,11 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
             ) : (
               <button
                 onClick={handleStartAllSpeedTest}
-                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-semibold flex items-center space-x-2 shadow-sm shadow-blue-500/25 transition-colors"
+                disabled={coreOff && testMode !== 'ping'}
+                title={coreOff && testMode !== 'ping' ? '代理核心未运行,当前测试类型不可用' : undefined}
+                className={`px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-semibold flex items-center space-x-2 shadow-sm shadow-blue-500/25 transition-colors ${
+                  coreOff && testMode !== 'ping' ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
                 <Play className="w-4 h-4 fill-current" />
                 <span>开始全面测试</span>
@@ -376,16 +415,28 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
             <button
               key={t.id}
               onClick={() => setTestMode(t.id as any)}
+              disabled={coreOff && t.id !== 'ping'}
+              title={coreOff && t.id !== 'ping' ? '代理核心未运行,该测试类型需经核心代理链路' : undefined}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 testMode === t.id
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
+              } ${coreOff && t.id !== 'ping' ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {t.label}
             </button>
           ))}
         </div>
+
+        {/* 核心未运行提示:HTTP/带宽测试依赖核心代理链路 */}
+        {coreOff && (
+          <div className="flex items-start space-x-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              代理核心未运行:HTTP 延迟与带宽吞吐需经核心代理链路测得,当前仅「TCP Ping 握手」可测。请先在首页连接代理,再做完整测速。
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 2. Results Toolbar (Search & View Toggle) */}
@@ -501,8 +552,15 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
 
                     {/* HTTP Latency Pill */}
                     {row.httpLatency !== undefined && row.httpLatency > 0 && (
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center space-x-1">
-                        <span className="text-[9px] opacity-70">HTTP</span>
+                      <span
+                        title={row.httpViaFallback ? '核心未运行,此为 TCP 兜底时延,不代表代理可用' : 'HTTP 真实响应时延'}
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full border flex items-center space-x-1 ${
+                          row.httpViaFallback
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <span className="text-[9px] opacity-70">{row.httpViaFallback ? 'TCP兜底' : 'HTTP'}</span>
                         <span>{row.httpLatency} ms</span>
                       </span>
                     )}
@@ -536,15 +594,28 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                         <span>测速中...</span>
                       </span>
                     ) : row.status === 'success' ? (
-                      <span className="text-emerald-500 font-medium flex items-center space-x-1 text-[11px]">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>
-                          畅通 ({row.httpLatency ? `${row.httpLatency}ms` : `${row.tcpPing}ms`})
+                      row.httpViaFallback && !row.downloadSpeed ? (
+                        <span
+                          className="text-amber-500 font-medium text-[11px]"
+                          title="TCP 直连可达,但核心代理链路未测得有效结果"
+                        >
+                          可达 · 代理未测
                         </span>
-                      </span>
+                      ) : (
+                        <span className="text-emerald-500 font-medium flex items-center space-x-1 text-[11px]">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>
+                            畅通 ({row.httpLatency ? `${row.httpLatency}ms` : `${row.tcpPing}ms`})
+                          </span>
+                        </span>
+                      )
                     ) : row.status === 'timeout' ? (
                       <span className="text-rose-500 text-[11px] font-medium" title={row.httpError}>
-                        {row.httpError ? '代理握手失败' : '超时不可达'}
+                        {row.httpError
+                          ? '代理握手失败'
+                          : row.tcpPing && row.tcpPing > 0
+                          ? '代理链路不可用'
+                          : '超时不可达'}
                       </span>
                     ) : (
                       <span className="text-slate-400 text-[11px]">就绪</span>
@@ -554,9 +625,9 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                   <div className="flex items-center space-x-1.5 shrink-0">
                     <button
                       onClick={() => handleTestSingleRow(row.node)}
-                      disabled={isRunning || row.status === 'testing'}
-                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="单独测试此节点"
+                      disabled={isRunning || row.status === 'testing' || (coreOff && testMode !== 'ping')}
+                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
+                      title={coreOff && testMode !== 'ping' ? '代理核心未运行,当前测试类型不可用' : '单独测试此节点'}
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
@@ -636,17 +707,23 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 font-mono">
-                        {row.httpLatency ? (
-                          `${row.httpLatency} ms`
-                        ) : row.httpError ? (
-                          <span className="text-rose-500" title={row.httpError}>
-                            握手失败
-                          </span>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
+                  <td className="py-3 px-4 font-mono">
+                    {row.httpLatency ? (
+                      row.httpViaFallback ? (
+                        <span className="text-amber-500" title="核心未运行,此为 TCP 兜底时延,不代表代理可用">
+                          兜底 {row.httpLatency} ms
+                        </span>
+                      ) : (
+                        `${row.httpLatency} ms`
+                      )
+                    ) : row.httpError ? (
+                      <span className="text-rose-500" title={row.httpError}>
+                        握手失败
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
                       <td className="py-3 px-4 font-semibold text-blue-600 dark:text-blue-400 font-mono">
                         {formatSpeed(row.downloadSpeed)}
                       </td>
@@ -657,15 +734,25 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                             <span>测试中</span>
                           </span>
                         ) : row.status === 'success' ? (
-                          <span className="text-emerald-500 flex items-center space-x-1 font-medium">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>
-                              畅通 ({row.httpLatency ? `${row.httpLatency}ms` : `${row.tcpPing}ms`})
+                          row.httpViaFallback && !row.downloadSpeed ? (
+                            <span className="text-amber-500 font-medium" title="TCP 直连可达,但核心代理链路未测得有效结果">
+                              可达 · 代理未测
                             </span>
-                          </span>
+                          ) : (
+                            <span className="text-emerald-500 flex items-center space-x-1 font-medium">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>
+                                畅通 ({row.httpLatency ? `${row.httpLatency}ms` : `${row.tcpPing}ms`})
+                              </span>
+                            </span>
+                          )
                         ) : row.status === 'timeout' ? (
                           <span className="text-rose-500 font-medium" title={row.httpError}>
-                            {row.httpError ? '代理握手失败' : '超时不可达'}
+                            {row.httpError
+                              ? '代理握手失败'
+                              : row.tcpPing && row.tcpPing > 0
+                              ? '代理链路不可用'
+                              : '超时不可达'}
                           </span>
                         ) : (
                           <span className="text-slate-400">未测试</span>
@@ -675,9 +762,9 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => handleTestSingleRow(row.node)}
-                            disabled={isRunning || row.status === 'testing'}
-                            className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            title="单独测速"
+                            disabled={isRunning || row.status === 'testing' || (coreOff && testMode !== 'ping')}
+                            className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
+                            title={coreOff && testMode !== 'ping' ? '代理核心未运行,当前测试类型不可用' : '单独测速'}
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                           </button>

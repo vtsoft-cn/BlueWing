@@ -69,44 +69,71 @@ export class SpeedTestRunner {
     this.activeTasks.set(taskId, abortCtrl);
 
     try {
-      // 1. If nodeId is specified, test via Sing-box Clash API outbound delay probe
-      if (nodeId) {
-        try {
-          const clashDelay = await this.testViaClashApi(nodeId, testUrl, timeoutMs, clashPort, abortCtrl.signal);
-          if (clashDelay > 0) return { latency: clashDelay, via: 'proxy-probe' };
-        } catch (err: any) {
-          // API 已应答但该节点出站探测失败:节点代理通道真实故障,带核心原始错误返回
-          if (err?.probeFailed) {
-            return { latency: -1, via: 'proxy-probe', reason: this.classifyProbeFailure(err.message) };
-          }
-          // Clash API 本身连不上(核心未运行等):回退直连 TCP ping,仅衡量服务器可达性
-          if (nodeServer && nodePort) {
-            try {
-              const tcpRes = await TcpPing.ping(nodeServer, nodePort, timeoutMs);
-              return { latency: tcpRes.time, via: 'tcp-fallback' };
-            } catch {
-              return { latency: -1, via: 'tcp-fallback' };
-            }
-          }
-          return { latency: -1, via: 'tcp-fallback' };
-        }
-      }
-
-      // 2. Test via current active proxyPort if specified
-      if (proxyPort) {
-        try {
-          const proxyDelay = await this.testViaHttp(testUrl, timeoutMs, proxyPort, abortCtrl.signal);
-          if (proxyDelay > 0) return { latency: proxyDelay, via: 'proxy-port' };
-        } catch {
-          // Fall through to direct
-        }
-      }
-
-      // 3. Fallback direct test
-      return { latency: await this.testViaHttp(testUrl, timeoutMs, undefined, abortCtrl.signal), via: 'direct' };
+      // 墙钟看门狗:经 createConnection 提供的隧道 socket 上 options.timeout 会失效(Node 实证),
+      // 任何探测链路都必须在有限时间内结算,否则渲染层永久 await
+      let watchdog: NodeJS.Timeout | undefined;
+      const deadline = new Promise<LatencyResult>((r) => {
+        watchdog = setTimeout(() => {
+          abortCtrl.abort();
+          r({ latency: -1, via: 'watchdog' });
+        }, timeoutMs * 2 + 3000);
+      });
+      const result = await Promise.race([
+        this.testLatencyCore(testUrl, timeoutMs, proxyPort, nodeId, clashPort, nodeServer, nodePort, abortCtrl.signal),
+        deadline,
+      ]);
+      if (watchdog) clearTimeout(watchdog);
+      return result;
     } finally {
       this.activeTasks.delete(taskId);
     }
+  }
+
+  private static async testLatencyCore(
+    testUrl: string,
+    timeoutMs: number,
+    proxyPort?: number,
+    nodeId?: string,
+    clashPort: number = 9090,
+    nodeServer?: string,
+    nodePort?: number,
+    signal: AbortSignal = new AbortController().signal
+  ): Promise<LatencyResult> {
+    // 1. If nodeId is specified, test via Sing-box Clash API outbound delay probe
+    if (nodeId) {
+      try {
+        const clashDelay = await this.testViaClashApi(nodeId, testUrl, timeoutMs, clashPort, signal);
+        if (clashDelay > 0) return { latency: clashDelay, via: 'proxy-probe' };
+      } catch (err: any) {
+        // API 已应答但该节点出站探测失败:节点代理通道真实故障,带核心原始错误返回
+        if (err?.probeFailed) {
+          return { latency: -1, via: 'proxy-probe', reason: this.classifyProbeFailure(err.message) };
+        }
+        // Clash API 本身连不上(核心未运行等):回退直连 TCP ping,仅衡量服务器可达性
+        if (nodeServer && nodePort) {
+          try {
+            const tcpRes = await TcpPing.ping(nodeServer, nodePort, timeoutMs);
+            return { latency: tcpRes.time, via: 'tcp-fallback' };
+          } catch {
+            return { latency: -1, via: 'tcp-fallback' };
+          }
+        }
+        return { latency: -1, via: 'tcp-fallback' };
+      }
+    }
+
+    // 2. Test via current active proxyPort if specified
+    if (proxyPort) {
+      try {
+        const proxyDelay = await this.testViaHttp(testUrl, timeoutMs, proxyPort, signal);
+        if (proxyDelay > 0) return { latency: proxyDelay, via: 'proxy-port' };
+      } catch {
+        // Fall through to direct
+      }
+    }
+
+    // 3. Fallback direct test
+    return { latency: await this.testViaHttp(testUrl, timeoutMs, undefined, signal), via: 'direct' };
   }
 
   /**
@@ -164,12 +191,10 @@ export class SpeedTestRunner {
         }
 
         try {
-          const speed = await this.doDownload(
-            downloadUrl,
+          const speed = await this.withDownloadWatchdog(
+            this.doDownload(downloadUrl, durationSec, speedtestPort, abortCtrl.signal, onProgress),
             durationSec,
-            speedtestPort,
-            abortCtrl.signal,
-            onProgress
+            abortCtrl
           );
           return speed;
         } finally {
@@ -179,16 +204,42 @@ export class SpeedTestRunner {
       }
 
       // If no nodeId, download via active proxyPort or direct
-      return await this.doDownload(
-        downloadUrl,
+      return await this.withDownloadWatchdog(
+        this.doDownload(downloadUrl, durationSec, proxyPort, abortCtrl.signal, onProgress),
         durationSec,
-        proxyPort,
-        abortCtrl.signal,
-        onProgress
+        abortCtrl
       );
     } finally {
       this.activeTasks.delete(taskId);
     }
+  }
+
+  /**
+   * 下载墙钟看门狗:经 createConnection 提供的隧道 socket 上 options.timeout 会失效(Node 实证),
+   * 硬时限保证 testDownload 必然结算;到期 abort 摧毁在途 socket,避免黑洞链路永久挂死
+   */
+  private static withDownloadWatchdog(
+    p: Promise<number>,
+    durationSec: number,
+    abortCtrl: AbortController
+  ): Promise<number> {
+    let watchdog: NodeJS.Timeout | undefined;
+    return new Promise<number>((resolve) => {
+      watchdog = setTimeout(() => {
+        abortCtrl.abort();
+        resolve(0);
+      }, (durationSec + 8) * 1000);
+      p.then(
+        (v) => {
+          if (watchdog) clearTimeout(watchdog);
+          resolve(v);
+        },
+        () => {
+          if (watchdog) clearTimeout(watchdog);
+          resolve(0);
+        }
+      );
+    });
   }
 
   /**
@@ -437,7 +488,8 @@ export class SpeedTestRunner {
     proxyPort?: number,
     signal?: AbortSignal,
     onProgress?: (speedBps: number) => void,
-    originUrl?: string
+    originUrl?: string,
+    hop = 0
   ): Promise<number> {
     return new Promise((resolve) => {
       if (signal?.aborted) return resolve(0);
@@ -460,7 +512,9 @@ export class SpeedTestRunner {
       const handleResponse = (req: http.ClientRequest, res: http.IncomingMessage) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           req.destroy();
-          this.doDownload(res.headers.location, durationSec, proxyPort, signal, onProgress, urlObj.href).then(resolve);
+          // 重定向链封顶:被劫持/异常代理可用无限 302 让测速永不结束
+          if (hop >= 5) return resolve(0);
+          this.doDownload(res.headers.location, durationSec, proxyPort, signal, onProgress, urlObj.href, hop + 1).then(resolve);
           return;
         }
 
@@ -520,6 +574,8 @@ export class SpeedTestRunner {
             req.on('error', () => resolve(0));
             req.on('timeout', () => {
               req.destroy();
+              // destroy() 在 TLS 握手黑洞(代理接受 CONNECT 后不应答)时永不触发 error,必须显式结算
+              resolve(0);
             });
             req.end();
           })
@@ -562,6 +618,7 @@ export class SpeedTestRunner {
 
         req.setTimeout(timeoutMs, () => {
           req.destroy();
+          resolve(0);
         });
 
         req.end();

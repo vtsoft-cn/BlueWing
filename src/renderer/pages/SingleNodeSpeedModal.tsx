@@ -166,8 +166,9 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
 
   const handleSaveToNode = () => {
     const pingVal = tcpPing !== null ? tcpPing : (node.ping ?? -1);
-    const httpVal = httpLatency !== null ? httpLatency : undefined;
-    const dlVal = downloadSpeed !== null ? downloadSpeed : undefined;
+    // 0 / -1 是"测了但失败"(含被停止/挂死兜底),不是有效结果:不落库,保留节点原有真实值
+    const httpVal = httpLatency !== null && httpLatency > 0 ? httpLatency : undefined;
+    const dlVal = downloadSpeed !== null && downloadSpeed > 0 ? downloadSpeed : undefined;
     onSaveNodePing(node.id, pingVal, httpVal, dlVal);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2000);

@@ -207,7 +207,7 @@ export type CoreState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error
  *  via=tcp-fallback 表示核心未运行、仅 TCP 兜底(不代表代理通道可用) */
 export interface LatencyResult {
   latency: number; // ms; -1 = 失败
-  via: 'proxy-probe' | 'tcp-fallback' | 'proxy-port' | 'direct';
+  via: 'proxy-probe' | 'tcp-fallback' | 'proxy-port' | 'direct' | 'watchdog'; // watchdog=墙钟兜底强制结算
   reason?: string;
 }
 
