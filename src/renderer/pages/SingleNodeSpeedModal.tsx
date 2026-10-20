@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Portal } from '../components/Portal';
+import { toast } from '../components/Toast';
 import {
   X,
   Play,
@@ -44,6 +45,24 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
   const [isTestingDownload, setIsTestingDownload] = useState(false);
   const [isTestingAll, setIsTestingAll] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  // 核心运行态:未运行时 HTTP 退化为 TCP 兜底、吞吐不可测,需横幅告知(与测速页一致)
+  const [coreOff, setCoreOff] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const update = (s: string) => {
+      if (mounted) setCoreOff(s !== 'running');
+    };
+    window.electronAPI?.core
+      .getState()
+      .then(update)
+      .catch(() => {});
+    const unsub = window.electronAPI?.core.onStateChange(update);
+    return () => {
+      mounted = false;
+      unsub?.();
+    };
+  }, []);
 
   const stopRequestedRef = useRef(false);
   const region = detectRegion(node.name, node.server);
@@ -169,6 +188,9 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
     // 0 / -1 是"测了但失败"(含被停止/挂死兜底),不是有效结果:不落库,保留节点原有真实值
     const httpVal = httpLatency !== null && httpLatency > 0 ? httpLatency : undefined;
     const dlVal = downloadSpeed !== null && downloadSpeed > 0 ? downloadSpeed : undefined;
+    if (downloadSpeed !== null && downloadSpeed <= 0) {
+      toast.info('下行吞吐未测得有效结果(测速失败),已保留原保存值');
+    }
     onSaveNodePing(node.id, pingVal, httpVal, dlVal);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2000);
@@ -247,6 +269,14 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* 核心未运行提示:与测速页保持一致的体验 */}
+        {coreOff && (
+          <div className="flex items-start space-x-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>代理核心未运行:HTTP 延迟将退化为 TCP 兜底时延(不代表代理可用),下行吞吐无法测得。</span>
+          </div>
+        )}
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-3 gap-3">
@@ -378,12 +408,21 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
               {isTestingDownload ? (
                 <div className="text-xs text-purple-500 animate-pulse font-medium">测速中...</div>
               ) : downloadSpeed !== null ? (
-                <div className="flex items-baseline space-x-1">
-                  <span className="text-xl font-black text-purple-600 dark:text-purple-400">
-                    {speedData.value}
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-400">{speedData.unit}</span>
-                </div>
+                downloadSpeed <= 0 ? (
+                  <div
+                    className="text-base font-bold text-rose-500"
+                    title="经核心代理链路的下载测速失败:核心未运行、节点代理通道不可用或测速目标不可达"
+                  >
+                    测速失败
+                  </div>
+                ) : (
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-xl font-black text-purple-600 dark:text-purple-400">
+                      {speedData.value}
+                    </span>
+                    <span className="text-[11px] font-medium text-slate-400">{speedData.unit}</span>
+                  </div>
+                )
               ) : (
                 <div className="text-lg font-bold text-slate-300 dark:text-slate-600">-</div>
               )}
