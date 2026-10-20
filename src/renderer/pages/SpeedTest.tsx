@@ -528,8 +528,8 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                 </div>
 
                 {/* Bottom Row: Status and Actions */}
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 text-xs">
-                  <div>
+                <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                  <div className="min-w-0">
                     {row.status === 'testing' ? (
                       <span className="text-amber-500 font-medium animate-pulse flex items-center space-x-1 text-[11px]">
                         <Activity className="w-3 h-3 animate-spin" />
@@ -551,7 +551,7 @@ export const SpeedTest: React.FC<SpeedTestProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 shrink-0">
                     <button
                       onClick={() => handleTestSingleRow(row.node)}
                       disabled={isRunning || row.status === 'testing'}

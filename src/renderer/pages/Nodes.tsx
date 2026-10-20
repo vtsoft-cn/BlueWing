@@ -356,7 +356,7 @@ export const Nodes: React.FC<NodesProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Sort Dropdown Window */}
           <div className="relative" ref={sortDropdownRef}>
             <button
@@ -557,14 +557,14 @@ export const Nodes: React.FC<NodesProps> = ({
                   </p>
                 </div>
 
-                {/* Bottom Row: Ping Badge, Active Indicator, Actions */}
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60">
-                  <div className="flex items-center space-x-2">
+                {/* Metrics Row: Ping / Download / HTTP badges */}
+                <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {/* Ping button / badge */}
                     <button
                       onClick={(e) => handlePingNode(node, e)}
                       disabled={pingingNodeIds.has(node.id)}
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center space-x-1 transition-colors ${
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center space-x-1 transition-colors shrink-0 whitespace-nowrap ${
                         pingingNodeIds.has(node.id)
                           ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
                           : hasPing
@@ -595,7 +595,7 @@ export const Nodes: React.FC<NodesProps> = ({
                     {/* Download Bandwidth Badge (if tested) */}
                     {node.downloadSpeed !== undefined && node.downloadSpeed > 0 && (
                       <span
-                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center space-x-1"
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center space-x-1 shrink-0 whitespace-nowrap"
                         title="下载带宽吞吐"
                       >
                         <Download className="w-2.5 h-2.5" />
@@ -610,7 +610,7 @@ export const Nodes: React.FC<NodesProps> = ({
                     {/* HTTP Latency Badge (if tested) */}
                     {node.httpLatency !== undefined && node.httpLatency > 0 && (
                       <span
-                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center space-x-1"
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center space-x-1 shrink-0 whitespace-nowrap"
                         title="HTTP 真实响应时延"
                       >
                         <span className="text-[9px] opacity-70">HTTP</span>
@@ -618,54 +618,58 @@ export const Nodes: React.FC<NodesProps> = ({
                       </span>
                     )}
 
+                  </div>
+
+                  {/* Footer: Active Indicator + Actions */}
+                  <div className="flex items-center gap-2 mt-2.5">
                     {isSelected && (
-                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center space-x-0.5">
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center space-x-0.5 shrink-0 whitespace-nowrap">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>已连接使用</span>
                       </span>
                     )}
-                  </div>
 
-                  {/* Action buttons (Single Node Speed Test, Copy link, Edit, Delete) */}
-                  <div className="flex items-center space-x-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSpeedTestingNode(node);
-                      }}
-                      className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="单节点专项测速 (TCP延迟 / HTTP真实时延 / 带宽吞吐)"
-                    >
-                      <Activity className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => handleCopyLink(node, e)}
-                      className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="复制节点分享链接"
-                    >
-                      {copiedNodeId === node.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingNode(node);
-                      }}
-                      className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="编辑节点配置"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteNode(node.id, e)}
-                      className="p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="删除节点"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Action buttons (Single Node Speed Test, Copy link, Edit, Delete) */}
+                    <div className="flex items-center space-x-1 shrink-0 ml-auto opacity-80 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSpeedTestingNode(node);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        title="单节点专项测速 (TCP延迟 / HTTP真实时延 / 带宽吞吐)"
+                      >
+                        <Activity className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleCopyLink(node, e)}
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        title="复制节点分享链接"
+                      >
+                        {copiedNodeId === node.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingNode(node);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        title="编辑节点配置"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteNode(node.id, e)}
+                        className="p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        title="删除节点"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
