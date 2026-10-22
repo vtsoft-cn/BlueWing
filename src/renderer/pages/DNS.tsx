@@ -318,7 +318,7 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
         </div>
 
         {/* 保存栏 */}
-        <div className="bg-white dark:bg-slate-900 p-4 px-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-end space-x-3">
+        <div className="bg-white dark:bg-slate-900 p-4 px-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-wrap items-center justify-end gap-3">
           {savedSuccess && (
             <span className="text-xs text-emerald-500 font-medium flex items-center space-x-1">
               <Check className="w-3.5 h-3.5" />
@@ -327,7 +327,7 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
           )}
           <button
             type="submit"
-            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25"
+            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 whitespace-nowrap"
           >
             <Save className="w-4 h-4" />
             <span>保存 DNS 配置</span>
@@ -346,12 +346,12 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
             value={testDomain}
             onChange={(e) => setTestDomain(e.target.value)}
             placeholder="输入域名，例如: www.google.com"
-            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none"
+            className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none"
           />
           <button
             onClick={handleTestDns}
             disabled={isTesting}
-            className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-medium flex items-center space-x-1.5 transition-colors"
+            className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-medium flex items-center space-x-1.5 transition-colors whitespace-nowrap flex-shrink-0"
           >
             <Zap className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
             <span>{isTesting ? '测试中...' : '测试解析'}</span>

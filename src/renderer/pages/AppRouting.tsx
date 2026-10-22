@@ -82,8 +82,8 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
+        <div className="min-w-0">
           <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
             Windows 应用分流
           </h3>
@@ -93,18 +93,18 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2 flex-shrink-0">
           <button
             onClick={fetchRunningApps}
             disabled={isScanning}
-            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center space-x-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center space-x-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
             <span>扫描已运行软件</span>
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 transition-colors"
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 transition-colors whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             <span>添加应用</span>
@@ -119,29 +119,29 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
             {appRules.map((rule) => (
               <div
                 key={rule.id}
-                className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between"
+                className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between gap-3"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 min-w-0 flex-1">
                   <input
                     type="checkbox"
                     checked={rule.enabled}
                     onChange={() => handleToggle(rule.id)}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-0"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-0 flex-shrink-0"
                   />
-                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold flex-shrink-0">
                     <AppWindow className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h5 className="font-medium text-xs text-slate-800 dark:text-slate-200">
+                  <div className="min-w-0">
+                    <h5 className="font-medium text-xs text-slate-800 dark:text-slate-200 truncate">
                       {rule.name}
                     </h5>
-                    <p className="text-[11px] font-mono text-slate-400 truncate max-w-md">
+                    <p className="text-[11px] font-mono text-slate-400 truncate">
                       {rule.exePath}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 flex-shrink-0">
                   {/* Action Segmented Control */}
                   <div className="flex items-center p-0.5 rounded-lg bg-slate-200/60 dark:bg-slate-800 border border-slate-300/40 dark:border-slate-700 text-xs">
                     <button

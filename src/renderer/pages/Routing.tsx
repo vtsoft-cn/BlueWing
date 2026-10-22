@@ -149,7 +149,7 @@ export const Routing: React.FC<RoutingProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 pt-1">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 pt-1">
           <button
             onClick={() => onUpdateSettings({ routingMode: 'rule' })}
             className={`p-3.5 rounded-xl border text-left flex items-start space-x-3 transition-all ${
@@ -199,8 +199,8 @@ export const Routing: React.FC<RoutingProps> = ({
 
       {/* 2. Custom Routing Rules List */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0">
             <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
               分流规则列表
             </h4>
@@ -209,11 +209,11 @@ export const Routing: React.FC<RoutingProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={handleUpdateRuleSets}
               disabled={isUpdatingRuleSets}
-              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium flex items-center space-x-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium flex items-center space-x-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60 whitespace-nowrap"
               title="从镜像下载最新的国内外分流规则数据(geosite/geoip)"
             >
               <RefreshCw className={`w-4 h-4 ${isUpdatingRuleSets ? 'animate-spin' : ''}`} />
@@ -221,7 +221,7 @@ export const Routing: React.FC<RoutingProps> = ({
             </button>
             <button
               onClick={openAddModal}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 transition-colors"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white text-xs font-medium flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 transition-colors whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               <span>添加自定义规则</span>
@@ -239,20 +239,20 @@ export const Routing: React.FC<RoutingProps> = ({
             return (
               <div
                 key={rule.id}
-                className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between"
+                className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between gap-3"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 min-w-0 flex-1">
                   <input
                     type="checkbox"
                     checked={rule.enabled}
                     onChange={() => handleToggleRule(rule.id)}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-0"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-0 flex-shrink-0"
                   />
-                  <div>
-                    <h5 className="font-medium text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                      {rule.name}
+                  <div className="min-w-0">
+                    <h5 className="font-medium text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{rule.name}</span>
                       {isDefault && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex-shrink-0">
                           内置
                         </span>
                       )}
@@ -265,10 +265,10 @@ export const Routing: React.FC<RoutingProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 flex-shrink-0">
                   {/* Outbound Badge */}
                   <span
-                    className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${
+                    className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full whitespace-nowrap ${
                       isProxy
                         ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
                         : isDirect
