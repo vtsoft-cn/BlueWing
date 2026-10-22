@@ -14,6 +14,7 @@ import { ProxySelectionService } from './core/ProxySelectionService';
 import { RuleSetUpdater } from './core/RuleSetUpdater';
 import { SystemProxy } from './system/SystemProxy';
 import { TakeoverLinkage } from './system/TakeoverLinkage';
+import { TunAdapter } from './system/TunAdapter';
 import { ElevatedRelaunch } from './system/ElevatedRelaunch';
 import { ProcessScanner } from './system/ProcessScanner';
 import { TcpPing } from './net/TcpPing';
@@ -526,6 +527,63 @@ async function runBackupImport<T>(fn: () => Promise<T> | T): Promise<T> {
   return res;
 }
 
+// ---------------------------------------------------------------------------
+// TUN 网卡冲突自动恢复
+// wintun 网卡(BlueWingTun)设备删除是异步的:强杀持有网卡的孤儿核心、或停止后
+// 快速重启,都会让下一个 sing-box 撞上幽灵设备而在启动约 15s 后 FATAL 退出
+// (实测:提权重启后首次连接必断、手动再连即好)。以下把"手动再连"自动化:
+// - 启动失败且特征为 TUN 网卡冲突 → 清除幽灵设备后立即重试(handleCoreStart);
+// - 连续失败 → 有界延迟自动重连(设备异步清理需要时间,上限 2 次);
+// - 启动成功后 30s 内异常退出 → 延迟自动重连一次。
+// 用户任何手动连接/断开与核心成功运行都会取消待执行的定时器,不与用户意图对抗。
+// ---------------------------------------------------------------------------
+const TUN_FATAL_RETRY_MAX = 2;
+const TUN_FATAL_RETRY_DELAY_MS = 20_000;
+let tunFatalRetryTimer: NodeJS.Timeout | null = null;
+let tunFatalRetryCount = 0;
+let tunCrashReconnectTimer: NodeJS.Timeout | null = null;
+let lastCoreStartOkAt = 0;
+let lastCoreStartHadTun = false;
+
+function cancelTunAutoRecovery(reason: string): void {
+  const hadPending = tunFatalRetryTimer !== null || tunCrashReconnectTimer !== null;
+  if (tunFatalRetryTimer) {
+    clearTimeout(tunFatalRetryTimer);
+    tunFatalRetryTimer = null;
+  }
+  if (tunCrashReconnectTimer) {
+    clearTimeout(tunCrashReconnectTimer);
+    tunCrashReconnectTimer = null;
+  }
+  if (hadPending) {
+    LogManager.getInstance().addLog('info', `TUN 自动重连已取消: ${reason}`, 'core');
+  }
+}
+
+/** 两次启动尝试均因 TUN 网卡冲突失败:设备异步清理需要时间,计划有界延迟重连 */
+function scheduleTunFatalRetry(): void {
+  if (tunFatalRetryTimer) return;
+  if (tunFatalRetryCount >= TUN_FATAL_RETRY_MAX) {
+    LogManager.getInstance().addLog(
+      'warn',
+      'TUN 网卡冲突自动重连已达上限,请稍后手动点击连接重试(或重启系统清理网卡设备)',
+      'core'
+    );
+    return;
+  }
+  tunFatalRetryCount++;
+  LogManager.getInstance().addLog(
+    'warn',
+    `TUN 网卡设备仍在异步清理,${TUN_FATAL_RETRY_DELAY_MS / 1000} 秒后自动重连 (第 ${tunFatalRetryCount}/${TUN_FATAL_RETRY_MAX} 次),无需手动操作`,
+    'core'
+  );
+  tunFatalRetryTimer = setTimeout(() => {
+    tunFatalRetryTimer = null;
+    LogManager.getInstance().addLog('info', 'TUN 网卡清理等待完成,正在自动重连...', 'core');
+    handleCoreStart({ userInitiated: true }).catch(() => {});
+  }, TUN_FATAL_RETRY_DELAY_MS);
+}
+
 async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<boolean> {
   const db = Database.getInstance();
   const core = SingBoxManager.getInstance();
@@ -570,11 +628,28 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
   if (!started) {
     // 规则源下载被间歇性重置等瞬时故障:自动重试一次,避免用户手动反复点击
     LogManager.getInstance().addLog('warn', '核心首次启动失败,2 秒后自动重试一次...', 'core');
+    // TUN 网卡冲突(幽灵设备,特征见 SingBoxManager.consumeTunAdapterFatal):
+    // 重试前主动做 PnP 级清除,大概率一次救回
+    if (core.consumeTunAdapterFatal()) {
+      LogManager.getInstance().addLog('info', '检测到 TUN 网卡设备冲突,正在清除残留设备后重试...', 'core');
+      const res = await TunAdapter.removeStale(8000);
+      LogManager.getInstance().addLog(
+        res.cleared ? 'info' : 'warn',
+        res.cleared ? 'TUN 网卡残留设备已清除' : 'TUN 网卡设备清除未完成,仍将重试',
+        'core'
+      );
+    }
     await new Promise((r) => setTimeout(r, 2000));
     started = await core.start(config);
   }
   if (started) {
     LogManager.getInstance().addLog('info', '代理核心引擎已就绪并接管网络流量', 'core');
+    // TUN 早期崩溃自动重连的判定基准(见 stateChange 订阅);config 经权限剥除
+    // 后就地变更,此处读到的是真实生效的入站
+    lastCoreStartOkAt = Date.now();
+    lastCoreStartHadTun =
+      Array.isArray(config.inbounds) && config.inbounds.some((i: any) => i.type === 'tun');
+    tunFatalRetryCount = 0;
     if (settings.systemProxyEnabled) {
       await SystemProxy.enable(
         '127.0.0.1',
@@ -590,6 +665,9 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
       broadcastSettingsChanged();
     }
   } else {
+    // 两次尝试均失败且特征为 TUN 网卡冲突:设备异步清理需要时间,计划有界自动
+    // 重连(把用户"过一会再点一次连接"自动化);其余失败保持原有手动提示语义
+    if (core.consumeTunAdapterFatal()) scheduleTunFatalRetry();
     LogManager.getInstance().addLog('error', 'Sing-box 核心启动失败，请检查配置或日志详情', 'core');
   }
   TrayManager.getInstance().updateMenu();
@@ -701,9 +779,18 @@ ipcMain.handle('system:flushDns', async () => {
 ipcMain.handle('system:getAppVersion', () => app.getVersion());
 
 // Core
-ipcMain.handle('core:start', async () => handleCoreStart({ userInitiated: true }));
-ipcMain.handle('core:stop', async () => handleCoreStop());
+// 用户手动连接/重启会取消待执行的 TUN 自动重连(用户意图优先,避免定时器
+// 迟到触发一次多余的停止-重启)
+ipcMain.handle('core:start', async () => {
+  cancelTunAutoRecovery('用户手动连接');
+  return handleCoreStart({ userInitiated: true });
+});
+ipcMain.handle('core:stop', async () => {
+  cancelTunAutoRecovery('用户手动断开');
+  return handleCoreStop();
+});
 ipcMain.handle('core:restart', async () => {
+  cancelTunAutoRecovery('用户手动重启');
   await handleCoreStop();
   return handleCoreStart({ userInitiated: true });
 });
@@ -726,6 +813,31 @@ ipcMain.handle('core:validateConfig', () => {
 // Forward core state change
 SingBoxManager.getInstance().on('stateChange', (state) => {
   mainWindow?.webContents.send('core:stateChange', state);
+  if (state === 'crashed') {
+    // TUN 模式启动初期(30s 内)异常退出:多为网卡设备/路由的清理竞态,
+    // 延迟自动重连一次即可恢复;用户已在等重试(fatal 梯次)时不重复
+    if (
+      lastCoreStartHadTun &&
+      Date.now() - lastCoreStartOkAt < 30_000 &&
+      !tunCrashReconnectTimer &&
+      !tunFatalRetryTimer
+    ) {
+      LogManager.getInstance().addLog(
+        'warn',
+        'TUN 模式启动初期核心异常退出,12 秒后自动重连(无需手动操作)',
+        'core'
+      );
+      tunCrashReconnectTimer = setTimeout(() => {
+        tunCrashReconnectTimer = null;
+        handleCoreStart({ userInitiated: true }).catch(() => {});
+      }, 12_000);
+    }
+    return;
+  }
+  // 核心成功运行或正在停止:待执行的自动重连已无意义(用户操作覆盖/已恢复)
+  if (state === 'running' || state === 'stopping') {
+    cancelTunAutoRecovery(state === 'running' ? '核心已成功运行' : '核心正在停止');
+  }
 });
 
 // Nodes

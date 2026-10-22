@@ -1,6 +1,7 @@
 import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import net from 'net';
 import http from 'http';
 import { EventEmitter } from 'events';
@@ -8,6 +9,7 @@ import { CoreState } from '../../types';
 import { LogManager } from '../log/LogManager';
 import { Database } from '../db/Database';
 import { isRunningAsAdmin } from '../system/Elevation';
+import { TunAdapter } from '../system/TunAdapter';
 
 export class SingBoxManager extends EventEmitter {
   private static instance: SingBoxManager;
@@ -17,6 +19,8 @@ export class SingBoxManager extends EventEmitter {
   private binaryPath: string;
   /** 本次 start() 是否因非管理员权限剥除了配置中的 TUN 入站(供上层兜底联动) */
   private tunStrippedLastStart = false;
+  /** 当前/最近一次核心进程是否输出了 TUN 网卡配置失败特征行(幽灵网卡冲突) */
+  private tunFatalSeen = false;
 
   // Lifecycle concurrency mutex
   private mutex: Promise<void> = Promise.resolve();
@@ -64,6 +68,25 @@ export class SingBoxManager extends EventEmitter {
   /** 最近一次 start():配置含 TUN 但因非管理员权限被剥除时为 true */
   public wasTunStrippedLastStart(): boolean {
     return this.tunStrippedLastStart;
+  }
+
+  /**
+   * 取走"最近一次核心失败是否为 TUN 网卡冲突"标记(读后即清)。
+   * 特征行形如 FATAL ... configure tun interface: (create adapter: ...
+   * already exists ... | open existing adapter: Element not found.)——
+   * wintun 网卡设备残留/异步删除未完成时按固定名创建必撞,进程在启动约 15s 后
+   * 整体退出。上层据此决定是否清除幽灵网卡后重试。
+   */
+  public consumeTunAdapterFatal(): boolean {
+    const seen = this.tunFatalSeen;
+    this.tunFatalSeen = false;
+    return seen;
+  }
+
+  private noteCoreOutputLine(line: string): void {
+    if (!this.tunFatalSeen && /configure tun interface/i.test(line)) {
+      this.tunFatalSeen = true;
+    }
   }
 
   public getPid(): number | undefined {
@@ -152,19 +175,40 @@ export class SingBoxManager extends EventEmitter {
           finish(0);
         }, 3000);
         proc.stdout?.on('data', (d) => (stdout += d.toString()));
-        proc.on('close', () => {
+        proc.on('close', async () => {
           clearTimeout(timer);
           const pids = stdout
             .split(/\r?\n/)
             .map((s) => s.trim())
             .filter((s) => /^\d+$/.test(s));
+          const livePid = this.process?.pid;
           for (const pid of pids) {
+            // 枚举期间刚被本实例拉起的核心不是孤儿:PS 枚举与用户点击连接可能并发,
+            // 严禁误杀(this.process 已就位的核心)
+            if (livePid && Number(pid) === livePid) continue;
             try {
               execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
             } catch {}
           }
           if (pids.length > 0) {
             this.log('warn', `已清理 ${pids.length} 个残留的孤儿 sing-box 进程 (PID: ${pids.join(', ')})`, 'core');
+            // 被强杀的孤儿若持有 TUN 网卡,必然留下幽灵设备(按固定名创建网卡的
+            // 下一个核心会在启动 15s 后 FATAL)。立即做 PnP 级清除(需管理员);
+            // 失败静默——连接失败路径还有"清除+自动重连"兜底
+            try {
+              if (livePid === undefined && Database.getInstance().getSettings().tunEnabled) {
+                const res = await TunAdapter.removeStale(4000);
+                if (res.found) {
+                  this.log(
+                    res.cleared ? 'info' : 'warn',
+                    res.cleared
+                      ? '已清除残留的 TUN 网卡设备 (BlueWingTun)'
+                      : 'TUN 网卡设备仍在异步清理中,若首次连接失败将自动重试',
+                    'core'
+                  );
+                }
+              }
+            } catch {}
           }
           finish(pids.length);
         });
@@ -230,6 +274,7 @@ export class SingBoxManager extends EventEmitter {
         // Safety Check: If TUN mode is in config but not elevated, gracefully remove it to prevent fatal crash
         const admin = this.isAdmin();
         this.tunStrippedLastStart = false;
+        this.tunFatalSeen = false;
         if (!admin && config.inbounds) {
           const hasTun = config.inbounds.some((i: any) => i.type === 'tun');
           if (hasTun) {
@@ -268,6 +313,7 @@ export class SingBoxManager extends EventEmitter {
           const lines = data.toString().split('\n');
           for (const line of lines) {
             if (line.trim()) {
+              this.noteCoreOutputLine(line);
               this.log(
                 line.toLowerCase().includes('error') ? 'error' : 'info',
                 line.trim(),
@@ -282,6 +328,7 @@ export class SingBoxManager extends EventEmitter {
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed) {
+              this.noteCoreOutputLine(trimmed);
               let level: 'error' | 'warn' | 'info' = 'info';
               if (/\b(fatal|panic)\b/i.test(trimmed) || (/\berror\b/i.test(trimmed) && !/\bnoerror\b/i.test(trimmed))) {
                 level = 'error';
@@ -322,8 +369,13 @@ export class SingBoxManager extends EventEmitter {
           ? parseInt(config.experimental.clash_api.external_controller.split(':')[1], 10)
           : 9090;
 
-        // Active readiness probing: verify mixed port and process health
-        const isReady = await this.waitForReady(mixedPort, clashPort, 5000);
+        // TUN 模式的就绪判定必须等到网卡真正出现在系统接口中:sing-box 的 mixed
+        // 端口毫秒级就绪,而 TUN 入站撞上残留网卡时最长约 15s 后才 FATAL 退出——
+        // 只探端口会把"必死"的核心先宣告为已连接(用户所见"连上后过一会就断")。
+        // 18s 覆盖 sing-box 的 15s 入站超时;进程死亡也会立即终止等待。
+        const tunInbound = config.inbounds?.find((i: any) => i.type === 'tun');
+        const tunName: string | undefined = tunInbound?.interface_name;
+        const isReady = await this.waitForReady(mixedPort, clashPort, tunName ? 18_000 : 5000, tunName);
         if (isReady && this.process && !this.process.killed) {
           this.setState('running');
           this.log('info', `青翼连接 核心引擎启动成功 (PID: ${this.process.pid}, 监听端口: ${mixedPort})`, 'core');
@@ -400,9 +452,15 @@ export class SingBoxManager extends EventEmitter {
   }
 
   /**
-   * Probe TCP mixed-in port and Clash API readiness
+   * Probe TCP mixed-in port readiness; with a TUN inbound additionally require the
+   * TUN interface to actually come up (see start() for why port-only probing lies).
    */
-  private async waitForReady(mixedPort: number, clashPort: number, timeoutMs: number): Promise<boolean> {
+  private async waitForReady(
+    mixedPort: number,
+    clashPort: number,
+    timeoutMs: number,
+    tunName?: string
+  ): Promise<boolean> {
     const startTime = Date.now();
     while (Date.now() - startTime < timeoutMs) {
       if (!this.process || this.process.killed) {
@@ -411,13 +469,21 @@ export class SingBoxManager extends EventEmitter {
 
       // Check if mixed port is accepting connections
       const portOpen = await this.checkPortOpen('127.0.0.1', mixedPort);
-      if (portOpen) {
+      if (portOpen && (!tunName || this.isTunInterfaceUp(tunName))) {
         return true;
       }
 
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 120));
     }
     return false;
+  }
+
+  /** TUN 网卡是否已带地址出现在系统网络接口中(名字做前缀匹配,容忍系统附加后缀) */
+  private isTunInterfaceUp(name: string): boolean {
+    const faces = os.networkInterfaces();
+    return Object.keys(faces).some(
+      (k) => (k === name || k.startsWith(name)) && (faces[k]?.length ?? 0) > 0
+    );
   }
 
   private checkPortOpen(host: string, port: number): Promise<boolean> {

@@ -10,6 +10,7 @@ import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { ProxySelectionService } from '../main/core/ProxySelectionService';
 import { SystemProxy } from '../main/system/SystemProxy';
 import { TakeoverLinkage } from '../main/system/TakeoverLinkage';
+import { TunAdapter } from '../main/system/TunAdapter';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
 import { isValidIpLiteral, isValidDomain } from '../utils/ip';
 
@@ -638,5 +639,21 @@ describe('TakeoverLinkage.proxyTogglePatch (开代理反向联动关 TUN)', () =
       TakeoverLinkage.proxyTogglePatch({ tunEnabled: true, systemProxyEnabled: true }, { tunEnabled: true, systemProxyEnabled: true }),
       null
     );
+  });
+});
+
+describe('TunAdapter.parseInstanceIds (TUN 幽灵网卡设备实例 ID 解析)', () => {
+  test('解析多行实例 ID,剔除空行与 PowerShell 提示行', () => {
+    const out = ['HTROOT\\0000', '', 'WARNING: 模拟提示', 'ERROR: 模拟错误', 'ROOT\\NET\\0007'].join('\r\n');
+    assert.deepEqual(TunAdapter.parseInstanceIds(out), ['HTROOT\\0000', 'ROOT\\NET\\0007']);
+  });
+
+  test('空输出与纯空白输出返回空数组', () => {
+    assert.deepEqual(TunAdapter.parseInstanceIds(''), []);
+    assert.deepEqual(TunAdapter.parseInstanceIds('  \r\n  \r\n'), []);
+  });
+
+  test('实例 ID 中的反斜杠与 & 原样保留(pnputil 参数传递依赖)', () => {
+    assert.deepEqual(TunAdapter.parseInstanceIds('ROOT\\NET\\0003&A1\n'), ['ROOT\\NET\\0003&A1']);
   });
 });
