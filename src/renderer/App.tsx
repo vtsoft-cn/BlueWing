@@ -280,23 +280,38 @@ export const App: React.FC = () => {
   };
 
   // TUN 提权引导:统一走应用内自定义确认框(不使用系统原生对话框)。
-  // 覆盖三条入口:Dashboard/设置页开 TUN 的预检、托盘勾选、主进程兜底拦截事件
-  const handleRequestTunElevation = async () => {
+  // 覆盖入口:Dashboard/设置页开 TUN 的预检、托盘勾选、主进程兜底拦截事件,
+  // 以及连接门禁(context='connect':TUN 已开启但非管理员时点连接,主进程拒绝
+  // 启动并弹窗——取消即关闭 TUN 改用系统代理连接,不让 TUN 开关"假开启")
+  const handleRequestTunElevation = async (context?: string) => {
+    const isConnect = context === 'connect';
     const ok = await confirmDialog({
       title: '启用 TUN 需要管理员权限',
-      message:
-        '当前应用以普通用户权限运行,TUN 无法生效。可以管理员身份重启应用后启用 TUN(若系统开启 UAC 提示会请求确认一次,静默提升的系统则直接重启);选择取消则不开启 TUN,继续使用系统代理。',
+      message: isConnect
+        ? '当前 TUN 模式已开启,但应用以普通用户权限运行,连接无法启用 TUN。可以管理员身份重启应用后启用 TUN;或关闭 TUN,本次连接改用系统代理。'
+        : '当前应用以普通用户权限运行,TUN 无法生效。可以管理员身份重启应用后启用 TUN(若系统开启 UAC 提示会请求确认一次,静默提升的系统则直接重启);选择取消则不开启 TUN,继续使用系统代理。',
       confirmText: '以管理员身份重启',
-      cancelText: '取消',
+      cancelText: isConnect ? '改用系统代理连接' : '取消',
     });
-    if (ok && window.electronAPI?.tun) {
-      await window.electronAPI.tun.enableElevated();
+    if (ok) {
+      if (window.electronAPI?.tun) {
+        await window.electronAPI.tun.enableElevated();
+      }
+      return;
+    }
+    if (isConnect && window.electronAPI) {
+      // 改用系统代理:以主进程最新设置为基准仅翻转 TUN(订阅闭包里的渲染层
+      // settings 可能过期,直接回写会连旧字段一起落库),连接意图保护会自动
+      // 补开系统代理;先 await 设置落库再连接,避免门禁重读到旧 tunEnabled
+      const cur = await window.electronAPI.settings.get();
+      await window.electronAPI.settings.save({ ...cur, tunEnabled: false });
+      await window.electronAPI.core.start();
     }
   };
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI?.tun?.onElevationRequired(() => {
-      handleRequestTunElevation();
+    const unsubscribe = window.electronAPI?.tun?.onElevationRequired((context) => {
+      handleRequestTunElevation(context);
     });
     return unsubscribe;
   }, []);

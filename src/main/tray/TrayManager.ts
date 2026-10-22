@@ -118,6 +118,18 @@ export class TrayManager {
               await SystemProxy.disable();
             }
           } else {
+            // TUN 连接门禁(与主进程 handleCoreStart 同一约束):TUN 已开启但非管理
+            // 员时,静默剥除+代理回退会让 TUN 开关"假开启",改为弹提权引导由用户
+            // 抉择(确认=管理员重启;取消=关 TUN 改用系统代理连接)
+            if (settings.tunEnabled && !core.isAdmin()) {
+              if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                this.mainWindow.setSkipTaskbar(false);
+                this.mainWindow.show();
+                this.mainWindow.focus();
+              }
+              this.mainWindow?.webContents.send('tun:elevation-required', 'connect');
+              return;
+            }
             // 连接意图保护:用户显式连接且系统代理与 TUN 都未启用时自动补开,确保连接真实生效
             if (SystemProxy.shouldAutoEnableSystemProxy(true, settings)) {
               settings.systemProxyEnabled = true;

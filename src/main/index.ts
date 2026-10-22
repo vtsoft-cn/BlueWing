@@ -599,6 +599,27 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
     );
   }
 
+  // TUN 连接门禁:设置已启用 TUN 但当前非管理员——此前会静默剥除 TUN 入站并兜底
+  // 开系统代理,TUN 开关停留在"假开启"且用户全程无感(用户实测所见:未提示就开了
+  // 系统代理)。改为拒绝启动并弹既有提权引导(connect 上下文):确认=以管理员
+  // 重启;取消=关闭 TUN 改用系统代理连接。手动/托盘/自启等 userInitiated 路径
+  // 全部收口于此;核心运行中的配置重载(非 userInitiated)不受影响。
+  if (options?.userInitiated && settings.tunEnabled && !core.isAdmin()) {
+    LogManager.getInstance().addLog(
+      'info',
+      'TUN 模式已开启,但应用未以管理员身份运行:请选择以管理员重启启用 TUN,或改用系统代理连接',
+      'app'
+    );
+    // 弹窗挂在主窗口内:窗口可能隐藏在托盘,先恢复显示并聚焦
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setSkipTaskbar(false);
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    mainWindow?.webContents.send('tun:elevation-required', 'connect');
+    return false;
+  }
+
   // 连接意图保护:仅用户显式发起的连接(core:start/重启/自启/托盘连接)且系统代理与
   // TUN 都未启用时,才自动补开系统代理开关——否则点"连接"后流量没有任何出口,
   // 界面却显示"已连接"。设置/规则变更触发的重载绝不能触碰用户的代理开关:

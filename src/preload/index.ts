@@ -194,9 +194,12 @@ export const api = {
   tun: {
     /** 弹窗确认"以管理员身份重启":落库(含互斥联动)并提权重启 */
     enableElevated: (): Promise<boolean> => ipcRenderer.invoke('tun:enableElevated'),
-    /** 主进程拦截到非管理员开 TUN 时请求弹窗(兜底路径) */
-    onElevationRequired: (callback: () => void): (() => void) => {
-      const sub = () => callback();
+    /**
+     * 主进程请求弹窗:开 TUN 被拦截(兜底路径,无上下文)或连接门禁
+     * (context='connect':TUN 已开启但非管理员时点连接,取消=关 TUN 改系统代理连接)
+     */
+    onElevationRequired: (callback: (context?: string) => void): (() => void) => {
+      const sub = (_e: unknown, context?: string) => callback(context);
       ipcRenderer.on('tun:elevation-required', sub);
       return () => {
         ipcRenderer.removeListener('tun:elevation-required', sub);
