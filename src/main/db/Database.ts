@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings } from '../../types';
 import { CredentialSecurity } from '../security/CredentialSecurity';
+import { ImportJournal } from './backup/ImportJournal';
 
 export class Database {
   public static readonly CURRENT_SCHEMA_VERSION = 2;
@@ -142,6 +143,7 @@ export class Database {
     this.nodes = [];
     this.activeNodeId = '';
 
+    ImportJournal.recover(this.dataDir);
     this.load();
   }
 
@@ -170,6 +172,7 @@ export class Database {
   public getDataDir(): string {
     return this.dataDir;
   }
+  public reloadFromDisk():void {if(this.saveTimer){clearTimeout(this.saveTimer);this.saveTimer=null;}this.load();}
 
   private load(): void {
     try {

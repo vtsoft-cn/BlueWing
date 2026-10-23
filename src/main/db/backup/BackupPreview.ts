@@ -9,13 +9,17 @@ import {
   RouteRule,
   AppRule,
   AppSettings,
+  DnsConfig,
   BackupCategories,
   BackupPreviewResult,
   BackupPreviewItem,
 } from '../../../types';
 import { BackupFormatType } from './BackupValidator';
+import { VpnProfile } from '../../../types/corporateVpn';
 
 export interface RawParsedBackupData {
+  corporateVpn?: VpnProfile[];
+  dns?: DnsConfig;
   format: BackupFormatType;
   nodes?: ProxyNode[];
   subscriptions?: Subscription[];
@@ -35,6 +39,7 @@ export class BackupPreview {
       rules: RouteRule[];
       appRules: AppRule[];
       settings: AppSettings;
+      corporateVpn?: VpnProfile[];
     },
     requestedCategories?: Partial<BackupCategories>
   ): BackupPreviewResult {
@@ -42,10 +47,15 @@ export class BackupPreview {
       profiles: requestedCategories?.profiles ?? (!!incoming.nodes?.length || !!incoming.subscriptions?.length),
       rules: requestedCategories?.rules ?? (!!incoming.rules?.length || !!incoming.appRules?.length),
       settings: requestedCategories?.settings ?? (!!incoming.settings && Object.keys(incoming.settings).length > 0),
+      ...((requestedCategories?.corporateVpn!==undefined||incoming.corporateVpn?.length)?{corporateVpn:requestedCategories?.corporateVpn??!!incoming.corporateVpn?.length}:{}),
     };
 
     const itemsPreview: BackupPreviewItem[] = [];
     const warnings: string[] = [...(incoming.warnings || [])];
+    const corporateProfiles=categories.corporateVpn?incoming.corporateVpn||[]:[];
+    let corporateAdd=0,corporateUpdate=0;
+    for(const p of corporateProfiles){const match=current.corporateVpn?.some(c=>c.id===p.id||(c.protocol===p.protocol&&c.gateway.host===p.gateway.host&&c.gateway.port===p.gateway.port&&c.username===p.username));if(match)corporateUpdate++;else corporateAdd++;itemsPreview.push({type:'corporateVpn',name:p.name,action:match?'update':'add',detail:`${p.protocol} 配置；不包含密码和会话，导入后需应用公司分流`});}
+    if(corporateProfiles.length)warnings.push('公司 VPN 仅导入非机密配置；密码和设备会话需重新输入。Android 备份不包含此分类。');
 
     // 1. Group / Subscription diffs
     let groupAdd = 0;
@@ -187,6 +197,7 @@ export class BackupPreview {
       format: incoming.format,
       categories,
       counts: {
+        ...(categories.corporateVpn?{corporateVpn:{total:corporateProfiles.length,add:corporateAdd,update:corporateUpdate,skip:0}}:{}),
         groups: { total: incomingSubs.length, add: groupAdd, update: groupUpdate, skip: groupSkip },
         nodes: { total: incomingNodes.length, add: nodeAdd, update: nodeUpdate, skip: nodeSkip },
         rules: { total: incomingRules.length, add: ruleAdd, update: ruleUpdate, skip: ruleSkip },

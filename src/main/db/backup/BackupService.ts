@@ -13,6 +13,8 @@ import { AndroidBackupEncoder } from './AndroidBackupEncoder';
 import { BackupPreview, RawParsedBackupData } from './BackupPreview';
 import { BackupTransaction } from './BackupTransaction';
 import { UniversalSubscriptionParser } from '../../net/UniversalSubscriptionParser';
+import { ProfileRepository, validateProfile } from '../../vpn/ProfileRepository';
+import { ImportJournal } from './ImportJournal';
 import {
   BackupCategories,
   BackupPreviewResult,
@@ -43,6 +45,7 @@ export class BackupService {
       rules: db.getRules(),
       appRules: db.getAppRules(),
       settings: db.getSettings(),
+      corporateVpn: new ProfileRepository(db.getDataDir()).list(),
     };
 
     const parsedData = this.parseRawContent(content);
@@ -54,29 +57,37 @@ export class BackupService {
    */
   public static async importWithTransaction(
     content: string,
-    categories: BackupCategories = { profiles: true, rules: true, settings: true },
+    categories: BackupCategories = { profiles: true, rules: true, settings: true, corporateVpn:true },
     mode: 'merge' | 'replace' = 'merge'
   ): Promise<BackupImportResult> {
     const parsed = this.parseRawContent(content);
 
-    return BackupTransaction.execute(
+    const db=Database.getInstance(),dir=db.getDataDir();
+    const withCompany=categories.corporateVpn===true&&!!parsed.corporateVpn?.length;
+    if(withCompany){db.flush();ImportJournal.begin(dir);}
+    try {
+    const result=BackupTransaction.execute(
       {
         nodes: parsed.nodes,
         subscriptions: parsed.subscriptions,
         rules: parsed.rules,
         appRules: parsed.appRules,
         settings: parsed.settings,
+        dns: parsed.dns,
       },
       categories,
       mode
     );
+    if(withCompany){result.importedCounts.corporateVpn=new ProfileRepository(dir).import(parsed.corporateVpn,mode);db.flush();ImportJournal.commit(dir);}
+    return result;
+    }catch(e){if(withCompany){ImportJournal.recover(dir);db.reloadFromDisk();}throw e;}
   }
 
   /**
    * Exports native Windows backup file content (.bluewingbackup).
    */
   public static async exportWindowsBackup(
-    categories: BackupCategories = { profiles: true, rules: true, settings: true }
+    categories: BackupCategories = { profiles: true, rules: true, settings: true, corporateVpn:true }
   ): Promise<string> {
     const db = Database.getInstance();
     return WindowsBackupCodec.encode(
@@ -86,7 +97,8 @@ export class BackupService {
       db.getAppRules(),
       db.getDns(),
       db.getSettings(),
-      categories
+      categories,
+      new ProfileRepository(db.getDataDir()).export()
     );
   }
 
@@ -122,7 +134,8 @@ export class BackupService {
       db.getAppRules(),
       db.getDns(),
       db.getSettings(),
-      { profiles: true, rules: true, settings: true }
+      { profiles: true, rules: true, settings: true, corporateVpn:true },
+      new ProfileRepository(db.getDataDir()).export()
     );
 
     fs.writeFileSync(tmpPath, content, 'utf8');
@@ -146,7 +159,7 @@ export class BackupService {
       throw new Error('未找到本地备份文件 (BlueWing_latest.bluewingbackup)');
     }
     const content = fs.readFileSync(targetPath, 'utf8');
-    return this.importWithTransaction(content, { profiles: true, rules: true, settings: true }, 'replace');
+    return this.importWithTransaction(content, { profiles: true, rules: true, settings: true, corporateVpn:true }, 'replace');
   }
 
   /**
@@ -201,6 +214,8 @@ export class BackupService {
         rules: decoded.routing?.rules || [],
         appRules: decoded.routing?.appRules || [],
         settings: decoded.settings || {},
+        dns: decoded.dns,
+        corporateVpn: decoded.corporateVpn?.map(p=>({...validateProfile(p),rememberPassword:false,rememberSession:false})),
       };
     }
 

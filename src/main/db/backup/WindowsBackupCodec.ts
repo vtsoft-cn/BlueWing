@@ -1,8 +1,8 @@
 /**
  * WindowsBackupCodec.ts
  * Codec for BlueWing Connect Windows native backup format (.bluewingbackup).
- * Schema version 2 with backward-compatibility for schema version 1.
- * Supports partial category export/import (profiles, rules, settings).
+ * Schema version 3 with backward-compatibility for schema versions 1 and 2.
+ * Supports partial category export/import, including non-secret corporate profiles.
  */
 
 import {
@@ -15,9 +15,10 @@ import {
   AppSettings,
   BackupCategories,
 } from '../../../types';
+import { VpnProfile } from '../../../types/corporateVpn';
 
 export class WindowsBackupCodec {
-  public static readonly CURRENT_SCHEMA_VERSION = 2;
+  public static readonly CURRENT_SCHEMA_VERSION = 3;
 
   public static encode(
     nodes: ProxyNode[],
@@ -26,13 +27,15 @@ export class WindowsBackupCodec {
     appRules: AppRule[],
     dns: DnsConfig,
     settings: AppSettings,
-    categories: BackupCategories = { profiles: true, rules: true, settings: true }
+    categories: BackupCategories = { profiles: true, rules: true, settings: true },
+    corporateVpn?: VpnProfile[]
   ): string {
     const backup: Partial<BackupData> = {
       schema_version: this.CURRENT_SCHEMA_VERSION,
       app_version: '1.0.3',
       timestamp: Date.now(),
     };
+    if(categories.corporateVpn&&corporateVpn)backup.corporateVpn=corporateVpn;
 
     if (categories.profiles) {
       backup.nodes = nodes;

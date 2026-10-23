@@ -1,3 +1,4 @@
+import type { VpnProfile } from './corporateVpn';
 export type ProxyType =
   | 'vless'
   | 'vmess'
@@ -241,6 +242,7 @@ export interface SpeedTestResult {
 }
 
 export interface BackupData {
+  corporateVpn?: VpnProfile[];
   schema_version: number;
   app_version: string;
   timestamp: number;
@@ -268,13 +270,14 @@ export interface InstalledAppInfo {
 }
 
 export interface BackupCategories {
+  corporateVpn?: boolean; // Company configuration only; never credentials or sessions
   profiles: boolean; // 分组和配置 (groups + nodes)
   rules: boolean;    // 路由规则 (rules + appRules)
   settings: boolean; // 设置 (settings + dns + webdav)
 }
 
 export interface BackupPreviewItem {
-  type: 'group' | 'node' | 'rule' | 'appRule' | 'setting';
+  type: 'group' | 'node' | 'rule' | 'appRule' | 'setting' | 'corporateVpn';
   name: string;
   action: 'add' | 'update' | 'skip';
   detail?: string;
@@ -285,6 +288,7 @@ export interface BackupPreviewResult {
   format: 'bluewing_windows' | 'bluewing_android' | 'singbox_config' | 'unknown';
   categories: BackupCategories;
   counts: {
+    corporateVpn?: { total:number; add:number; update:number; skip:number };
     groups: { total: number; add: number; update: number; skip: number };
     nodes: { total: number; add: number; update: number; skip: number };
     rules: { total: number; add: number; update: number; skip: number };
@@ -302,6 +306,7 @@ export interface BackupImportResult {
   message: string;
   snapshotPath?: string;
   importedCounts: {
+    corporateVpn?: number;
     groups: number;
     nodes: number;
     rules: number;

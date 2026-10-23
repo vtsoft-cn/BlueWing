@@ -4,11 +4,13 @@ import fs from 'fs';
 import { LogManager } from '../log/LogManager';
 import { Database } from '../db/Database';
 import { AppSettings } from '../../types';
+import { WinInetConnection, WinInetProxy } from './WinInetProxy';
 
 export interface ProxySnapshot {
   enabled: boolean;
   server?: string;
   override?: string;
+  connections?: WinInetConnection[];
 }
 
 interface OwnershipState {
@@ -21,6 +23,9 @@ interface OwnershipState {
 export class SystemProxy {
   private static REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
   private static stateFile: string = '';
+  private static corporateRouting = false;
+  public static setCorporateRouting(enabled:boolean):void { this.corporateRouting=enabled; }
+  public static corporateBypassList():string { return 'localhost;127.*;[::1]'; }
 
   /**
    * 连接意图保护判定:仅当"用户显式发起连接"且系统代理与 TUN 全关时才自动补开
@@ -141,6 +146,17 @@ export class SystemProxy {
         }
       }
 
+      // Company domains, including single-label hosts and private IPs, must enter sing-box.
+      // Non-company LAN still uses its DIRECT rules there.
+      if (this.corporateRouting) bypassList = this.corporateBypassList();
+
+      if (WinInetProxy.available()) {
+        await WinInetProxy.run({action:'enable',server:proxyServer,bypass:bypassList});
+        this.saveOwnership({managedByBlueWing:true,managedServer:proxyServer,originalSnapshot:original,updatedAt:Date.now()});
+        LogManager.getInstance().addLog('info',`Windows 连接级系统代理已同步并回读验证 (${proxyServer})`,'system');
+        return true;
+      }
+
       // Safe parameterized registry updates (No shell injection possible)
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f']);
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyServer, '/f']);
@@ -173,6 +189,12 @@ export class SystemProxy {
    */
   public static async disable(): Promise<boolean> {
     try {
+      if (WinInetProxy.available()) {
+        const ownership=this.loadOwnership();
+        if(ownership?.managedServer)await WinInetProxy.run({action:'disable',managedServer:ownership.managedServer});
+        if(ownership){ownership.managedByBlueWing=false;this.saveOwnership(ownership);}
+        return true;
+      }
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '0', '/f']);
 
       // 清除死回环地址:仅当 ProxyServer 是本应用写入的受管服务器时删除,
@@ -224,6 +246,11 @@ export class SystemProxy {
 
       // 2. Restore original snapshot
       const orig = state.originalSnapshot;
+      if (orig?.connections && WinInetProxy.available()) {
+        await WinInetProxy.run({action:'restore',managedServer:state.managedServer,connections:orig.connections});
+        this.saveOwnership(null);
+        return;
+      }
       if (orig && orig.enabled) {
         await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f']);
         if (orig.server) {
@@ -273,6 +300,12 @@ export class SystemProxy {
   }
 
   private static async getFullRegistryStatus(): Promise<ProxySnapshot> {
+    if (WinInetProxy.available()) {
+      const connections=await WinInetProxy.run({action:'query'});
+      const lan=connections.find(c=>c.name==='');
+      if(!lan)throw new Error('WinINet LAN configuration missing');
+      return {enabled:(lan.flags&2)!==0,server:lan.server,override:lan.bypass,connections};
+    }
     let enabled = false;
     let server: string | undefined;
     let override: string | undefined;
@@ -313,13 +346,13 @@ public class WinINet {
 [WinINet]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0);
 `;
       try {
-        const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', notifyScript.replace(/\r?\n/g, ' ')], {
+        const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', Buffer.from(notifyScript,'utf16le').toString('base64')], {
           windowsHide: true,
         });
         const timer = setTimeout(() => {
           proc.kill();
           resolve();
-        }, 1200);
+        }, 10000);
         proc.on('close', () => {
           clearTimeout(timer);
           resolve();

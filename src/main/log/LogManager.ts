@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { BrowserWindow, dialog } from 'electron';
+import type { BrowserWindow } from 'electron';
 import { LogEntry } from '../../types';
 import { Database } from '../db/Database';
 
@@ -293,6 +293,7 @@ export class LogManager {
         ],
       };
 
+      const { dialog } = require('electron') as typeof import('electron');
       const result = this.mainWindow
         ? await dialog.showSaveDialog(this.mainWindow, options)
         : await dialog.showSaveDialog(options);

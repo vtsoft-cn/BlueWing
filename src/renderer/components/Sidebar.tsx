@@ -11,6 +11,7 @@ import {
   CloudUpload,
   Settings,
   Info,
+  Network,
 } from 'lucide-react';
 import logoDark from '../../images/png/app-dark.png';
 import logoLight from '../../images/png/app-light.png';
@@ -18,6 +19,7 @@ import logoLight from '../../images/png/app-light.png';
 export type NavTab =
   | 'dashboard'
   | 'nodes'
+  | 'vpn-access'
   | 'subscriptions'
   | 'routing'
   | 'app-routing'
@@ -39,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, theme
   const navItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: '首页', icon: <Home className="w-4 h-4" /> },
     { id: 'nodes', label: '节点', icon: <Server className="w-4 h-4" /> },
+    { id: 'vpn-access', label: 'VPN 接入', icon: <Network className="w-4 h-4" /> },
     { id: 'subscriptions', label: '订阅', icon: <Rss className="w-4 h-4" /> },
     { id: 'routing', label: '路由', icon: <GitFork className="w-4 h-4" /> },
     { id: 'app-routing', label: '应用分流', icon: <LayoutGrid className="w-4 h-4" /> },

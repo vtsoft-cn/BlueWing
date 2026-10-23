@@ -36,3 +36,12 @@
    - 官方主页: https://vitejs.dev
    - 许可证: MIT License
    - 用途: 极速现代前端构建打包工具
+
+8. **zju-connect（BlueWing 维护分支）**
+   - 上游主页: https://github.com/Mythologyli/zju-connect
+   - 基线: v1.3.1，提交 `5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da`
+   - 许可证: GNU Affero General Public License v3.0 (AGPL-3.0)
+   - 用途: EasyConnect 与 aTrust 用户态协议核心；没有集成 EZ4Connect 的界面源码。
+   - 保留上游版权与许可；修改说明见 `native/vpn/BLUEWING-FORK.md`，完整维护源码见 `native/vpn/`。
+   - 构建附带 `bin/VPN-CORE-LICENSE-AGPL-3.0.txt`、`bin/vpn-core-sources.zip` 和含来源与校验值的 `bin/vpn-core-manifest.json`。
+   - 以上材料不代表已完成集成产品的整体许可证决策；公开发布前须完成该决策。

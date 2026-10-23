@@ -8,6 +8,9 @@ release*/
 # ---------- 临时文件 ----------
 temp/
 work/easyconnect-diagnostics/
+work/corporate-vpn-tools/
+native/vpn/.cache/
+native/vpn/bluewing-vpn-core.exe
 
 # ---------- 日志 ----------
 *.log

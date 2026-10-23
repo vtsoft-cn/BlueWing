@@ -4,6 +4,7 @@ import fs from 'fs';
 import { app } from 'electron';
 import { Database } from '../db/Database';
 import { LogManager } from '../log/LogManager';
+import { dataDirArgument } from './LaunchDataDir';
 
 const TASK_NAME = 'BlueWingElevateRelaunch';
 
@@ -26,6 +27,7 @@ export class ElevatedRelaunch {
    */
   public static relaunch(): void {
     const execPath = process.execPath.replace(/'/g, "''");
+    const dataArgument = dataDirArgument(Database.getInstance().getDataDir());
     const logsDir = path.join(Database.getInstance().getDataDir(), 'logs');
     const elevateLog = path.join(logsDir, 'elevate-relaunch.log').replace(/'/g, "''");
     const scriptPath = path.join(logsDir, 'elevate-relaunch.ps1');
@@ -37,11 +39,11 @@ export class ElevatedRelaunch {
       `try { Add-Content -Path '${elevateLog}' -Value ("[{0}] relaunch begin, oldPid=${process.pid}" -f (Get-Date -Format o)) } catch {}`,
       `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue`,
       'Start-Sleep -Milliseconds 800',
-      `try { Start-Process -FilePath '${execPath}' -Verb RunAs -ErrorAction Stop; try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas-ok (部分机器 UAC 策略为静默提升,无弹窗属正常)" -f (Get-Date -Format o)) } catch {} }`,
+      `try { Start-Process -FilePath '${execPath}' -ArgumentList '${dataArgument}' -Verb RunAs -ErrorAction Stop; try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas-ok (部分机器 UAC 策略为静默提升,无弹窗属正常)" -f (Get-Date -Format o)) } catch {} }`,
       'catch {',
       `  try { Add-Content -Path '${elevateLog}' -Value ("[{0}] runas failed: {1}" -f (Get-Date -Format o), $_.Exception.Message) } catch {}`,
       '  Start-Sleep -Seconds 1',
-      `  try { Start-Process -FilePath '${execPath}' } catch {}`,
+      `  try { Start-Process -FilePath '${execPath}' -ArgumentList '${dataArgument}' } catch {}`,
       '}',
       `try { Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction Stop } catch { try { schtasks /delete /tn ${TASK_NAME} /f | Out-Null } catch {} }`,
     ].join('\n');

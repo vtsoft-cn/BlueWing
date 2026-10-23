@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "name": "bluewing-vpn-core",
+  "controlProtocol": 1,
+  "upstream": {
+    "repository": "https://github.com/Mythologyli/zju-connect",
+    "tag": "v1.3.1",
+    "commit": "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da"
+  },
+  "toolchain": "go version go1.25.6 windows/amd64",
+  "sourceSha256": "bfebe9d3cd2f7f91cd92ec96d25863e986e9db24db8a7b2a350537fc3dc3e063",
+  "sha256": "03448606583e1dda416a95f3a307be06e6660bbd98244d03ed39150ac9c8cd82",
+  "sourceArchiveSha256": "861f34eec9d97fd4c448a2ed423752ef07744d18d4c07bbe75ecc1be8186963e",
+  "protocols": [
+    "easyconnect",
+    "atrust"
+  ],
+  "supportedAuth": {
+    "easyconnect": [
+      "password",
+      "otp",
+      "image",
+      "sms"
+    ],
+    "atrust": [
+      "auth/psw",
+      "auth/smsCheckCode",
+      "otp",
+      "image"
+    ]
+  },
+  "udp": false,
+  "verification": {
+    "easyconnect": "NOT_RUN_REAL_GATEWAY",
+    "atrust": "NOT_RUN_REAL_GATEWAY",
+    "tun": "NOT_RUN_REAL_WINDOWS"
+  },
+  "license": "AGPL-3.0",
+  "releaseLicenseDecision": "PENDING"
+}

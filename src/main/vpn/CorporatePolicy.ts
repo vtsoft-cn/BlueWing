@@ -1,0 +1,191 @@
+import fs from 'fs';
+import path from 'path';
+import { createHash, randomBytes } from 'crypto';
+import {
+  VpnProfile,
+  VpnResources,
+  VpnRuntime,
+  VpnRuntimeProfile,
+  VpnTarget,
+} from '../../types/corporateVpn';
+import { atomicJSON, validateResources, targets } from './ProfileRepository';
+
+export function sourceRules(
+  targets: VpnTarget[],
+  guard = false,
+): Record<string, unknown> {
+  const rules = targets
+    .filter((t) => guard || !t.guardOnly)
+    .map((t) => {
+      const r: Record<string, unknown> = {};
+      if (t.domains.length) r.domain_suffix = t.domains;
+      if (t.cidrs.length) r.ip_cidr = t.cidrs;
+      if (!guard) {
+        if (t.network) r.network = [t.network];
+        if (t.ports?.length) {
+          const single = t.ports.filter((p) => !p.includes(':')).map(Number),
+            range = t.ports.filter((p) => p.includes(':'));
+          if (single.length) r.port = single;
+          if (range.length) r.port_range = range;
+        }
+      }
+      return r;
+    });
+  return { version: 3, rules };
+}
+export class CorporatePolicy {
+  private credentials = new Map<string, { user: string; password: string }>();
+  private resources = new Map<string, VpnResources>();
+  private protectedTargets = new Map<string, VpnTarget[]>();
+  private probes = new Map<string, string>();
+  private activeId?: string;
+  private current: VpnRuntime = {
+    profiles: [],
+    coreProcessName: 'bluewing-vpn-core.exe',
+  };
+  constructor(readonly dir: string) {
+    const known = path.join(dir, 'vpn-runtime', 'known-targets.json');
+    if (fs.existsSync(known)) {
+      for (const [id, value] of Object.entries(
+        JSON.parse(fs.readFileSync(known, 'utf8')),
+      ))
+        if (/^[a-zA-Z0-9-]{1,64}$/.test(id))
+          this.protectedTargets.set(id, targets(value));
+    }
+    const file = path.join(dir, 'vpn-runtime', 'resources.json');
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      for (const [id, value] of Object.entries(data))
+        if (/^[a-zA-Z0-9-]{1,64}$/.test(id))
+          this.resources.set(id, validateResources(value));
+    }
+  }
+  runtime(): VpnRuntime {
+    return structuredClone(this.current);
+  }
+  getResources(id: string): VpnResources | undefined {
+    return structuredClone(this.resources.get(id));
+  }
+  setProbe(id: string, nonce: string, profiles: VpnProfile[]): void {
+    this.activeId = id;
+    this.probes.set(id, nonce);
+    this.prepare(profiles);
+  }
+  deactivate(profiles: VpnProfile[]): void {
+    this.activeId = undefined;
+    this.prepare(profiles);
+  }
+  update(id: string, input: unknown, profiles: VpnProfile[]): string {
+    const value = validateResources(input);
+    const old = this.resources.get(id);
+    this.resources.set(id, value);
+    try {
+      this.prepare(profiles);
+      atomicJSON(
+        path.join(this.dir, 'vpn-runtime', 'resources.json'),
+        Object.fromEntries(this.resources),
+      );
+    } catch (e) {
+      if (old) this.resources.set(id, old);
+      else this.resources.delete(id);
+      throw e;
+    }
+    return createHash('sha256')
+      .update(JSON.stringify(value))
+      .digest('hex')
+      .slice(0, 16);
+  }
+  prepare(profiles: VpnProfile[]): VpnRuntime {
+    const next: VpnRuntimeProfile[] = [];
+    for (const profile of profiles) {
+      let credentials = this.credentials.get(profile.id);
+      if (!credentials) {
+        credentials = {
+          user: randomBytes(16).toString('hex'),
+          password: randomBytes(32).toString('hex'),
+        };
+        this.credentials.set(profile.id, credentials);
+      }
+      const res = this.resources.get(profile.id);
+      const hostTargets = Object.entries({
+        ...res?.hosts,
+        ...profile.hosts,
+      }).map(([d, ips]) => ({
+        domains: [d],
+        cidrs: ips.map((ip) => `${ip}/${ip.includes(':') ? 128 : 32}`),
+      }));
+      const current = [
+        ...profile.targets,
+        ...(res?.targets ?? []),
+        ...hostTargets,
+      ];
+      const before = this.protectedTargets.get(profile.id) || [];
+      // Keep revoked/previous destinations protected for the whole process lifetime.
+      const all = [
+        ...new Map(
+          [...before, ...current].map((t) => [
+            JSON.stringify({ domains: t.domains, cidrs: t.cidrs }),
+            { domains: t.domains, cidrs: t.cidrs },
+          ]),
+        ).values(),
+      ];
+      if (all.length > 4096)
+        throw new Error('公司目标保护集合超过上限，请先审查资源配置');
+      this.protectedTargets.set(profile.id, all);
+      const folder = path.join(this.dir, 'vpn-runtime', profile.id);
+      const routePath = path.join(folder, 'route.json'),
+        guardPath = path.join(folder, 'guard.json'),
+        dnsPath = path.join(folder, 'dns.json');
+      this.publish(guardPath, sourceRules(all, true));
+      this.publish(
+        dnsPath,
+        sourceRules(
+          all
+            .filter((t) => t.domains.length)
+            .map((t) => ({ domains: t.domains, cidrs: [] })),
+          true,
+        ),
+      );
+      const nonce = this.probes.get(profile.id);
+      this.publish(
+        routePath,
+        sourceRules(
+          this.activeId === profile.id
+            ? [
+                ...current,
+                ...(nonce
+                  ? [
+                      {
+                        domains: [`${nonce}.${profile.id}.bluewing.invalid`],
+                        cidrs: [],
+                        ports: ['1'],
+                      },
+                    ]
+                  : []),
+              ]
+            : [],
+        ),
+      );
+      next.push({
+        profile,
+        socksUser: credentials.user,
+        socksPassword: credentials.password,
+        routePath,
+        guardPath,
+        dnsPath,
+      });
+    }
+    atomicJSON(
+      path.join(this.dir, 'vpn-runtime', 'known-targets.json'),
+      Object.fromEntries(this.protectedTargets),
+    );
+    this.current = { profiles: next, coreProcessName: 'bluewing-vpn-core.exe' };
+    return this.runtime();
+  }
+  private publish(file: string, value: Record<string, unknown>): void {
+    // Generate only validated source schemas; never edit the watched destination in place.
+    const data = JSON.stringify(value, null, 2);
+    if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === data) return;
+    atomicJSON(file, value);
+  }
+}

@@ -1,7 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings, LogEntry, LatencyResult } from '../types';
+import { CorporateVpnAPI, VpnProfile, VpnState } from '../types/corporateVpn';
 
 export const api = {
+  corporateVpn: {
+    snapshot: () => ipcRenderer.invoke('vpn:snapshot'),
+    save: (profile: VpnProfile) => ipcRenderer.invoke('vpn:save', profile),
+    remove: (id: string) => ipcRenderer.invoke('vpn:remove', id),
+    connect: (id: string, password: string) => ipcRenderer.invoke('vpn:connect', id, password),
+    disconnect: () => ipcRenderer.invoke('vpn:disconnect'),
+    discover: (id: string) => ipcRenderer.invoke('vpn:discover', id),
+    certificate: (id: string) => ipcRenderer.invoke('vpn:certificate', id),
+    respond: (id: string, generation: number, value: string) => ipcRenderer.invoke('vpn:respond', id, generation, value),
+    clearCredentials: (id: string) => ipcRenderer.invoke('vpn:clearCredentials', id),
+    apply: () => ipcRenderer.invoke('vpn:apply'),
+    onState: (callback: (state: VpnState) => void) => {
+      const handler = (_: unknown, state: VpnState) => callback(state);
+      ipcRenderer.on('vpn:state', handler);
+      return () => ipcRenderer.removeListener('vpn:state', handler);
+    },
+  } satisfies CorporateVpnAPI,
   // Window controls
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

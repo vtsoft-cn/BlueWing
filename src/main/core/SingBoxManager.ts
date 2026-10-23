@@ -24,6 +24,8 @@ export class SingBoxManager extends EventEmitter {
 
   // Lifecycle concurrency mutex
   private mutex: Promise<void> = Promise.resolve();
+  private configEnricher?: (config:Record<string,any>)=>Promise<void>;
+  public setConfigEnricher(enricher:(config:Record<string,any>)=>Promise<void>):void {this.configEnricher=enricher;}
 
   private log(level: 'info' | 'warn' | 'error' | 'debug', message: string, source: 'core' | 'app' | 'system' | 'net' = 'core') {
     LogManager.getInstance().addLog(level, message, source);
@@ -100,7 +102,10 @@ export class SingBoxManager extends EventEmitter {
   public getLiveConfig(): string {
     try {
       if (fs.existsSync(this.configPath)) {
-        return fs.readFileSync(this.configPath, 'utf8');
+        const value=JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+        const redact=(item:any):void=>{if(!item||typeof item!=='object')return;for(const key of Object.keys(item)){if(/^(password|private_key|pre_shared_key|secret|uuid|username)$/i.test(key))item[key]='[REDACTED]';else redact(item[key]);}};
+        redact(value);
+        return JSON.stringify(value,null,2);
       }
     } catch {}
     return '{}';
@@ -272,6 +277,7 @@ export class SingBoxManager extends EventEmitter {
 
       try {
         // Safety Check: If TUN mode is in config but not elevated, gracefully remove it to prevent fatal crash
+        await this.configEnricher?.(config);
         const admin = this.isAdmin();
         this.tunStrippedLastStart = false;
         this.tunFatalSeen = false;
@@ -378,6 +384,7 @@ export class SingBoxManager extends EventEmitter {
         const isReady = await this.waitForReady(mixedPort, clashPort, tunName ? 18_000 : 5000, tunName);
         if (isReady && this.process && !this.process.killed) {
           this.setState('running');
+          this.emit('configured',config);
           this.log('info', `青翼连接 核心引擎启动成功 (PID: ${this.process.pid}, 监听端口: ${mixedPort})`, 'core');
           // cache_file 会跨重启恢复上次持久化的选择器状态,静默覆盖配置中的 selector default,
           // 曾导致"界面已切换节点、核心仍走旧节点"(旧节点不可用时表现为全网络极慢);

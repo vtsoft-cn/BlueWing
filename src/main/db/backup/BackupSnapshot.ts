@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import { Database } from '../Database';
 import { WindowsBackupCodec } from './WindowsBackupCodec';
+import { ProfileRepository } from '../../vpn/ProfileRepository';
 
 export class BackupSnapshot {
   private static getSnapshotDir(): string {
@@ -34,7 +35,8 @@ export class BackupSnapshot {
       db.getAppRules(),
       db.getDns(),
       db.getSettings(),
-      { profiles: true, rules: true, settings: true }
+      { profiles: true, rules: true, settings: true, corporateVpn:true },
+      new ProfileRepository(db.getDataDir()).export()
     );
 
     fs.writeFileSync(snapshotPath, backupJson, 'utf8');

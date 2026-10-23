@@ -3,7 +3,6 @@ import https from 'https';
 import tls from 'tls';
 import net from 'net';
 import { URL } from 'url';
-import { app } from 'electron';
 import { TcpPing } from './TcpPing';
 import { LatencyResult } from '../../types';
 
@@ -24,7 +23,7 @@ export class SpeedTestRunner {
   private static userAgent(suffix = ''): string {
     let ver = '0.0.0';
     try {
-      ver = app.getVersion();
+      if(process.versions.electron)ver = (require('electron') as typeof import('electron')).app.getVersion();
     } catch {}
     return `BlueWingConnect/${ver}${suffix}`;
   }

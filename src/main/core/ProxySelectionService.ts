@@ -1,10 +1,10 @@
 import http from 'http';
 import { Database } from '../db/Database';
 import { SingBoxManager } from './SingBoxManager';
-import { TrayManager } from '../tray/TrayManager';
 import { LogManager } from '../log/LogManager';
 
 export class ProxySelectionService {
+  private static updateTray():void {if(process.versions.electron){const {TrayManager}=require('../tray/TrayManager') as typeof import('../tray/TrayManager');TrayManager.getInstance().updateMenu();}}
   /**
    * Gets currently active node ID from database state
    */
@@ -29,7 +29,7 @@ export class ProxySelectionService {
 
     const core = SingBoxManager.getInstance();
     if (core.getState() !== 'running') {
-      TrayManager.getInstance().updateMenu();
+      this.updateTray();
       return { success: true, hotSwitched: false };
     }
 
@@ -46,7 +46,7 @@ export class ProxySelectionService {
         `已热切换活跃节点 -> ${target.name} (${target.type.toUpperCase()}) [零断流热重载]`,
         'core'
       );
-      TrayManager.getInstance().updateMenu();
+      this.updateTray();
       return { success: true, hotSwitched: true };
     }
 
@@ -69,7 +69,7 @@ export class ProxySelectionService {
         settings
       );
       const restarted = await core.start(config);
-      TrayManager.getInstance().updateMenu();
+      this.updateTray();
       return { success: restarted, hotSwitched: false };
     } catch (e: any) {
       LogManager.getInstance().addLog('error', `切换节点失败: ${e.message}`, 'core');

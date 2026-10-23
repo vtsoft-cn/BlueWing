@@ -10,6 +10,7 @@ export class CredentialSecurity {
   private static getSafeStorage(): any {
     if (!this.initialized) {
       this.initialized = true;
+      if (!process.versions.electron) return null;
       try {
         // Dynamic require so it doesn't fail when running in pure Node.js test environment
         const electron = require('electron');

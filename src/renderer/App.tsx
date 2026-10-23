@@ -14,6 +14,7 @@ import { Logs } from './pages/Logs';
 import { Backup } from './pages/Backup';
 import { Settings } from './pages/Settings';
 import { About } from './pages/About';
+import { VpnAccess, VpnAccessStatus } from './pages/VpnAccess';
 import {
   ProxyNode,
   Subscription,
@@ -335,6 +336,7 @@ export const App: React.FC = () => {
             activeNodeName={activeNode?.name}
             latency={activeNode?.ping}
           />
+          <VpnAccessStatus showSummary={currentTab !== 'vpn-access'} onOpen={() => setCurrentTab('vpn-access')} />
 
           {/* Main Content Area(key 随页签变化,触发入场动画;no-drag 保证滚动条可交互) */}
           <main className="flex-1 overflow-y-auto p-6 no-drag">
@@ -387,6 +389,7 @@ export const App: React.FC = () => {
             )}
 
             {currentTab === 'dns' && <DNS dns={dns} onSaveDns={handleSaveDns} />}
+            {currentTab === 'vpn-access' && <VpnAccess />}
 
             {currentTab === 'speedtest' && (
               <SpeedTest

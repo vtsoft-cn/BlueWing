@@ -41,6 +41,7 @@ export const Backup: React.FC<BackupProps> = ({
     profiles: true,
     rules: true,
     settings: true,
+    corporateVpn: true,
   });
 
   // Category selection for Import Preview
@@ -48,6 +49,7 @@ export const Backup: React.FC<BackupProps> = ({
     profiles: true,
     rules: true,
     settings: true,
+    corporateVpn: true,
   });
 
   // Local latest overwrite backup info
@@ -394,13 +396,14 @@ export const Backup: React.FC<BackupProps> = ({
               <span>跨端备份、迁移与同步中心</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              打通 Android 手机端与 Windows 桌面端备份体系，支持三项分类独立选择与安全合并
+              支持分类选择与安全合并；VPN 接入 配置仅包含在 Windows 备份中，不包含密码或会话。
             </p>
           </div>
 
           {/* Export Category Toggles */}
           <div className="flex flex-row flex-wrap items-center gap-x-3 gap-y-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 self-start lg:self-center">
             <span className="text-slate-400 font-medium text-[11px]">导出分类:</span>
+            <label className="flex items-center space-x-1 cursor-pointer"><input type="checkbox" checked={!!exportCategories.corporateVpn} onChange={e=>setExportCategories({...exportCategories,corporateVpn:e.target.checked})} className="rounded text-blue-600 w-3.5 h-3.5"/><span>VPN 接入</span></label>
             <label className="flex items-center space-x-1 cursor-pointer">
               <input
                 type="checkbox"
@@ -829,6 +832,7 @@ export const Backup: React.FC<BackupProps> = ({
                   导入分类选择:
                 </span>
                 <div className="flex items-center space-x-4">
+                  <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!importCategories.corporateVpn} onChange={e=>setImportCategories({...importCategories,corporateVpn:e.target.checked})}/><span>VPN 接入 ({previewResult.counts.corporateVpn?.total||0})</span></label>
                   <label className="flex items-center space-x-1.5 cursor-pointer">
                     <input
                       type="checkbox"

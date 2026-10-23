@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, screen, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
@@ -6,6 +6,7 @@ import dns from 'dns';
 import { spawn } from 'child_process';
 import { Database } from './db/Database';
 import { resolveDataDir } from './system/DataDirResolver';
+import { launchDataDir } from './system/LaunchDataDir';
 import { isRunningAsAdmin } from './system/Elevation';
 import { resourcePath } from './branding';
 import { SingBoxManager } from './core/SingBoxManager';
@@ -27,12 +28,15 @@ import { UniversalSubscriptionParser } from './net/UniversalSubscriptionParser';
 import { TrayManager } from './tray/TrayManager';
 import { TrafficStats, Subscription } from '../types';
 import { LogManager } from './log/LogManager';
+import { existingCorporateVpn, getCorporateVpn } from './vpn/VpnService';
+import { applyCorporateConfig } from './vpn/CorporateConfig';
 
 let mainWindow: BrowserWindow | null = null;
 let trafficTimer: NodeJS.Timeout | null = null;
 let startTime: number = 0;
 let totalRx: number = 0;
 let totalTx: number = 0;
+let corporateEventsBound = false;
 
 // 数据目录:便携优先(exe 同级 data/),不可写回退 %APPDATA%;含前向迁移与搁浅迁移规则
 // (详见 system/DataDirResolver.ts)。必须在 app ready 之前设置:Chromium 配置
@@ -43,7 +47,8 @@ const fallbackDataDir = path.join(
   process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Roaming'),
   'BlueWingConnect'
 );
-const { dir: appDataDir } = resolveDataDir(portableDataDir, fallbackDataDir, undefined, isRunningAsAdmin());
+const explicitDataDir=launchDataDir(process.argv,process.env.BLUEWING_DATA_DIR);
+const appDataDir=explicitDataDir?path.resolve(explicitDataDir):resolveDataDir(portableDataDir, fallbackDataDir, undefined, isRunningAsAdmin()).dir;
 process.env.BLUEWING_DATA_DIR = appDataDir;
 
 // 启动黑匣子:早于一切子系统(LogManager 尚未就绪)用裸 fs 记面包屑,
@@ -190,6 +195,10 @@ function createWindow(): void {
   });
 
   LogManager.getInstance().setMainWindow(mainWindow);
+  if (!corporateEventsBound) {
+    corporateEventsBound = true;
+    getCorporateVpn().on('state', (state) => mainWindow?.webContents.send('vpn:state', state));
+  }
 
   // 页头拖动兜底:窗口失焦(如 Alt+Tab)或关闭时停止移动循环,避免失控
   mainWindow.on('blur', stopHeaderDrag);
@@ -277,6 +286,12 @@ app.whenReady().then(async () => {
 
   createWindow();
   bootLog('main window created');
+
+  // A suspended transport cannot retain a truthful connected state. Require a fresh
+  // company login after waking; the public proxy lifecycle remains independent.
+  powerMonitor.on('suspend', () => {
+    existingCorporateVpn()?.disconnect().catch(() => {});
+  });
 
   let lastSampleTime = 0;
   let lastDownloadTotal = 0;
@@ -382,6 +397,7 @@ app.on('before-quit', async (e) => {
     }
     try {
       Database.getInstance().flush();
+      await existingCorporateVpn()?.dispose();
       await handleCoreStop();
       await SystemProxy.restoreOriginal();
       await LogManager.getInstance().destroy();
@@ -506,9 +522,11 @@ function broadcastSettingsChanged(): void {
  */
 async function runBackupImport<T>(fn: () => Promise<T> | T): Promise<T> {
   const db = Database.getInstance();
-  const prevActiveId = db.getActiveNodeId();
+  const wasRunning=SingBoxManager.getInstance().getState()==='running';
+  await existingCorporateVpn()?.disconnect();
   const res = await fn();
   if (!res || (res as any).success !== false) {
+    existingCorporateVpn()?.reloadProfiles();
     TrayManager.getInstance().updateMenu();
     broadcastNodesChanged();
     mainWindow?.webContents.send('subs:changed', db.getSubscriptions());
@@ -516,13 +534,11 @@ async function runBackupImport<T>(fn: () => Promise<T> | T): Promise<T> {
     mainWindow?.webContents.send('rules:changed', db.getRules());
     mainWindow?.webContents.send('apprules:changed', db.getAppRules());
     mainWindow?.webContents.send('dns:changed', db.getDns());
-    syncActiveNodeAfterNodesReplaced(prevActiveId).catch((e: any) =>
-      LogManager.getInstance().addLog(
-        'error',
-        `备份导入后同步切换活跃节点失败: ${e?.message || e}`,
-        'app'
-      )
-    );
+    if(wasRunning){
+      const applied=await handleCoreStart({userInitiated:false});
+      if(res&&typeof res==='object')Object.assign(res,{runtimeApplied:applied});
+      if(!applied)LogManager.getInstance().addLog('warn','备份已保存，但运行配置未应用，请检查日志后重新连接','app');
+    }
   }
   return res;
 }
@@ -635,13 +651,17 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
     );
   }
 
+  const corporateRuntime = await getCorporateVpn().prepareRuntime(true);
+  SystemProxy.setCorporateRouting(corporateRuntime.profiles.length > 0);
   const config = ConfigGenerator.generate(
     activeNodeId,
     nodes,
     db.getRules(),
     db.getAppRules(),
     db.getDns(),
-    settings
+    settings,
+    undefined,
+    corporateRuntime
   );
 
   LogManager.getInstance().addLog('info', '正在启动 Sing-box 核心代理引擎...', 'app');
@@ -664,6 +684,7 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
     started = await core.start(config);
   }
   if (started) {
+    getCorporateVpn().publicCoreStarted(corporateRuntime);
     LogManager.getInstance().addLog('info', '代理核心引擎已就绪并接管网络流量', 'core');
     // TUN 早期崩溃自动重连的判定基准(见 stateChange 订阅);config 经权限剥除
     // 后就地变更,此处读到的是真实生效的入站
@@ -698,6 +719,25 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
 // -------------------------------------------------------------
 // IPC Handlers
 // -------------------------------------------------------------
+
+// Corporate VPN IPC is intentionally narrow and restricted to the top-level app frame.
+for (const [name, handler] of Object.entries({
+  snapshot: () => getCorporateVpn().snapshot(),
+  save: (profile: unknown) => getCorporateVpn().save(profile),
+  remove: (id: string) => getCorporateVpn().remove(id),
+  connect: (id: string, password: string) => getCorporateVpn().connect(id, password),
+  disconnect: () => getCorporateVpn().disconnect(),
+  discover: (id: string) => getCorporateVpn().discover(id),
+  certificate: (id: string) => getCorporateVpn().certificate(id),
+  respond: (id: string, generation: number, value: string) => getCorporateVpn().respond(id, generation, value),
+  clearCredentials: (id: string) => getCorporateVpn().clearCredentials(id),
+  apply: () => handleCoreStart({ userInitiated: true }),
+})) {
+  ipcMain.handle(`vpn:${name}`, (event, ...args: any[]) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('VPN IPC sender rejected');
+    return (handler as (...args:any[])=>unknown)(...args);
+  });
+}
 
 // Logs
 ipcMain.handle('log:getAll', () => LogManager.getInstance().getLogs());
@@ -826,13 +866,22 @@ ipcMain.handle('core:validateConfig', () => {
     db.getRules(),
     db.getAppRules(),
     db.getDns(),
-    db.getSettings()
+    db.getSettings(),
+    undefined,
+    getCorporateVpn().policy.runtime()
   );
   return SingBoxManager.getInstance().validate(config);
 });
 
 // Forward core state change
+SingBoxManager.getInstance().setConfigEnricher(async config=>{
+  const runtime=await getCorporateVpn().prepareRuntime(true);
+  SystemProxy.setCorporateRouting(runtime.profiles.length>0);
+  applyCorporateConfig(config,runtime);
+});
+SingBoxManager.getInstance().on('configured',()=>getCorporateVpn().publicCoreStarted(getCorporateVpn().policy.runtime()));
 SingBoxManager.getInstance().on('stateChange', (state) => {
+  if (['stopped','crashed','error'].includes(state)) existingCorporateVpn()?.publicCoreStopped();
   mainWindow?.webContents.send('core:stateChange', state);
   if (state === 'crashed') {
     // TUN 模式启动初期(30s 内)异常退出:多为网卡设备/路由的清理竞态,

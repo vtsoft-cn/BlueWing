@@ -2,6 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../../types';
 import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
+import { VpnRuntime } from '../../types/corporateVpn';
+import { applyCorporateConfig } from '../vpn/CorporateConfig';
 
 export class ConfigGenerator {
   /**
@@ -14,7 +16,8 @@ export class ConfigGenerator {
     appRules: AppRule[],
     dns: DnsConfig,
     settings: AppSettings,
-    forceDisableTun?: boolean
+    forceDisableTun?: boolean,
+    corporateRuntime?: VpnRuntime
   ): Record<string, any> {
     const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
 
@@ -451,6 +454,7 @@ export class ConfigGenerator {
       };
     }
 
+    applyCorporateConfig(rootConfig, corporateRuntime);
     return rootConfig;
   }
 
