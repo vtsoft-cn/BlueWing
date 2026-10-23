@@ -103,3 +103,36 @@ npm run dist
 - `release/win-unpacked/BlueWing Connect.exe`
 - `release/BlueWingConnect-Setup.exe`
 
+## Windows EasyConnect 共存诊断
+
+保留 Windows 版 EasyConnect 时，先区分连接后的路由、DNS 变化与客户端网络过滤。
+项目提供只读采集脚本，在断网期间也会继续将结果保存在本机：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\diagnose-easyconnect.ps1 -DurationSeconds 180
+```
+
+使用平时登录桌面的 Windows 账户运行。开始采集后连接 EasyConnect，故障出现后保持
+10～15 秒，再断开 EasyConnect。结果保存在 `work/easyconnect-diagnostics/`，已从 Git 排除。
+脚本不修改路由、DNS、系统代理、驱动、服务或防火墙。
+
+采集包含路由、网卡、DNS、系统代理、相关进程及 TCP 连通性，并对比普通连接与指定物理网卡
+出口的连接。物理网卡测试成功而普通连接失败，可以进一步验证指定代理出口的修复；两者都失败
+时，需要结合路由、DNS 与过滤证据继续判断，不能仅凭超时认定专线模式，也不能把新增 `DIRECT`
+规则视为已解除限制。
+
+可用 `-IntranetHost 内网域名或IP -IntranetPort 443` 同时探测一个公司资源；
+`-DurationSeconds 0` 只采集一次当前状态。
+
+需要继续定位 Windows 过滤规则时，可以运行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\inspect-easyconnect-filters.ps1 -WatchSeconds 600
+```
+
+此脚本需要有权导出 WFP 状态的 Windows 账户。开始时保持 EasyConnect 断开，提示等待后
+连接并保持故障约 30 秒，再断开。脚本自动保存连接前、连接中与断开后的过滤规则、规则差异
+及公网／物理网关 TCP 探测结果；除了按 GUID 对比，也按规则内容对比，避免 Windows
+防火墙重建规则导致大量无关差异。`-WatchSeconds 0` 仅保存当前状态。
+它不会增加、删除或修改任何过滤规则。采集文件包含网络及应用路径信息，分享前请检查。
+
