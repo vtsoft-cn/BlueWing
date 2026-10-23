@@ -21,6 +21,7 @@ import {Plus,
 import { ProxyNode, Subscription } from '../../types';
 import { NodeEditorModal } from './NodeEditorModal';
 import { SingleNodeSpeedModal } from './SingleNodeSpeedModal';
+import { vlessShareLink } from '../../utils/vlessShareLink';
 
 interface NodesProps {
   nodes: ProxyNode[];
@@ -281,12 +282,7 @@ export const Nodes: React.FC<NodesProps> = ({
     const nameEnc = encodeURIComponent(node.name);
 
     if (node.type === 'vless') {
-      const sec = node.reality ? 'reality' : node.tls ? 'tls' : 'none';
-      const fp = node.fingerprint || 'chrome';
-      const pbk = node.publicKey ? `&pbk=${node.publicKey}` : '';
-      const sid = node.shortId ? `&sid=${node.shortId}` : '';
-      const sni = node.sni ? `&sni=${node.sni}` : '';
-      url = `vless://${node.uuid}@${node.server}:${node.port}?security=${sec}&fp=${fp}${pbk}${sid}${sni}#${nameEnc}`;
+      url = vlessShareLink(node);
     } else if (node.type === 'vmess') {
       const vmessObj = {
         v: '2',

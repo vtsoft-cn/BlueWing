@@ -13,6 +13,7 @@ import { TakeoverLinkage } from '../main/system/TakeoverLinkage';
 import { TunAdapter } from '../main/system/TunAdapter';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
 import { isValidIpLiteral, isValidDomain } from '../utils/ip';
+import { vlessShareLink } from '../utils/vlessShareLink';
 
 const execFileAsync = promisify(execFile);
 
@@ -54,6 +55,46 @@ const defaultDns: DnsConfig = {
 };
 
 describe('UniversalSubscriptionParser', () => {
+  test('Copy → delete → import preserves Reality Vision and transport/TLS settings in the effective outbound', () => {
+    const nativeOutbound = (node: ProxyNode) => {
+      const config = ConfigGenerator.generate(node.id, [node], [], [], defaultDns, defaultSettings);
+      const outbound = { ...config.outbounds.find((o: any) => o.tag === `node-${node.id}`) };
+      delete outbound.tag;
+      return outbound;
+    };
+    for (const transport of ['tcp', 'ws', 'grpc', 'http', 'xhttp'] as const) {
+      const node: ProxyNode = {
+        id: 'original', name: '测试节点 & # / 中文', groupId: 'test', type: 'vless',
+        server: transport === 'ws' ? '2001:db8::1' : 'proxy.example.com', port: 443,
+        uuid: 'b831381d-6324-4d53-ad4f-8cda48b30811', tls: true, reality: true,
+        flow: transport === 'tcp' ? 'xtls-rprx-vision' : undefined,
+        sni: 'tls.example.com', publicKey: 'fixture-public-key', shortId: 'abcdef', fingerprint: 'firefox',
+        alpn: ['h2', 'http/1.1'], insecure: false, transport,
+        transportPath: '/a?key=1&other=2', transportHost: 'cdn.example.com',
+        ...(transport === 'xhttp' ? { xhttpMode: 'stream-one', xhttpExtraHeaders: { 'X-Fixture': 'value & more' } } : {}),
+      };
+      const copied = vlessShareLink(node);
+      if (transport === 'tcp') assert.equal(new URL(copied).searchParams.get('flow'), 'xtls-rprx-vision');
+      const restored = UniversalSubscriptionParser.parse(copied)[0];
+      assert.ok(restored);
+      assert.equal(restored.name, node.name);
+      assert.deepEqual(nativeOutbound(restored), nativeOutbound(node), transport);
+      if (transport === 'xhttp') assert.equal(restored.xhttpMode, 'stream-one');
+    }
+  });
+
+  test('Copying native VLESS extensions uses importable JSON and never guesses a missing flow', () => {
+    const node: ProxyNode = { id: 'raw', name: 'Native fixture', groupId: 'test', type: 'vless', server: 'proxy.example.com', port: 443,
+      rawOutbound: { type: 'vless', server: 'proxy.example.com', server_port: 443, uuid: 'fixture', flow: 'xtls-rprx-vision', tls: { enabled: true, server_name: 'tls.example.com' }, packet_encoding: 'xudp' } };
+    const restored = UniversalSubscriptionParser.parse(vlessShareLink(node))[0];
+    assert.deepEqual(restored.rawOutbound, { ...node.rawOutbound, tag: node.name });
+    const plain = UniversalSubscriptionParser.parseVless('vless://fixture@proxy.example.com:443?security=tls&type=grpc&serviceName=service%2Fname&allowInsecure=1&extra=broken');
+    assert.equal(plain?.flow, undefined);
+    assert.equal(plain?.transportHost, 'service/name');
+    assert.equal(plain?.insecure, true);
+    assert.equal(plain?.xhttpExtraHeaders, undefined);
+  });
+
   test('Parses VLESS Reality & XHTTP links', () => {
     const uri = 'vless://b831381d-6324-4d53-ad4f-8cda48b30811@example.com:443?security=reality&encryption=none&pbk=123456&headerType=none&type=xhttp&sni=example.com&sid=abcdef&fp=chrome&path=%2Fstream#TestVlessXhttp';
     const node = UniversalSubscriptionParser.parseVless(uri);

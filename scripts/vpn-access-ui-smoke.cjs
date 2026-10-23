@@ -156,6 +156,8 @@ app.whenReady().then(async()=>{
  await click('[aria-label="选择网络出口"]');await textClick('本机直连（无需节点）普通公网直连，公司资源继续走 VPN 接入');await wait('document.body.innerText.includes("本机直连，无需代理节点")');await capture('vpn-access-direct-choice');
  await js('window.dispatchEvent(new CustomEvent("fixture:proxy",{detail:{page:"nodes",settings:{routingMode:"rule"}}}))');
  await textClick('本机直连（无需节点）普通公网使用本机网络，公司资源按 VPN 接入配置分流选择直连');assert.equal(await js('document.querySelector("button[aria-pressed=true]").textContent.includes("本机直连")'),true);await capture('vpn-access-nodes-direct-choice');
+ await js('Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async value=>{window.fixtureCopied=value;}}});window.dispatchEvent(new CustomEvent("fixture:proxy",{detail:{nodes:[{id:"saved",name:"Vision fixture",type:"vless",server:"proxy.example.com",port:443,uuid:"b831381d-6324-4d53-ad4f-8cda48b30811",tls:true,reality:true,flow:"xtls-rprx-vision",publicKey:"fixture-public-key",shortId:"abcd",sni:"tls.example.com",transport:"tcp"}]}}))');
+ await click('[title="复制节点分享链接"]');assert.equal(await js('new URL(window.fixtureCopied).searchParams.get("flow")'),'xtls-rprx-vision');
  await js('window.dispatchEvent(new CustomEvent("fixture:proxy",{detail:{page:"vpn-access",settings:{routingMode:"rule"}}}))');await wait('!!document.querySelector(".vpn-connection-title")');
  assert.equal(await noOverflow(),true);assert.equal(await js('document.querySelector(".vpn-connect-actions .primary").getBoundingClientRect().bottom < window.innerHeight'),true);
  await capture('vpn-access-light');await js('document.documentElement.classList.add("dark")');await capture('vpn-access-dark');
