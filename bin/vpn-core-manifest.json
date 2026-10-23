@@ -8,9 +8,9 @@
     "commit": "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da"
   },
   "toolchain": "go version go1.25.6 windows/amd64",
-  "sourceSha256": "bfebe9d3cd2f7f91cd92ec96d25863e986e9db24db8a7b2a350537fc3dc3e063",
-  "sha256": "03448606583e1dda416a95f3a307be06e6660bbd98244d03ed39150ac9c8cd82",
-  "sourceArchiveSha256": "861f34eec9d97fd4c448a2ed423752ef07744d18d4c07bbe75ecc1be8186963e",
+  "sourceSha256": "946216fb59c65b8fb921d225d80d96042ecadb22c4fdb1f0a86ea41e2b1a9f41",
+  "sha256": "9acb009120b5d70df3be28d66a3eee54988a80007c30a44489a08152d283d6ca",
+  "sourceArchiveSha256": "f9a664bd587b1c04ca0b1557d8e2172210426704287e0df6b2bf8b4cada9c7fd",
   "protocols": [
     "easyconnect",
     "atrust"

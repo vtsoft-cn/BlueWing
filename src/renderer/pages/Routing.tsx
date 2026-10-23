@@ -199,7 +199,7 @@ export const Routing: React.FC<RoutingProps> = ({
             <Slash className="w-5 h-5 mt-0.5 flex-shrink-0" />
             <div>
               <div className="font-bold text-xs">全局直连 (Direct)</div>
-              <div className="text-[11px] opacity-80 mt-0.5">所有网络请求不走代理直接连接</div>
+              <div className="text-[11px] opacity-80 mt-0.5">普通公网直连，VPN 资源仍按接入配置分流</div>
             </div>
           </button>
         </div>

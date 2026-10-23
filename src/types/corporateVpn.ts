@@ -16,7 +16,13 @@ export interface VpnProfile {
   loginDomain: string;
   rememberPassword: boolean;
   rememberSession: boolean;
-  tls: { caPem?: string; pinSha256?: string; serverName?: string };
+  tls: {
+    caPem?: string;
+    pinSha256?: string;
+    serverName?: string;
+    trustMode?: 'auto' | 'strict';
+    autoTrustAnchor?: 'system' | 'pin';
+  };
   targets: VpnTarget[];
   hosts: Record<string, string[]>;
   bindInterface: string;
@@ -35,6 +41,10 @@ export interface VpnCertificate {
   issuer: string;
   validTo: string;
   chainTrusted: boolean;
+  validFrom?: string;
+  dnsNames?: string[];
+  ipAddresses?: string[];
+  trustIssues?: string[];
 }
 export interface VpnResources {
   targets: VpnTarget[];
@@ -75,6 +85,7 @@ export interface VpnSnapshot {
   profiles: VpnProfile[];
   state: VpnState;
   encryptionAvailable: boolean;
+  passwordSaved?: Record<string, boolean>;
 }
 export interface VpnRuntimeProfile {
   profile: VpnProfile;
@@ -100,6 +111,7 @@ export interface CorporateVpnAPI {
   certificate(id: string): Promise<VpnCertificate>;
   respond(id: string, generation: number, value: string): Promise<void>;
   clearCredentials(id: string): Promise<void>;
+  savePassword(id: string, password: string, remember: boolean): Promise<void>;
   apply(): Promise<boolean>;
   onState(callback: (state: VpnState) => void): () => void;
 }

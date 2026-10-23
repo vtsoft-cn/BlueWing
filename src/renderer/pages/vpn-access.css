@@ -305,11 +305,66 @@
   min-width: 0;
 }
 .vpn-connection-card,
-.vpn-resource-card {
+.vpn-resource-card,
+.vpn-proxy-card {
   background: var(--vpn-bg);
   border: 1px solid var(--vpn-border);
   border-radius: 16px;
   overflow: hidden;
+}
+.vpn-proxy-card {
+  padding: 18px 22px;
+}
+.vpn-proxy-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.vpn-proxy-heading h3 {
+  font-weight: 600;
+  font-size: 14px;
+}
+.vpn-proxy-heading p,
+.vpn-proxy-hint {
+  color: var(--vpn-muted);
+  font-size: 12px;
+}
+.vpn-proxy-heading p {
+  margin-top: 3px;
+}
+.vpn-proxy-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--vpn-border);
+  border-radius: 10px;
+  background: var(--vpn-soft);
+}
+.vpn-proxy-fields dt {
+  color: var(--vpn-muted);
+  font-size: 12px;
+}
+.vpn-proxy-fields dd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.vpn-proxy-fields code {
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.vpn-proxy-fields .vpn-icon-button {
+  width: 32px;
+}
+.vpn-proxy-hint + .vpn-proxy-hint {
+  margin-top: 4px;
 }
 .vpn-connection-header {
   display: flex;
@@ -507,6 +562,51 @@ textarea.vpn-input {
   outline: none;
   padding: 10px 12px;
 }
+.vpn-password-input input:focus-visible {
+  outline: none;
+}
+.vpn-password-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.vpn-remember-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--vpn-muted);
+  font-weight: 400;
+  cursor: pointer;
+}
+.vpn-remember-option input {
+  width: 14px;
+  height: 14px;
+  accent-color: #2563eb;
+}
+.vpn-credential-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+}
+.vpn-credential-summary .vpn-text-button {
+  padding: 3px;
+  font-size: 12px;
+}
+.vpn-connection-error {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.vpn-connection-error p {
+  flex: 1 1 220px;
+}
+.vpn-certificate-issues {
+  color: var(--vpn-muted);
+  display: grid;
+  gap: 4px;
+}
 .vpn-password-input button {
   width: 42px;
   height: 40px;
@@ -572,6 +672,23 @@ textarea.vpn-input {
   gap: 22px;
   padding: 0 20px;
   border-bottom: 1px solid var(--vpn-border);
+}
+.vpn-resource-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px 4px;
+}
+.vpn-resource-heading h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.vpn-resource-heading p {
+  color: var(--vpn-muted);
+  font-size: 12px;
+  margin-top: 4px;
 }
 .vpn-detail-tabs > button {
   display: flex;
@@ -944,6 +1061,24 @@ textarea.vpn-input {
   padding-top: 16px;
   border-top: 1px solid var(--vpn-border);
 }
+.vpn-editor-password {
+  position: relative;
+}
+.vpn-editor-password .vpn-input {
+  padding-right: 44px;
+}
+.vpn-editor-password .vpn-icon-button {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.vpn-readonly-fields :is(input, textarea, select) {
+  color: var(--vpn-text);
+  -webkit-text-fill-color: var(--vpn-text);
+  opacity: 1;
+  cursor: default;
+}
 .vpn-storage-settings > div {
   grid-column: 1 / -1;
   font-size: 12px;
@@ -1121,6 +1256,13 @@ textarea.vpn-input {
   }
 }
 @media (max-width: 550px) {
+  .vpn-proxy-card {
+    padding: 16px;
+  }
+  .vpn-proxy-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
   .vpn-modal-backdrop {
     padding: 12px;
   }

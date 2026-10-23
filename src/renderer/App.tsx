@@ -222,21 +222,34 @@ export const App: React.FC = () => {
     if (coreState === 'running') {
       await window.electronAPI.core.stop();
     } else {
-      if (nodes.length === 0) {
-        toast.warn('当前节点列表为空，请先在“订阅管理”页面添加并获取节点');
-        setCurrentTab('subscriptions');
-        return;
-      }
       await window.electronAPI.core.start();
     }
   };
 
   // Node select
+  const selectingExit = useRef(false);
   const handleSelectNode = async (id: string) => {
-    setActiveNodeId(id);
-    if (window.electronAPI) {
-      await window.electronAPI.nodes.setActiveId(id);
-    }
+    if (!window.electronAPI || selectingExit.current) return;
+    selectingExit.current = true;
+    try {
+      const success = await window.electronAPI.nodes.setActiveId(id);
+      setActiveNodeId(await window.electronAPI.nodes.getActiveId());
+      setSettings(await window.electronAPI.settings.get());
+      if (!success) toast.error('代理出口应用失败，请检查日志后重新连接');
+    } catch {
+      toast.error('切换代理出口失败，请重试');
+    } finally { selectingExit.current = false; }
+  };
+  const handleSelectDirect = async () => {
+    if (!window.electronAPI || selectingExit.current) return;
+    selectingExit.current = true;
+    try {
+      const success = await window.electronAPI.nodes.selectDirect();
+      setSettings(await window.electronAPI.settings.get());
+      if (!success) toast.error('直连出口应用失败，请检查日志后重新连接');
+    } catch {
+      toast.error('切换本机直连失败，请重试');
+    } finally { selectingExit.current = false; }
   };
 
   // Save Subscriptions
@@ -333,8 +346,8 @@ export const App: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <PageHeader
             coreState={coreState}
-            activeNodeName={activeNode?.name}
-            latency={activeNode?.ping}
+            activeNodeName={settings.routingMode === 'direct' || nodes.length === 0 ? '本机直连' : activeNode?.name}
+            latency={settings.routingMode === 'direct' || nodes.length === 0 ? undefined : activeNode?.ping}
           />
           <VpnAccessStatus showSummary={currentTab !== 'vpn-access'} onOpen={() => setCurrentTab('vpn-access')} />
 
@@ -349,6 +362,7 @@ export const App: React.FC = () => {
                 nodes={nodes}
                 activeNodeId={activeNodeId}
                 onSelectNode={handleSelectNode}
+                onSelectDirect={handleSelectDirect}
                 traffic={traffic}
                 settings={settings}
                 onUpdateSettings={handleUpdateSettings}
@@ -362,6 +376,9 @@ export const App: React.FC = () => {
                 nodes={nodes}
                 activeNodeId={activeNodeId}
                 onSelectNode={handleSelectNode}
+                onSelectDirect={handleSelectDirect}
+                directSelected={settings.routingMode === 'direct' || nodes.length === 0}
+                selectionDisabled={coreState === 'starting' || coreState === 'stopping'}
                 subscriptions={subscriptions}
               />
             )}
@@ -389,7 +406,9 @@ export const App: React.FC = () => {
             )}
 
             {currentTab === 'dns' && <DNS dns={dns} onSaveDns={handleSaveDns} />}
-            {currentTab === 'vpn-access' && <VpnAccess />}
+            {currentTab === 'vpn-access' && (
+              <VpnAccess settings={settings} coreState={coreState} />
+            )}
 
             {currentTab === 'speedtest' && (
               <SpeedTest

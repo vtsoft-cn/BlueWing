@@ -14,6 +14,7 @@ import { CredentialVault } from './CredentialVault';
 import { CorporatePolicy } from './CorporatePolicy';
 import { VpnCoreEvent, VpnCoreProcess } from './VpnCoreProcess';
 import { physicalInterface } from './PhysicalInterface';
+import { gatewayTrust } from './GatewayTrust';
 
 interface PublicCore {
   running(): boolean;
@@ -40,6 +41,7 @@ export class CorporateVpnManager extends EventEmitter {
   private registered = '';
   private configured = '';
   private connectionTimeout?: NodeJS.Timeout;
+  private timeoutRevision = 0;
   private disposing = false;
   private mutation: Promise<unknown> = Promise.resolve();
   private desired?: { id: string; password: string };
@@ -89,6 +91,15 @@ export class CorporateVpnManager extends EventEmitter {
           signature(this.policy.runtime()) !== this.registered,
       },
       encryptionAvailable: this.vault.available(),
+      passwordSaved: Object.fromEntries(
+        this.profiles
+          .list()
+          .map((p) => [
+            p.id,
+            p.rememberPassword &&
+              this.vault.has(this.credentialKey(p, 'password')),
+          ]),
+      ),
     };
   }
   private exclusive<T>(job: () => Promise<T> | T): Promise<T> {
@@ -102,7 +113,26 @@ export class CorporateVpnManager extends EventEmitter {
     return this.exclusive(() => {
       if (!['idle', 'failed'].includes(this.state.state))
         throw new Error('请先断开VPN 接入 再编辑配置');
-      const p = this.profiles.save(input);
+      let value = input as VpnProfile;
+      const before = this.profiles.list().find((p) => p.id === value?.id);
+      if (
+        before &&
+        (before.protocol !== value.protocol ||
+          before.gateway.host !== value.gateway?.host ||
+          before.gateway.port !== value.gateway?.port ||
+          before.tls.serverName !== value.tls?.serverName ||
+          before.tls.caPem !== value.tls?.caPem)
+      ) {
+        const tls = { ...value.tls };
+        if (
+          before.tls.autoTrustAnchor === 'pin' &&
+          tls.pinSha256 === before.tls.pinSha256
+        )
+          delete tls.pinSha256;
+        delete tls.autoTrustAnchor;
+        value = { ...value, tls };
+      }
+      const p = this.profiles.save(value);
       // Credentials are bound to the complete gateway/protocol identity, not just a display name.
       if (!p.rememberPassword) this.vault.remove(`${p.id}:password:`);
       if (!p.rememberSession) this.vault.remove(`${p.id}:session:`);
@@ -129,6 +159,34 @@ export class CorporateVpnManager extends EventEmitter {
   clearCredentials(id: string): void {
     this.profiles.get(id);
     this.vault.remove(`${id}:`);
+    this.emit('state', this.snapshot().state);
+  }
+  async savePassword(
+    id: string,
+    password: string,
+    remember: boolean,
+  ): Promise<void> {
+    return this.exclusive(() => {
+      if (!['idle', 'failed'].includes(this.state.state))
+        throw new Error('请先断开 VPN 再修改保存的密码');
+      if (
+        typeof password !== 'string' ||
+        password.length > 4096 ||
+        typeof remember !== 'boolean'
+      )
+        throw new Error('密码保存参数不正确');
+      const profile = this.profiles.get(id);
+      if (remember) {
+        if (!this.vault.available())
+          throw new Error(
+            'CREDENTIAL_STORE_LOCKED：系统加密不可用，无法记住密码',
+          );
+        if (password)
+          this.vault.set(this.credentialKey(profile, 'password'), password);
+      } else this.vault.remove(`${id}:password:`);
+      this.profiles.save({ ...profile, rememberPassword: remember });
+      this.emit('state', this.snapshot().state);
+    });
   }
   reloadProfiles(): void {
     this.profiles.reload();
@@ -206,8 +264,9 @@ export class CorporateVpnManager extends EventEmitter {
         !this.publicCore.running() ||
         signature(this.policy.runtime()) !== this.registered
       )
-        throw new Error('请先应用接入分流并启动公网连接');
-      const p = this.profiles.get(id);
+        throw new Error('请先应用接入分流并启动本地分流服务，无需代理节点');
+      let p = this.profiles.get(id);
+      this.clearConnectionTimeout();
       const generation = this.state.generation + 1;
       this.change({
         state: 'starting',
@@ -227,8 +286,17 @@ export class CorporateVpnManager extends EventEmitter {
         )
           return;
         if (!this.publicCore.running()) throw new Error('PUBLIC_CORE_CHANGED');
+        p = await this.trustedProfile(p, generation);
+        if (
+          this.state.generation !== generation ||
+          this.state.state !== 'starting'
+        )
+          return;
         const key = this.credentialKey(p, 'password');
-        const secret = password || this.vault.get(key) || '';
+        const secret =
+          password ||
+          (p.rememberPassword ? this.vault.get(key) : undefined) ||
+          '';
         if (!secret && p.authMethod !== 'auth/smsCheckCode')
           throw new Error('请输入密码');
         this.desired = { id, password: secret };
@@ -253,7 +321,7 @@ export class CorporateVpnManager extends EventEmitter {
     });
   }
   async disconnect(preserveIntent = false): Promise<void> {
-    if (this.connectionTimeout) clearTimeout(this.connectionTimeout);
+    this.clearConnectionTimeout();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (!preserveIntent) {
       this.desired = undefined;
@@ -273,11 +341,12 @@ export class CorporateVpnManager extends EventEmitter {
     return this.exclusive(async () => {
       if (!['idle', 'failed'].includes(this.state.state))
         throw new Error('请先断开VPN 接入 再获取认证方式');
-      const p = this.profiles.get(id);
+      let p = this.profiles.get(id);
       if (p.protocol !== 'atrust')
         throw new Error('仅 aTrust 需要发现认证方式');
       if (this.publicCore.settings().tunEnabled && !p.bindInterface)
         p.bindInterface = await physicalInterface();
+      p = await this.trustedProfile(p, this.state.generation);
       const e = await this.core.request(
         'discoverAuth',
         { profile: p, generation: this.state.generation },
@@ -297,37 +366,86 @@ export class CorporateVpnManager extends EventEmitter {
     return this.exclusive(async () => {
       if (!['idle', 'failed'].includes(this.state.state))
         throw new Error('请先断开VPN 接入');
-      const p = this.profiles.get(id);
-      if (this.publicCore.settings().tunEnabled && !p.bindInterface)
-        p.bindInterface = await physicalInterface();
-      const e = await this.core.request(
-          'serverCertificate',
-          { profile: p },
-          15000,
-        ),
-        d = e.data;
-      if (
-        !d ||
-        typeof d.fingerprint !== 'string' ||
-        !/^\w{64}$/.test(d.fingerprint)
-      )
-        throw new Error('证书信息不正确');
-      return {
-        fingerprint: d.fingerprint,
-        subject: String(d.subject).slice(0, 500),
-        issuer: String(d.issuer).slice(0, 500),
-        validTo: String(d.validTo).slice(0, 100),
-        chainTrusted: d.chainTrusted === true,
-      };
+      return this.inspectCertificate(this.profiles.get(id));
     });
+  }
+  private async trustedProfile(
+    profile: VpnProfile,
+    generation: number,
+  ): Promise<VpnProfile> {
+    if (profile.tls.trustMode === 'strict') return profile;
+    const certificate = await this.inspectCertificate(profile);
+    if (this.state.generation !== generation) throw new Error('AUTH_CANCELLED');
+    const tls = gatewayTrust(profile.tls, certificate);
+    if (JSON.stringify(tls) !== JSON.stringify(profile.tls)) {
+      const saved = this.profiles.save({
+        ...this.profiles.get(profile.id),
+        tls,
+      });
+      this.emit('state', this.snapshot().state);
+      return { ...saved, bindInterface: profile.bindInterface };
+    }
+    return profile;
+  }
+  private async inspectCertificate(p: VpnProfile): Promise<VpnCertificate> {
+    if (this.publicCore.settings().tunEnabled && !p.bindInterface)
+      p.bindInterface = await physicalInterface();
+    const e = await this.core.request(
+        'serverCertificate',
+        { profile: p },
+        15000,
+      ),
+      d = e.data;
+    if (
+      !d ||
+      typeof d.fingerprint !== 'string' ||
+      !/^[a-fA-F0-9]{64}$/.test(d.fingerprint)
+    )
+      throw new Error('证书信息不正确');
+    return {
+      fingerprint: d.fingerprint,
+      subject: String(d.subject).slice(0, 500),
+      issuer: String(d.issuer).slice(0, 500),
+      validTo: String(d.validTo).slice(0, 100),
+      chainTrusted: d.chainTrusted === true,
+      validFrom:
+        typeof d.validFrom === 'string' ? d.validFrom.slice(0, 100) : undefined,
+      dnsNames: Array.isArray(d.dnsNames)
+        ? d.dnsNames
+            .filter((v: unknown) => typeof v === 'string')
+            .slice(0, 128)
+            .map((v: string) => v.slice(0, 253))
+        : [],
+      ipAddresses: Array.isArray(d.ipAddresses)
+        ? d.ipAddresses
+            .filter((v: unknown) => typeof v === 'string')
+            .slice(0, 128)
+            .map((v: string) => v.slice(0, 64))
+        : [],
+      trustIssues: Array.isArray(d.trustIssues)
+        ? d.trustIssues.filter((v: unknown) =>
+            [
+              'UNTRUSTED_AUTHORITY',
+              'NAME_MISMATCH',
+              'EXPIRED',
+              'NOT_YET_VALID',
+              'INVALID_CA',
+              'CHAIN_INVALID',
+            ].includes(String(v)),
+          )
+        : [],
+    };
   }
   respond(id: string, generation: number, value: string): void {
     const challenge = this.state.challenge;
     if (
       !challenge ||
+      this.state.state !== 'waiting_user' ||
       challenge.id !== id ||
+      challenge.profileId !== this.state.profileId ||
+      challenge.generation !== generation ||
       generation !== this.state.generation ||
-      Date.now() > challenge.expiresAt ||
+      Date.now() >= challenge.expiresAt ||
       typeof value !== 'string' ||
       !value ||
       value.length > 65536
@@ -337,17 +455,22 @@ export class CorporateVpnManager extends EventEmitter {
     this.change({ state: 'authenticating', challenge: undefined });
     this.armTimeout(45000, generation);
   }
-  private armTimeout(ms: number, generation: number): void {
+  private clearConnectionTimeout(): void {
+    this.timeoutRevision++;
     if (this.connectionTimeout) clearTimeout(this.connectionTimeout);
+    this.connectionTimeout = undefined;
+  }
+  private armTimeout(ms: number, generation: number, code = 'AUTH_TIMEOUT'): void {
+    this.clearConnectionTimeout();
+    const revision = this.timeoutRevision;
     this.connectionTimeout = setTimeout(() => {
-      if (this.state.generation === generation) {
-        this.core.send('disconnect', { generation });
-        this.fail('AUTH_TIMEOUT');
+      if (this.state.generation === generation && this.timeoutRevision === revision) {
+        this.fail(code);
       }
     }, ms);
   }
   private fail(error: string): void {
-    if (this.connectionTimeout) clearTimeout(this.connectionTimeout);
+    this.clearConnectionTimeout();
     const generation = this.state.generation + 1;
     if (this.core.isRunning()) this.core.send('disconnect', { generation });
     this.policy.deactivate(this.profiles.list());
@@ -384,6 +507,7 @@ export class CorporateVpnManager extends EventEmitter {
       return;
     if (e.type === 'challenge') {
       const d = e.data;
+      if (!['starting', 'authenticating', 'waiting_user'].includes(this.state.state)) return;
       if (
         !d ||
         typeof d.id !== 'string' ||
@@ -391,11 +515,14 @@ export class CorporateVpnManager extends EventEmitter {
           d.kind,
         ) ||
         typeof d.expiresAt !== 'number' ||
+        !Number.isFinite(d.expiresAt) ||
         d.expiresAt > Date.now() + 125000 ||
         typeof d.title !== 'string' ||
         (d.imageBase64 && d.imageBase64.length > 1500000)
       )
         throw new Error('Invalid challenge');
+      // Replayed/expired prompts never replace the current round or extend its deadline.
+      if (d.expiresAt <= Date.now() || this.state.challenge?.id === d.id) return;
       this.change({
         state: 'waiting_user',
         challenge: {
@@ -414,7 +541,7 @@ export class CorporateVpnManager extends EventEmitter {
           generation: e.generation,
         },
       });
-      this.armTimeout(Math.max(1, d.expiresAt - Date.now()), e.generation);
+      this.armTimeout(Math.max(1, d.expiresAt - Date.now()), e.generation, 'AUTH_CHALLENGE_EXPIRED');
     } else if (e.type === 'resources') {
       const revision = this.policy.update(
         e.profileId!,
@@ -441,7 +568,7 @@ export class CorporateVpnManager extends EventEmitter {
         pid,
       );
       if (this.state.generation !== generation) return;
-      if (this.connectionTimeout) clearTimeout(this.connectionTimeout);
+      this.clearConnectionTimeout();
       this.change({ state: 'connected', challenge: undefined });
       this.retries = 0;
     } else if (e.type === 'sessionUpdated') {

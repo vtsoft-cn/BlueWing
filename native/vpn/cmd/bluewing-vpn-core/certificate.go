@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
+	"slices"
 	"strconv"
 	"time"
 
@@ -45,19 +46,69 @@ func (c *controller) certificate(cmd command) {
 		c.emit(event{Type: "error", ID: cmd.ID, Code: "TLS_UNTRUSTED"})
 		return
 	}
-	leaf := certs[0]
-	sum := sha256.Sum256(leaf.Raw)
 	roots, _ := x509.SystemCertPool()
 	if roots == nil {
 		roots = x509.NewCertPool()
 	}
-	if cmd.Profile.TLS.CAPEM != "" && !roots.AppendCertsFromPEM([]byte(cmd.Profile.TLS.CAPEM)) {
-		err = errors.New("invalid CA")
+	c.emit(event{Type: "serverCertificate", ID: cmd.ID, Data: certificateReport(certs, name, cmd.Profile.TLS.CAPEM, roots, time.Now())})
+}
+
+type serverCertificate struct {
+	Fingerprint  string   `json:"fingerprint"`
+	Subject      string   `json:"subject"`
+	Issuer       string   `json:"issuer"`
+	ValidFrom    string   `json:"validFrom"`
+	ValidTo      string   `json:"validTo"`
+	ChainTrusted bool     `json:"chainTrusted"`
+	DNSNames     []string `json:"dnsNames"`
+	IPAddresses  []string `json:"ipAddresses"`
+	TrustIssues  []string `json:"trustIssues"`
+}
+
+func certificateReport(certs []*x509.Certificate, name, caPEM string, roots *x509.CertPool, now time.Time) serverCertificate {
+	leaf := certs[0]
+	sum := sha256.Sum256(leaf.Raw)
+	report := serverCertificate{Fingerprint: hex.EncodeToString(sum[:]), Subject: leaf.Subject.String(), Issuer: leaf.Issuer.String(),
+		ValidFrom: leaf.NotBefore.UTC().Format(time.RFC3339), ValidTo: leaf.NotAfter.UTC().Format(time.RFC3339),
+		DNSNames: append([]string{}, leaf.DNSNames...), IPAddresses: []string{}, TrustIssues: []string{}}
+	for _, ip := range leaf.IPAddresses {
+		report.IPAddresses = append(report.IPAddresses, ip.String())
+	}
+	addIssue := func(code string) {
+		if !slices.Contains(report.TrustIssues, code) {
+			report.TrustIssues = append(report.TrustIssues, code)
+		}
+	}
+	if roots == nil {
+		roots = x509.NewCertPool()
+	} else {
+		roots = roots.Clone()
+	}
+	if caPEM != "" && !roots.AppendCertsFromPEM([]byte(caPEM)) {
+		addIssue("INVALID_CA")
+	}
+	if leaf.VerifyHostname(name) != nil {
+		addIssue("NAME_MISMATCH")
+	}
+	if now.Before(leaf.NotBefore) {
+		addIssue("NOT_YET_VALID")
+	}
+	if now.After(leaf.NotAfter) {
+		addIssue("EXPIRED")
 	}
 	intermediates := x509.NewCertPool()
 	for _, crt := range certs[1:] {
 		intermediates.AddCert(crt)
 	}
-	_, verifyErr := leaf.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, DNSName: name})
-	c.emit(event{Type: "serverCertificate", ID: cmd.ID, Data: map[string]any{"fingerprint": hex.EncodeToString(sum[:]), "subject": leaf.Subject.String(), "issuer": leaf.Issuer.String(), "validTo": leaf.NotAfter.UTC().Format(time.RFC3339), "chainTrusted": err == nil && verifyErr == nil}})
+	_, verifyErr := leaf.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, CurrentTime: now})
+	if verifyErr != nil {
+		var authority x509.UnknownAuthorityError
+		if errors.As(verifyErr, &authority) {
+			addIssue("UNTRUSTED_AUTHORITY")
+		} else if !slices.Contains(report.TrustIssues, "EXPIRED") && !slices.Contains(report.TrustIssues, "NOT_YET_VALID") {
+			addIssue("CHAIN_INVALID")
+		}
+	}
+	report.ChainTrusted = len(report.TrustIssues) == 0
+	return report
 }

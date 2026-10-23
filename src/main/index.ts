@@ -463,7 +463,8 @@ async function handleCoreStop(): Promise<boolean> {
  * 节点集合变化后,若原活跃节点已被删除(saveNodes 回落只改数据库,不碰运行中的核心):
  * - 广播 node:changed 同步渲染层高亮(此前仅手动切换路径广播,删除路径渲染层会停留在已删节点);
  * - 核心运行中:热切换到回落节点(运行配置本就含全部节点 outbound,通常瞬时完成,失败自动重载核心);
- * - 节点被全部删除:停核心并断开系统代理,避免核心继续用已删节点出流量而界面显示无节点。
+ * - 节点被全部删除:切换本机直连，保留 VPN 和系统代理入口。
+ * - 无节点运行时首次添加节点:保留直连，直到用户明确选择代理节点。
  * coreAlreadyConsistent:订阅更新按服务器地址保留活跃节点时,运行中核心仍走同一服务器,不打断连接。
  */
 async function syncActiveNodeAfterNodesReplaced(
@@ -472,7 +473,7 @@ async function syncActiveNodeAfterNodesReplaced(
 ): Promise<void> {
   const db = Database.getInstance();
   // 原活跃节点仍在列表(普通编辑/测速/排序):无需任何同步
-  if (!prevActiveId || db.getNodes().some((n) => n.id === prevActiveId)) return;
+  if (prevActiveId && db.getNodes().some((n) => n.id === prevActiveId)) return;
 
   const newActiveId = db.getActiveNodeId();
   mainWindow?.webContents.send('node:changed', newActiveId);
@@ -480,13 +481,15 @@ async function syncActiveNodeAfterNodesReplaced(
   if (options?.coreAlreadyConsistent) return;
   if (SingBoxManager.getInstance().getState() !== 'running') return;
 
-  if (!newActiveId) {
+  if (!prevActiveId || !newActiveId) {
     LogManager.getInstance().addLog(
-      'warn',
-      '节点列表已全部删除,停止代理核心并断开系统代理',
+      'info',
+      !newActiveId ? '节点列表已清空，切换为本机直连，公司 VPN 分流保持启用' : '已添加代理节点，当前保持本机直连；选择节点后切换代理',
       'app'
     );
-    await handleCoreStop();
+    const result = await ProxySelectionService.selectDirect();
+    broadcastSettingsChanged();
+    if (!result.success) LogManager.getInstance().addLog('error', result.error || '本机直连应用失败', 'core');
     return;
   }
 
@@ -496,7 +499,10 @@ async function syncActiveNodeAfterNodesReplaced(
     `活跃节点被删除,已自动切换至: ${target?.name ?? newActiveId}`,
     'app'
   );
-  await ProxySelectionService.selectNode(newActiveId);
+  if (db.getSettings().routingMode !== 'direct') {
+    const result = await ProxySelectionService.selectNode(newActiveId);
+    if (!result.success) LogManager.getInstance().addLog('error', result.error || '节点切换失败', 'core');
+  }
 }
 
 /**
@@ -609,8 +615,8 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
 
   if (nodes.length === 0) {
     LogManager.getInstance().addLog(
-      'warn',
-      '【提示】当前节点列表中暂无可用节点。建议先添加或更新订阅后再进行连接。',
+      'info',
+      '未配置代理节点，普通流量使用本机直连，VPN 资源继续按接入配置分流。',
       'app'
     );
   }
@@ -731,6 +737,7 @@ for (const [name, handler] of Object.entries({
   certificate: (id: string) => getCorporateVpn().certificate(id),
   respond: (id: string, generation: number, value: string) => getCorporateVpn().respond(id, generation, value),
   clearCredentials: (id: string) => getCorporateVpn().clearCredentials(id),
+  savePassword: (id: string, password: string, remember: boolean) => getCorporateVpn().savePassword(id, password, remember),
   apply: () => handleCoreStart({ userInitiated: true }),
 })) {
   ipcMain.handle(`vpn:${name}`, (event, ...args: any[]) => {
@@ -932,8 +939,11 @@ ipcMain.handle('nodes:updateFull', (_, node) => {
   }
   return ok;
 });
-ipcMain.handle('nodes:add', (_, node) => {
-  Database.getInstance().addNode(node);
+ipcMain.handle('nodes:add', async (_, node) => {
+  const db = Database.getInstance();
+  const prevActiveId = db.getActiveNodeId();
+  db.addNode(node);
+  await syncActiveNodeAfterNodesReplaced(prevActiveId);
   TrayManager.getInstance().updateMenu();
   broadcastNodesChanged();
   return true;
@@ -960,7 +970,13 @@ ipcMain.handle('nodes:delete', (_, id) => {
 ipcMain.handle('nodes:getActiveId', () => Database.getInstance().getActiveNodeId());
 ipcMain.handle('nodes:setActiveId', async (_, id) => {
   const res = await ProxySelectionService.selectNode(id);
-  mainWindow?.webContents.send('node:changed', id);
+  mainWindow?.webContents.send('node:changed', Database.getInstance().getActiveNodeId());
+  broadcastSettingsChanged();
+  return res.success;
+});
+ipcMain.handle('nodes:selectDirect', async () => {
+  const res = await ProxySelectionService.selectDirect();
+  broadcastSettingsChanged();
   return res.success;
 });
 ipcMain.handle('nodes:ping', (_, host, port) => TcpPing.ping(host, port));
@@ -1272,11 +1288,13 @@ ipcMain.handle('backup:import', (_, content) =>
     BackupService.importWithTransaction(content, { profiles: true, rules: true, settings: true })
   )
 );
-ipcMain.handle('backup:importLinks', (_, text) => {
+ipcMain.handle('backup:importLinks', async (_, text) => {
   const nodes = BackupMigrator.parseNodeLinks(text);
   if (nodes.length > 0) {
     const db = Database.getInstance();
+    const prevActiveId = db.getActiveNodeId();
     db.saveNodes([...db.getNodes(), ...nodes]);
+    await syncActiveNodeAfterNodesReplaced(prevActiveId);
     TrayManager.getInstance().updateMenu();
     broadcastNodesChanged();
   }

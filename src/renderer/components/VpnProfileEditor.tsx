@@ -3,6 +3,8 @@ import {
   ArrowRight,
   Check,
   ChevronRight,
+  Eye,
+  EyeOff,
   Fingerprint,
   Globe2,
   KeyRound,
@@ -49,7 +51,7 @@ export const newVpnProfile = (): VpnProfile => ({
 });
 const tabs = [
   { id: 'connection', name: '连接设置', icon: KeyRound },
-  { id: 'routing', name: '分流范围', icon: Network },
+  { id: 'routing', name: '高级分流', icon: Network },
   { id: 'advanced', name: '高级选项', icon: Settings2 },
 ] as const;
 
@@ -59,12 +61,18 @@ export function VpnProfileEditor({
   onClose,
   onSaved,
   onRemoved,
+  initialTab = 'connection',
+  readOnly = false,
+  passwordSaved = false,
 }: {
   profile: VpnProfile;
   encryptionAvailable: boolean;
   onClose: () => void;
   onSaved: (profile: VpnProfile, keepOpen?: boolean) => Promise<void>;
   onRemoved: () => Promise<void>;
+  initialTab?: 'connection' | 'routing' | 'advanced';
+  readOnly?: boolean;
+  passwordSaved?: boolean;
 }) {
   const [form, setForm] = useState(() => structuredClone(profile));
   const [domains, setDomains] = useState(
@@ -78,30 +86,36 @@ export function VpnProfileEditor({
       .flatMap(([d, ips]) => ips.map((ip) => `${d} ${ip}`))
       .join('\n'),
   );
-  const [tab, setTab] = useState<(typeof tabs)[number]['id']>('connection');
+  const [tab, setTab] = useState<(typeof tabs)[number]['id']>(initialTab);
   const [methods, setMethods] = useState<VpnAuthMethod[]>([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [confirmation, setConfirmation] = useState<'discard' | 'delete'>();
   const root = useRef<HTMLDivElement>(null);
-  const initial = useRef(JSON.stringify({ form, domains, cidrs, hosts }));
+  const initial = useRef(JSON.stringify({ form, domains, cidrs, hosts, password: '' }));
   const dirty =
-    JSON.stringify({ form, domains, cidrs, hosts }) !== initial.current;
+    JSON.stringify({ form, domains, cidrs, hosts, password }) !== initial.current;
   const provider = vpnProviders[form.protocol];
   const savedGateway =
     !!profile.id &&
     profile.protocol === form.protocol &&
     profile.gateway.host === form.gateway.host &&
     profile.gateway.port === form.gateway.port;
+  const hasSavedPassword = passwordSaved && savedGateway && form.rememberPassword &&
+    profile.username === form.username && profile.authMethod === form.authMethod && profile.loginDomain === form.loginDomain;
   const close = () => {
     if (!busy) {
-      if (dirty) setConfirmation('discard');
+      if (dirty && !readOnly) setConfirmation('discard');
       else onClose();
     }
   };
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    root.current?.querySelector<HTMLInputElement>('input')?.focus();
+    (Array.from(root.current?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select') || [])
+      .find((input) => input.getClientRects().length && !input.matches(':disabled')) || root.current?.querySelector<HTMLButtonElement>('button'))
+      ?.focus();
     return () => previous?.focus();
   }, []);
   useEffect(() => {
@@ -142,6 +156,8 @@ export function VpnProfileEditor({
     }
   };
   const persist = async () => {
+    if (readOnly) throw new Error('连接期间配置只读，请先断开 VPN 再修改。');
+    if (password && !encryptionAvailable) throw new Error('系统加密不可用，无法保存密码。');
     if (
       !form.name.trim() ||
       !form.gateway.host.trim() ||
@@ -196,11 +212,22 @@ export function VpnProfileEditor({
           ],
     });
     setForm(result.profile);
+    if (password) {
+      try {
+        await window.electronAPI.corporateVpn.savePassword(result.profile.id, password, true);
+        setPassword('');
+        setShowPassword(false);
+      } catch (error) {
+        await onSaved(result.profile, true);
+        throw new Error(`接入配置已保存，但密码保存失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     initial.current = JSON.stringify({
       form: result.profile,
       domains,
       cidrs,
       hosts,
+      password: '',
     });
     return result;
   };
@@ -210,7 +237,7 @@ export function VpnProfileEditor({
     toast.success(
       result.requiresCoreRebuild
         ? '配置已保存，请应用接入分流后连接'
-        : '接入配置已保存',
+        : `已保存「${result.profile.name}」的接入配置`,
     );
   };
   return (
@@ -235,9 +262,9 @@ export function VpnProfileEditor({
             </div>
             <div className="flex-1 min-w-0">
               <h2 id="vpn-editor-title">
-                {profile.id ? '编辑接入' : '新增 VPN 接入'}
+                {readOnly ? '查看接入' : profile.id ? '编辑接入' : '新增 VPN 接入'}
               </h2>
-              <p>设置连接方式与需要通过 VPN 访问的资源</p>
+              <p>{readOnly ? 'VPN 连接期间只读，断开后可修改配置。' : '设置连接方式与需要通过 VPN 访问的资源'}</p>
             </div>
             <button
               type="button"
@@ -273,7 +300,7 @@ export function VpnProfileEditor({
             className="vpn-editor-form"
             onSubmit={(e) => {
               e.preventDefault();
-              run('save', save);
+              if (!readOnly) run('save', save);
             }}
           >
             <div className="vpn-editor-body">
@@ -283,8 +310,8 @@ export function VpnProfileEditor({
                 </div>
               )}
               <fieldset
-                disabled={!!busy}
-                className="min-w-0 disabled:opacity-60"
+                disabled={!!busy || readOnly}
+                className={`min-w-0 ${readOnly ? 'vpn-readonly-fields' : 'disabled:opacity-60'}`}
               >
                 <section
                   role="tabpanel"
@@ -515,6 +542,32 @@ export function VpnProfileEditor({
                       </div>
                     </div>
                   )}
+                  {form.authMethod !== 'auth/smsCheckCode' && (
+                    <div className="vpn-field">
+                      <label htmlFor="vpn-editor-password">登录密码 <span className="vpn-optional">可选</span></label>
+                      <div className="vpn-editor-password">
+                        <input
+                          id="vpn-editor-password"
+                          aria-label="配置登录密码"
+                          className="vpn-input"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete="new-password"
+                          maxLength={4096}
+                          disabled={!encryptionAvailable}
+                          placeholder={hasSavedPassword ? '已加密保存；留空保留已有密码' : '输入密码，随配置加密保存'}
+                          value={password}
+                          onChange={event => {
+                            setPassword(event.target.value);
+                            if (event.target.value) setForm({ ...form, rememberPassword: true });
+                          }}
+                        />
+                        <button type="button" className="vpn-icon-button" aria-label={showPassword ? '隐藏配置密码' : '显示配置密码'} onClick={() => setShowPassword(!showPassword)}>
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <small>{readOnly ? '已保存的密码不回显。' : '填写后随「保存配置」一起加密保存，验证码仍在连接时输入。'}</small>
+                    </div>
+                  )}
                   <div className="vpn-storage-settings">
                     <div className="flex gap-2 items-center">
                       <LockKeyhole size={15} />
@@ -525,12 +578,13 @@ export function VpnProfileEditor({
                         type="checkbox"
                         checked={form.rememberPassword}
                         disabled={!encryptionAvailable}
-                        onChange={(e) =>
+                        onChange={(e) => {
                           setForm({
                             ...form,
                             rememberPassword: e.target.checked,
-                          })
-                        }
+                          });
+                          if (!e.target.checked) { setPassword(''); setShowPassword(false); }
+                        }}
                       />
                       加密记住密码
                     </label>
@@ -552,7 +606,7 @@ export function VpnProfileEditor({
                     )}
                     <p>
                       {encryptionAvailable
-                        ? '密码和验证码在连接时输入。勾选后使用 Windows 系统加密保存。'
+                        ? '使用 Windows 系统加密保存密码；验证码不保存。'
                         : '系统加密当前不可用，密码仅用于本次连接。'}
                     </p>
                   </div>
@@ -567,16 +621,17 @@ export function VpnProfileEditor({
                   <div className="vpn-section-intro">
                     <Network size={19} />
                     <div>
-                      <h3>按资源分流</h3>
+                      <h3>此接入的自定义分流</h3>
                       <p>
-                        连接后自动加载服务器授权资源，也可以在这里补充分流范围。
+                        仅保存到「{form.name || '当前接入'}」，其他公司的配置独立。留空时使用服务器自动下发的资源。
                       </p>
                     </div>
                   </div>
                   <div className="vpn-two-columns">
                     <label className="vpn-field">
-                      <span>补充域名</span>
+                      <span>自定义域名</span>
                       <textarea
+                        aria-label="自定义域名"
                         className="vpn-input font-mono"
                         rows={5}
                         placeholder={'dev.example.com\nuat.example.com'}
@@ -586,8 +641,9 @@ export function VpnProfileEditor({
                       <small>每行一个域名，包含它的子域名</small>
                     </label>
                     <label className="vpn-field">
-                      <span>补充 IP / 网段</span>
+                      <span>自定义 IP / 网段</span>
                       <textarea
+                        aria-label="自定义 IP / 网段"
                         className="vpn-input font-mono"
                         rows={5}
                         placeholder={'10.20.30.40\n10.20.40.0/24'}
@@ -602,6 +658,7 @@ export function VpnProfileEditor({
                       固定域名解析 <span className="vpn-optional">可选</span>
                     </span>
                     <textarea
+                      aria-label="固定域名解析"
                       className="vpn-input font-mono"
                       rows={4}
                       placeholder="dev.example.com 10.20.30.40"
@@ -612,6 +669,13 @@ export function VpnProfileEditor({
                   </label>
                   <div className="vpn-notice">
                     <ShieldCheck size={17} />
+                    <p>
+                      优先顺序：明确阻止 → 此接入的用户自定义 → 服务器资源 → 国内、局域网及应用规则。
+                      同一域名的固定解析以用户填写的 IP 为准。点击「保存配置」后保留，重启无需重新填写。
+                    </p>
+                  </div>
+                  <div className="vpn-notice">
+                    <Network size={17} />
                     <p>
                       已知 VPN
                       目标在断线时保持阻断，其他流量沿用原来的出口规则。修改补充范围会保存为
@@ -630,12 +694,39 @@ export function VpnProfileEditor({
                     <ShieldCheck size={19} />
                     <div>
                       <h3>证书与网络出口</h3>
-                      <p>默认使用系统信任链和自动选择的物理网卡。</p>
+                      <p>默认自动处理网关证书，并自动选择物理网卡。</p>
                     </div>
                   </div>
+                  <label className="vpn-field">
+                    <span>证书处理方式</span>
+                    <select
+                      className="vpn-input"
+                      aria-label="证书处理方式"
+                      value={form.tls.trustMode || 'auto'}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          tls: {
+                            ...form.tls,
+                            trustMode: event.target.value as 'auto' | 'strict',
+                          },
+                        })
+                      }
+                    >
+                      <option value="auto">自动处理（首次记住网关证书）</option>
+                      <option value="strict">
+                        严格校验（系统 CA 或已固定指纹）
+                      </option>
+                    </select>
+                    <small>
+                      优先使用系统信任链；首次遇到未受信任证书时自动绑定指纹。已记录的指纹变化时会停止连接，自定义
+                      CA 按配置校验。
+                    </small>
+                  </label>
                   <CertificateInspector
                     profile={form}
                     savedGateway={savedGateway}
+                    autoInspect={initialTab === 'advanced'}
                     onTrust={(pinSha256) =>
                       setForm({ ...form, tls: { ...form.tls, pinSha256 } })
                     }
@@ -775,7 +866,7 @@ export function VpnProfileEditor({
               ) : (
                 <>
                   <div>
-                    {!!profile.id && (
+                    {!!profile.id && !readOnly && (
                       <button
                         type="button"
                         className="vpn-button text-danger"
@@ -794,9 +885,9 @@ export function VpnProfileEditor({
                       disabled={!!busy}
                       onClick={close}
                     >
-                      取消
+                      {readOnly ? '关闭' : '取消'}
                     </button>
-                    <button
+                    {!readOnly && <button
                       type="submit"
                       className="vpn-button primary"
                       disabled={!!busy}
@@ -810,7 +901,7 @@ export function VpnProfileEditor({
                         <Save size={16} />
                       )}
                       保存配置
-                    </button>
+                    </button>}
                   </div>
                 </>
               )}
@@ -826,19 +917,59 @@ function CertificateInspector({
   profile,
   savedGateway,
   onTrust,
+  autoInspect,
 }: {
   profile: VpnProfile;
   savedGateway: boolean;
   onTrust: (pin: string) => void;
+  autoInspect?: boolean;
 }) {
   const [certificate, setCertificate] = useState<VpnCertificate>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const sequence = useRef(0);
   useEffect(() => {
+    sequence.current++;
     setCertificate(undefined);
     setConfirm(false);
+    setBusy(false);
+    return () => {
+      sequence.current++;
+    };
   }, [profile.id, profile.gateway.host, profile.gateway.port]);
+  const read = async () => {
+    const version = ++sequence.current;
+    setBusy(true);
+    setError('');
+    try {
+      const value = await window.electronAPI.corporateVpn.certificate(
+        profile.id,
+      );
+      if (version === sequence.current) setCertificate(value);
+    } catch (e) {
+      if (version === sequence.current) setError(String(e));
+    } finally {
+      if (version === sequence.current) setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (autoInspect && savedGateway) void read();
+  }, [
+    autoInspect,
+    savedGateway,
+    profile.id,
+    profile.gateway.host,
+    profile.gateway.port,
+  ]);
+  const issues: Record<string, string> = {
+    UNTRUSTED_AUTHORITY: '签发者未被系统信任，可能使用了自签名证书。',
+    NAME_MISMATCH: '证书名称与当前网关地址不匹配。',
+    EXPIRED: '服务器证书已过期。',
+    NOT_YET_VALID: '服务器证书尚未到生效时间。',
+    INVALID_CA: '保存的 CA 证书无法读取。',
+    CHAIN_INVALID: '证书链未通过校验。',
+  };
   return (
     <div className="vpn-certificate-panel">
       <div className="vpn-section-heading">
@@ -853,19 +984,7 @@ function CertificateInspector({
           type="button"
           className="vpn-button compact"
           disabled={!savedGateway || busy}
-          onClick={async () => {
-            setBusy(true);
-            setError('');
-            try {
-              setCertificate(
-                await window.electronAPI.corporateVpn.certificate(profile.id),
-              );
-            } catch (e) {
-              setError(String(e));
-            } finally {
-              setBusy(false);
-            }
-          }}
+          onClick={read}
         >
           {busy ? (
             <LoaderCircle
@@ -895,10 +1014,34 @@ function CertificateInspector({
               : '系统信任链未通过，使用前需要核对证书'}
           </p>
           <dl>
+            {!!certificate.trustIssues?.length && (
+              <>
+                <dt>校验结果</dt>
+                <dd>
+                  <ul className="vpn-certificate-issues">
+                    {certificate.trustIssues.map((issue) => (
+                      <li key={issue}>{issues[issue] || '证书校验未通过。'}</li>
+                    ))}
+                  </ul>
+                </dd>
+              </>
+            )}
             <dt>颁发给</dt>
             <dd>{certificate.subject}</dd>
             <dt>颁发者</dt>
             <dd>{certificate.issuer}</dd>
+            {!!certificate.dnsNames?.length && (
+              <>
+                <dt>域名</dt>
+                <dd>{certificate.dnsNames.join(', ')}</dd>
+              </>
+            )}
+            {!!certificate.ipAddresses?.length && (
+              <>
+                <dt>IP 地址</dt>
+                <dd>{certificate.ipAddresses.join(', ')}</dd>
+              </>
+            )}
             <dt>有效期至</dt>
             <dd>{certificate.validTo}</dd>
             <dt>SHA256</dt>

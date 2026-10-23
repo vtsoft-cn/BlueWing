@@ -26,6 +26,9 @@ interface NodesProps {
   nodes: ProxyNode[];
   activeNodeId: string;
   onSelectNode: (id: string) => void;
+  onSelectDirect: () => void;
+  directSelected: boolean;
+  selectionDisabled?: boolean;
   subscriptions: Subscription[];
 }
 
@@ -78,6 +81,9 @@ export const Nodes: React.FC<NodesProps> = ({
   nodes,
   activeNodeId,
   onSelectNode,
+  onSelectDirect,
+  directSelected,
+  selectionDisabled,
   subscriptions,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -447,6 +453,12 @@ export const Nodes: React.FC<NodesProps> = ({
         </div>
       </div>
 
+      <button type="button" aria-pressed={directSelected} disabled={selectionDisabled} onClick={onSelectDirect}
+        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border text-left transition-colors disabled:opacity-60 ${directSelected ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-400'}`}>
+        <span className="flex items-center gap-3"><span className="rounded-lg p-2 bg-blue-500/10 text-blue-500"><Server className="w-5 h-5" /></span><span><span className="block font-semibold text-sm text-slate-900 dark:text-slate-100">本机直连（无需节点）</span><span className="block mt-1 text-xs text-slate-500 dark:text-slate-400">普通公网使用本机网络，公司资源按 VPN 接入配置分流</span></span></span>
+        {directSelected ? <CheckCircle2 className="w-5 h-5 shrink-0 text-blue-500" /> : <span className="text-xs text-blue-500 shrink-0">选择直连</span>}
+      </button>
+
       {/* 2. Dual-Level Filter Navigation Bar */}
       <div className="space-y-2">
         {/* Level 1: Subscription Groups Bar */}
@@ -508,7 +520,7 @@ export const Nodes: React.FC<NodesProps> = ({
       {filteredNodes.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredNodes.map((node) => {
-            const isSelected = node.id === activeNodeId;
+            const isSelected = !directSelected && node.id === activeNodeId;
             const hasPing = node.ping !== undefined && node.ping > 0;
             const isTimeout = node.ping === -1;
             const region = detectRegion(node.name, node.server);
@@ -516,7 +528,7 @@ export const Nodes: React.FC<NodesProps> = ({
             return (
               <div
                 key={node.id}
-                onClick={() => onSelectNode(node.id)}
+                onClick={() => { if (!selectionDisabled) onSelectNode(node.id); }}
                 className={`p-4 rounded-2xl border transition-all duration-200 cursor-pointer relative group flex flex-col justify-between ${
                   isSelected
                     ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/25 shadow-sm shadow-blue-500/10 ring-1 ring-blue-500/30'
@@ -768,7 +780,7 @@ export const Nodes: React.FC<NodesProps> = ({
       {speedTestingNode && (
         <SingleNodeSpeedModal
           node={speedTestingNode}
-          isActive={speedTestingNode.id === activeNodeId}
+          isActive={!directSelected && speedTestingNode.id === activeNodeId}
           onSelectNode={onSelectNode}
           onSaveNodePing={(nodeId, ping, httpLatency, downloadSpeed) => {
             const current = nodes.find((n) => n.id === nodeId);

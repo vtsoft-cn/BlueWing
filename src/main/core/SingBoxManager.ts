@@ -270,7 +270,7 @@ export class SingBoxManager extends EventEmitter {
   public async start(config: Record<string, any>): Promise<boolean> {
     return this.runWithMutex(async () => {
       if (this.state === 'running' || this.state === 'starting') {
-        await this.stopInternal();
+        await this.stopInternal(true);
       }
 
       this.setState('starting');
@@ -346,12 +346,16 @@ export class SingBoxManager extends EventEmitter {
           }
         });
 
+        const child = this.process;
         this.process.on('error', (err) => {
+          if (this.process !== child) return;
           this.log('error', `内核进程异常: ${err.message}`, 'core');
           this.setState('error');
         });
 
         this.process.on('close', (code, signal) => {
+          // A force-stopped child may close after its replacement has started.
+          if (this.process !== child) return;
           const wasRunning = this.state === 'running';
           this.log(
             code === 0 ? 'info' : 'warn',
@@ -414,7 +418,7 @@ export class SingBoxManager extends EventEmitter {
     });
   }
 
-  private async stopInternal(): Promise<void> {
+  private async stopInternal(restarting = false): Promise<void> {
     if (!this.process && this.state === 'stopped') {
       return;
     }
@@ -442,7 +446,9 @@ export class SingBoxManager extends EventEmitter {
     }
 
     this.process = null;
-    this.setState('stopped');
+    // A controlled reload is not a user disconnect. Keep the independent VPN
+    // session alive; startup errors still emit error/stopped and revoke it.
+    if (!restarting) this.setState('stopped');
     this.log('info', 'Sing-box 核心进程已安全停止', 'core');
   }
 
@@ -523,17 +529,21 @@ export class SingBoxManager extends EventEmitter {
     const selector = config.outbounds?.find((o: any) => o.type === 'selector' && o.tag === 'proxy');
     const db = Database.getInstance();
     const activeId = db.getActiveNodeId();
-    const desired = `node-${activeId}`;
+    const desired = selector?.outbounds?.length === 1 && selector.outbounds[0] === 'direct'
+      ? 'direct' : `node-${activeId}`;
     if (!selector || !Array.isArray(selector.outbounds) || !selector.outbounds.includes(desired)) {
       return;
     }
 
     const secret: string | undefined = config.experimental.clash_api.secret || undefined;
-    const friendlyName = db.getNodes().find((n) => n.id === activeId)?.name || activeId;
+    const friendlyName = desired === 'direct' ? '本机直连' : db.getNodes().find((n) => n.id === activeId)?.name || activeId;
+    const pid = this.process?.pid;
+    const mode = db.getSettings().routingMode;
 
     for (let attempt = 0; attempt < 10; attempt++) {
-      if (this.state !== 'running') return;
+      if (this.state !== 'running' || this.process?.pid !== pid || db.getActiveNodeId() !== activeId || db.getSettings().routingMode !== mode) return;
       const current = await this.getClashSelection(clashPort, secret);
+      if (this.state !== 'running' || this.process?.pid !== pid || db.getActiveNodeId() !== activeId || db.getSettings().routingMode !== mode) return;
       if (current === undefined) {
         await new Promise((r) => setTimeout(r, 300));
         continue;
