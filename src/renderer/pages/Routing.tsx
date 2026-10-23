@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Portal } from '../components/Portal';
-import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X} from 'lucide-react';
+import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, ArrowDown, ArrowUpToLine} from 'lucide-react';
 import { RouteRule, AppSettings, ProxyNode } from '../../types';
 import { toast } from '../components/Toast';
 import { Select } from '../components/Select';
@@ -45,6 +45,14 @@ export const Routing: React.FC<RoutingProps> = ({
 
   const handleDeleteRule = (ruleId: string) => {
     const updated = rules.filter((r) => r.id !== ruleId);
+    onSaveRules(updated);
+  };
+
+  const handleMoveRule = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= rules.length) return;
+    const updated = [...rules];
+    const [rule] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, rule);
     onSaveRules(updated);
   };
 
@@ -205,7 +213,7 @@ export const Routing: React.FC<RoutingProps> = ({
               分流规则列表
             </h4>
             <p className="text-xs text-slate-400">
-              优先级由上至下匹配，命中后执行对应动作；带「内置」徽标的为系统默认规则，可停用不可删除
+              按列表从上到下匹配，可用右侧按钮调整顺序；公司网络等例外规则应放在国内直连之前。内置规则也可排序、停用
             </p>
           </div>
 
@@ -230,7 +238,7 @@ export const Routing: React.FC<RoutingProps> = ({
         </div>
 
         <div className="space-y-2">
-          {rules.map((rule) => {
+          {rules.map((rule, index) => {
             const isProxy = rule.outbound === 'proxy';
             const isDirect = rule.outbound === 'direct';
             const isBlock = rule.outbound === 'block';
@@ -245,6 +253,7 @@ export const Routing: React.FC<RoutingProps> = ({
                   <input
                     type="checkbox"
                     checked={rule.enabled}
+                    aria-label={`启用规则：${rule.name}`}
                     onChange={() => handleToggleRule(rule.id)}
                     className="w-4 h-4 rounded text-blue-600 focus:ring-0 flex-shrink-0"
                   />
@@ -266,6 +275,38 @@ export const Routing: React.FC<RoutingProps> = ({
                 </div>
 
                 <div className="flex items-center space-x-3 flex-shrink-0">
+                  <div className="flex items-center gap-0.5" role="group" aria-label={`调整规则顺序：${rule.name}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveRule(index, 0)}
+                      disabled={index === 0}
+                      aria-label={`置顶规则：${rule.name}`}
+                      title="置顶：优先于下方规则匹配"
+                      className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ArrowUpToLine className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveRule(index, index - 1)}
+                      disabled={index === 0}
+                      aria-label={`上移规则：${rule.name}`}
+                      title="上移一位"
+                      className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveRule(index, index + 1)}
+                      disabled={index === rules.length - 1}
+                      aria-label={`下移规则：${rule.name}`}
+                      title="下移一位"
+                      className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   {/* Outbound Badge */}
                   <span
                     className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full whitespace-nowrap ${

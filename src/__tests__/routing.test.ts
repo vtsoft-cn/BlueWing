@@ -163,6 +163,47 @@ describe('Routing and App Rules in ConfigGenerator', () => {
     assert.ok(blockIdx < cnIdx, 'app block rule must stay ahead of all domain rules');
   });
 
+  test('Company rules can take priority while both CN direct rules remain enabled', () => {
+    const companyNode: ProxyNode = {
+      id: 'company-vpn', name: 'Company VPN', type: 'socks',
+      server: '127.0.0.1', port: 11080, groupId: 'default',
+    };
+    const customRules: RouteRule[] = [
+      {
+        id: 'company-domains', name: 'Company domains', enabled: true,
+        domains: ['full:dev.corp.example', 'full:uat.corp.example', 'full:prod.corp.example'],
+        outbound: companyNode.id,
+      },
+      {
+        id: 'company-networks', name: 'Company networks', enabled: true,
+        ip: ['10.20.30.0/24', '10.20.40.0/24', '10.20.50.0/24'],
+        outbound: companyNode.id,
+      },
+      { id: 'rule-cn-domains', name: 'CN domains', enabled: true, domains: ['geosite:cn'], outbound: 'direct' },
+      { id: 'rule-cn-ips', name: 'CN IPs', enabled: true, ip: ['geoip:cn'], outbound: 'direct' },
+    ];
+    const dns: DnsConfig = {
+      mode: 'standard', remoteDns: 'https://1.1.1.1/dns-query', directDns: '223.5.5.5',
+      fakeIpRange: '198.18.0.0/15', enableDnsRouting: true, servers: [],
+    };
+    const config = ConfigGenerator.generate(sampleNode.id, [sampleNode, companyNode], customRules, [], dns, {
+      ...defaultSettings, routingMode: 'rule', systemProxyBypassLan: false,
+    });
+    const generated: any[] = config.route.rules;
+    const companyDomainIndex = generated.findIndex(r => r.domain?.includes('dev.corp.example'));
+    const companyIpIndex = generated.findIndex(r => r.ip_cidr?.includes('10.20.30.0/24'));
+    const cnDomainIndex = generated.findIndex(r => r.rule_set?.includes('geosite-cn') && r.outbound === 'direct');
+    const cnIpIndex = generated.findIndex(r => r.rule_set?.includes('geoip-cn') && r.outbound === 'direct');
+
+    assert.ok(companyDomainIndex >= 0 && companyIpIndex > companyDomainIndex);
+    assert.ok(cnDomainIndex > companyIpIndex, 'Company destinations must precede CN domain bypass');
+    assert.ok(cnIpIndex > companyIpIndex, 'Company destinations must precede CN IP bypass');
+    assert.equal(generated[companyDomainIndex].outbound, 'node-company-vpn');
+    assert.equal(generated[companyIpIndex].outbound, 'node-company-vpn');
+    assert.equal(config.route.final, 'proxy', 'Other traffic must keep the public proxy fallback');
+    assert.equal(config.outbounds.find((o: any) => o.tag === 'proxy').default, 'node-node-test');
+  });
+
   test('Configures custom DNS servers and cache capacity in Sing-box', () => {
     const dns: DnsConfig = {
       mode: 'fakeip',
