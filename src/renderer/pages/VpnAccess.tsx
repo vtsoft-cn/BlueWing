@@ -143,6 +143,13 @@ export const VpnAccess: React.FC<{
     () => setAddPickerOpen(false),
   );
   const pickerDrag = useMaskDrag();
+  // 防双击穿透:弹层刚打开的瞬间,物理第二击可能落在与之位置重叠的类型行上,
+  // 直接触发编辑器(视觉上=类型选择被跳过)。打开后 350ms 内忽略行点击。
+  const pickerOpenedAtRef = useRef(0);
+  useEffect(() => {
+    if (addPickerOpen) pickerOpenedAtRef.current = Date.now();
+  }, [addPickerOpen]);
+  const pickerClickGuard = () => Date.now() - pickerOpenedAtRef.current < 350;
   // ---- 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…,与原生协议并列在同一列表) ----
   const [engineProfiles, setEngineProfiles] = useState<EngineVpnProfile[]>([]);
   const [engineRuntime, setEngineRuntime] = useState<VpnRuntimeInfo | null>(null);
@@ -1175,7 +1182,7 @@ export const VpnAccess: React.FC<{
                     key={provider.id}
                     className="vpn-button"
                     style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
-                    onClick={() => { setAddPickerOpen(false); openEditor({ ...newVpnProfile(), protocol: provider.id }); }}
+                    onClick={() => { if (pickerClickGuard()) return; setAddPickerOpen(false); openEditor({ ...newVpnProfile(), protocol: provider.id }); }}
                   >
                     <strong>{provider.name}</strong>
                     <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{provider.description}</div>
@@ -1188,6 +1195,7 @@ export const VpnAccess: React.FC<{
                     className="vpn-button"
                     style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
                     onClick={() => {
+                      if (pickerClickGuard()) return;
                       setAddPickerOpen(false);
                       // 空白引擎档案带类型直开编辑器(管理在主列表:连接/编辑/删除)
                       setEngineEditorFor({
