@@ -9,6 +9,8 @@ import path from 'path';
 import { execFileSync, spawn } from 'child_process';
 import { ProfileRepository } from '../main/vpn/ProfileRepository';
 import { CorporatePolicy } from '../main/vpn/CorporatePolicy';
+import { CorporateVpnManager } from '../main/vpn/CorporateVpnManager';
+import { CredentialVault } from '../main/vpn/CredentialVault';
 import { VpnCoreProcess } from '../main/vpn/VpnCoreProcess';
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { SingBoxManager } from '../main/core/SingBoxManager';
@@ -19,6 +21,81 @@ import { applyCorporateConfig } from '../main/vpn/CorporateConfig';
 import { AppSettings, DnsConfig, ProxyNode } from '../types';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test('A company VPN that rejects public traffic leaves CN local and foreign traffic on the proxy', { timeout: 35000 }, async (t) => {
+  const cases = [
+    { name: 'smart / public VPN denied', mode: 'split', proxy: true, domestic: 'DIRECT', foreign: 'PUBLIC', lan: 'DIRECT', denyPublic: true },
+    { name: 'all VPN / foreign proxy has priority', mode: 'vpn', proxy: true, domestic: 'VPN', foreign: 'PUBLIC', lan: 'VPN', denyPublic: false },
+    { name: 'all VPN / no public proxy', mode: 'vpn', proxy: false, domestic: 'VPN', foreign: 'VPN', lan: 'VPN', denyPublic: false },
+    { name: 'custom / domestic proxy and foreign direct', mode: 'custom', proxy: true, domestic: 'PUBLIC', foreign: 'DIRECT', lan: 'DIRECT', denyPublic: true,
+      custom: { domestic: 'proxy', foreign: 'direct', lan: 'direct' } },
+  ] as const;
+  for (const policyCase of cases) await t.test(policyCase.name, async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-cn-vpn-'));
+  const prior = process.env.BLUEWING_DATA_DIR; process.env.BLUEWING_DATA_DIR = dir;
+  let sb: ReturnType<typeof spawn> | undefined; const servers: net.Server[] = [], sockets = new Set<net.Socket>();
+  t.after(async () => {
+    if (sb) { const closed = new Promise(r => sb!.exitCode !== null ? r(null) : sb!.once('exit', r)); sb.kill(); await closed; }
+    for (const s of sockets) s.destroy(); for (const s of servers) s.close();
+    if (prior === undefined) delete process.env.BLUEWING_DATA_DIR; else process.env.BLUEWING_DATA_DIR = prior;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const companyAttempts: string[] = [];
+  const serve = async (body: string, companyOnly = false) => {
+    const server = net.createServer(socket => {
+      sockets.add(socket); socket.on('close', () => sockets.delete(socket)); let stage = 0, data = Buffer.alloc(0);
+      socket.on('data', chunk => {
+        data = Buffer.concat([data, chunk]);
+        if (stage === 0 && data.length >= 2 + data[1]) { data = data.subarray(2 + data[1]); socket.write(Buffer.from([5, 2])); stage = 1; }
+        if (stage === 1 && data.length >= 2 + data[1] + 1) { const n = 2 + data[1] + 1 + data[2 + data[1]]; if (data.length < n) return; data = data.subarray(n); socket.write(Buffer.from([1, 0])); stage = 2; }
+        if (stage === 2 && data.length >= 5) {
+          const n = data[3] === 1 ? 10 : data[3] === 4 ? 22 : 7 + data[4]; if (data.length < n) return;
+          const host = data[3] === 1 ? [...data.subarray(4, 8)].join('.') : data.subarray(5, 5 + data[4]).toString();
+          if (companyOnly) {
+            companyAttempts.push(host);
+            if (policyCase.denyPublic && !['192.0.2.10', 'office.company.cn'].includes(host)) { socket.end(Buffer.from([5, 2, 0, 1, 0, 0, 0, 0, 0, 0])); stage = 4; return; }
+          }
+          data = data.subarray(n); socket.write(Buffer.from([5, 0, 0, 1, 127, 0, 0, 1, 0, 1])); stage = 3;
+        }
+        if (stage === 3 && data.includes(Buffer.from('\r\n\r\n'))) { socket.end(`HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n${body}`); stage = 4; }
+      });
+    }); servers.push(server); return listen(server);
+  };
+  const vpnPort = await serve('VPN', true), publicPort = await serve('PUBLIC');
+  // Both mock SOCKS outlets use password authentication; no real site is contacted.
+  const repo = new ProfileRepository(dir);
+  const p = repo.save({ id: 'cn', name: 'Company only', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: '', trafficMode: policyCase.mode, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['192.0.2.10/32'] }], hosts: {}, bindInterface: '' });
+  const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')); stored.profiles[0].socksPort = vpnPort; stored.profiles[0].dnsPort = await freePort(); fs.writeFileSync(path.join(dir, 'vpn-profiles.json'), JSON.stringify(stored)); repo.reload();
+  const policy = new CorporatePolicy(dir); policy.prepare(repo.list()); const runtime = policy.runtime();
+  const direct = await serve('DIRECT');
+  const config = ConfigGenerator.generate('public', policyCase.proxy ? [{ id: 'public', name: 'Public', type: 'socks', server: '127.0.0.1', port: publicPort, username: 'test', password: 'test', groupId: 'test' }] : [], [], [],
+    { mode: 'standard', remoteDns: '223.5.5.5', directDns: '223.5.5.5', servers: [] } as DnsConfig,
+    { mixedPort: await freePort(), tunEnabled: false, routingMode: 'rule', clashApiEnabled: false, logLevel: 'debug' } as AppSettings, undefined, runtime);
+  config.outbounds[config.outbounds.findIndex((r: any) => r.tag === 'direct')] = { type: 'socks', tag: 'direct', server: '127.0.0.1', server_port: direct, username: 'test', password: 'test', version: '5' };
+  config.inbounds.find((r: any) => r.tag === 'speedtest-in').listen_port = await freePort();
+  const file = path.join(dir, 'config.json'), binary = path.resolve('bin/sing-box.exe'); fs.writeFileSync(file, JSON.stringify(config)); execFileSync(binary, ['check', '-c', file], { windowsHide: true });
+  const port = config.inbounds.find((r: any) => r.tag === 'mixed-in').listen_port;
+  let log = ''; sb = spawn(binary, ['run', '-c', file], { windowsHide: true }); sb.stdout?.on('data', b => log += b); sb.stderr?.on('data', b => log += b);
+  let ready = false; for (let i = 0; i < 40; i++) { try { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT') { ready = true; break; } } catch {} await sleep(100); }
+  assert.ok(ready, log); const pid = sb.pid;
+  policy.setProbe(p.id, 'company-on', repo.list());
+  let active = false; for (let i = 0; i < 30; i++) { try { if ((await request(port, 'http://192.0.2.10/')).body === 'VPN') { active = true; break; } } catch {} await sleep(100); }
+  assert.ok(active, log);
+  assert.equal((await request(port, 'http://www.baidu.com/')).body, policyCase.domestic, log);
+  assert.equal((await request(port, 'http://223.5.5.5/')).body, policyCase.domestic, log);
+  assert.equal((await request(port, 'http://chatgpt.com/')).body, policyCase.foreign, log);
+  assert.equal((await request(port, 'http://1.1.1.1/')).body, policyCase.foreign, log);
+  assert.equal((await request(port, 'http://192.168.77.1/')).body, policyCase.lan, log);
+  assert.equal((await request(port, 'http://192.0.2.10/')).body, 'VPN', log);
+  assert.equal((await request(port, 'http://office.company.cn/')).body, 'VPN', log);
+  if (policyCase.denyPublic) assert.ok(companyAttempts.every(host => ['192.0.2.10', 'office.company.cn'].includes(host)), 'Public traffic must never enter the company VPN');
+  policy.deactivate(repo.list()); let restored = false;
+  for (let i = 0; i < 30; i++) { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT') { restored = true; break; } await sleep(100); }
+  assert.ok(restored, log); assert.equal(sb.pid, pid); assert.equal(sb.exitCode, null);
+  assert.equal((await request(port, 'http://chatgpt.com/')).body, policyCase.proxy ? 'PUBLIC' : 'DIRECT', log);
+  try { assert.notEqual((await request(port, 'http://192.0.2.10/')).body, 'DIRECT'); } catch (error) { if (error instanceof assert.AssertionError) throw error; }
+  });
+});
 const listen = (s: net.Server | http.Server, host = '127.0.0.1') =>
   new Promise<number>((resolve) =>
     s.listen(0, host, () => resolve((s.address() as net.AddressInfo).port)),
@@ -149,6 +226,16 @@ test('Running core switches node-free → proxy → direct → deleted/re-added 
   const manager: SingBoxManager = new (SingBoxManager as any)();
   t.mock.method(SingBoxManager, 'getInstance', () => manager);
   const sockets = new Set<net.Socket>();
+  const resolver = dgram.createSocket('udp4');
+  resolver.on('message', (query, remote) => {
+    let end = 12; while (query[end]) end += query[end] + 1; end++;
+    const isA = query.readUInt16BE(end) === 1;
+    const header = Buffer.from(query.subarray(0, 12)); header.writeUInt16BE(0x8180, 2);
+    header.writeUInt16BE(isA ? 1 : 0, 6); header.writeUInt16BE(0, 8); header.writeUInt16BE(0, 10);
+    const answer = Buffer.from([0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 30, 0, 4, 127, 0, 0, 1]);
+    resolver.send(Buffer.concat([header, query.subarray(12, end + 4), ...(isA ? [answer] : [])]), remote.port, remote.address);
+  });
+  await new Promise<void>(r => resolver.bind(0, '127.0.0.1', r));
   const local = http.createServer((_, res) => res.end('PUBLIC-DIRECT'));
   const proxy = http.createServer((_, res) => res.end('PUBLIC-PROXY'));
   proxy.on('connect', (_, socket) => {
@@ -167,6 +254,7 @@ test('Running core switches node-free → proxy → direct → deleted/re-added 
     await manager.stop(); await native?.stop();
     for (const socket of sockets) socket.destroy();
     local.close(); proxy.close();
+    resolver.close();
     LogManager.getInstance().destroy();
     Database.resetInstance();
     if (prior === undefined) delete process.env.BLUEWING_DATA_DIR; else process.env.BLUEWING_DATA_DIR = prior;
@@ -176,7 +264,7 @@ test('Running core switches node-free → proxy → direct → deleted/re-added 
   const mixedPort = await freePort();
   db.saveSettings({ mixedPort, tunEnabled: false, routingMode: 'rule', systemProxyBypassLan: false, clashApiEnabled: true, clashApiPort: await freePort() });
   db.saveRules([]); db.saveAppRules([]);
-  db.saveDns({ mode: 'standard', remoteDns: 'udp://127.0.0.1:9', directDns: 'udp://127.0.0.1:9', enableDnsRouting: false, fakeIpRange: '198.18.0.0/15', servers: [] });
+  db.saveDns({ mode: 'standard', remoteDns: 'udp://127.0.0.1:9', directDns: `udp://127.0.0.1:${resolver.address().port}`, enableDnsRouting: false, fakeIpRange: '198.18.0.0/15', servers: [] });
   const repo = new ProfileRepository(dir);
   const p = repo.save({ id: 'switch-company', name: 'Switch fixture', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: '', authMethod: 'auth/psw', loginDomain: '', rememberPassword: false, rememberSession: false, tls: {}, targets: [{ domains: ['private.corp.example'], cidrs: ['127.0.0.2/32'] }], hosts: {}, bindInterface: '' });
   const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8'));
@@ -196,7 +284,7 @@ test('Running core switches node-free → proxy → direct → deleted/re-added 
   manager.on('stateChange', state => states.push(state));
   const initial = ConfigGenerator.generate('', [], [], [], db.getDns(), db.getSettings());
   assert.equal(await manager.start(initial), true);
-  const url = `http://127.0.0.1:${localPort}/`;
+  const url = `http://ordinary.public.example:${localPort}/`;
   const verify = async (expected: string) => {
     const actual = await request(mixedPort, url).catch(error => {
       throw new Error(`${expected} failed in mode ${db.getSettings().routingMode}: ${error.message}\n${LogManager.getInstance().getLogs().slice(-16).map(l => l.message).join('\n')}`);
@@ -511,3 +599,63 @@ test(
     assert.equal(updated.id, profile.id);
   },
 );
+test('A running public proxy installs a newly saved VPN on connect and skips the next routing reload', { timeout: 30000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-auto-routing-'));
+  const prior = process.env.BLUEWING_DATA_DIR; process.env.BLUEWING_DATA_DIR = dir;
+  Database.resetInstance();
+  const db = Database.getInstance(), sb = SingBoxManager.getInstance();
+  const proxy = http.createServer((_, res) => res.end('PUBLIC-PROXY')), sockets = new Set<net.Socket>();
+  proxy.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  proxy.on('connect', (_, socket) => {
+    socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    let pending = '';
+    socket.on('data', chunk => { pending += chunk.toString(); if (pending.includes('\r\n\r\n')) socket.end('HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nPUBLIC-PROXY'); });
+  });
+  const proxyPort = await new Promise<number>(resolve => proxy.listen(0, '127.0.0.1', () => resolve((proxy.address() as net.AddressInfo).port)));
+  const mixedPort = await freePort(), speedPort = await freePort();
+  db.saveSettings({ mixedPort, tunEnabled: false, routingMode: 'rule', clashApiEnabled: true, clashApiPort: await freePort() });
+  db.saveRules([]); db.saveAppRules([]);
+  db.saveDns({ mode: 'standard', remoteDns: 'udp://127.0.0.1:9', directDns: 'udp://127.0.0.1:9', enableDnsRouting: true, fakeIpRange: '198.18.0.0/15', servers: [],
+    hosts: [{ id: 'fixture', domain: 'outside.public.example', ip: '198.51.100.23', enabled: true }] });
+  db.addNode({ id: 'public-auto', name: 'Selected public node', type: 'http', server: '127.0.0.1', port: proxyPort, groupId: 'test' });
+  const repo = new ProfileRepository(dir), native = new VpnCoreProcess(path.resolve('bin/bluewing-vpn-core.exe'));
+  const originalSend = native.send.bind(native); let loginCommands = 0, applications = 0;
+  // Real configure/listeners and sing-box, but never send a login to an external gateway.
+  native.send = (type, data) => { if (type === 'connect') { loginCommands++; return; } originalSend(type, data); };
+  const config = () => ConfigGenerator.generate(db.getActiveNodeId(), db.getNodes(), db.getRules(), db.getAppRules(), db.getDns(), db.getSettings());
+  const vpn = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, {
+    isEncryptionAvailable: () => false, encryptString: () => { throw new Error('disabled'); }, decryptString: () => '',
+  }), native, {
+    running: () => sb.getState() === 'running', pid: () => sb.getPid(), settings: () => db.getSettings(),
+    applyRouting: async isCurrent => { applications++; if (!isCurrent()) return false; return sb.start(config()); },
+  });
+  sb.setConfigEnricher(async value => {
+    applyCorporateConfig(value, await vpn.prepareRuntime(true));
+    value.inbounds.find((i: any) => i.tag === 'speedtest-in').listen_port = speedPort;
+  });
+  const configured = () => vpn.publicCoreStarted(vpn.policy.runtime());
+  const stopped = (state: string) => { if (['stopped', 'crashed', 'error'].includes(state)) vpn.publicCoreStopped(); };
+  sb.on('configured', configured); sb.on('stateChange', stopped);
+  t.after(async () => {
+    sb.off('configured', configured); sb.off('stateChange', stopped);
+    await vpn.dispose(); await sb.stop(); sb.setConfigEnricher(async () => {});
+    for (const socket of sockets) socket.destroy(); proxy.close();
+    LogManager.getInstance().destroy(); Database.resetInstance();
+    if (prior === undefined) delete process.env.BLUEWING_DATA_DIR; else process.env.BLUEWING_DATA_DIR = prior;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  assert.equal(await sb.start(config()), true);
+  const before = sb.getPid(), url = 'http://outside.public.example/';
+  const p = (await vpn.save({ id: 'auto-vpn', name: 'Office fixture', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'example', authMethod: 'auth/psw', loginDomain: '', tls: { trustMode: 'strict' }, targets: [{ domains: ['office.corp.example'], cidrs: ['10.90.0.0/16'] }], hosts: {}, bindInterface: '' })).profile;
+  assert.equal(sb.getPid(), before); assert.equal(applications, 0);
+  assert.equal((await request(mixedPort, url)).body, 'PUBLIC-PROXY');
+  await vpn.connect(p.id, 'fixture-only-password');
+  assert.equal(applications, 1); assert.equal(loginCommands, 1);
+  assert.equal(db.getActiveNodeId(), 'public-auto'); assert.equal(db.getSettings().routingMode, 'rule');
+  assert.equal(vpn.snapshot().state.state, 'authenticating');
+  const live = JSON.parse(sb.getLiveConfig());
+  assert.ok(live.outbounds.some((o: any) => o.tag === `corp-out-${p.id}`));
+  assert.equal((await request(mixedPort, url)).body, 'PUBLIC-PROXY');
+  const installed = sb.getPid(); await vpn.disconnect(); await vpn.connect(p.id, 'fixture-only-password');
+  assert.equal(applications, 1); assert.equal(loginCommands, 2); assert.equal(sb.getPid(), installed);
+});

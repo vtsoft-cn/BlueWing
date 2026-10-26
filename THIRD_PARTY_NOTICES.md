@@ -45,3 +45,10 @@
    - 保留上游版权与许可；修改说明见 `native/vpn/BLUEWING-FORK.md`，完整维护源码见 `native/vpn/`。
    - 构建附带 `bin/VPN-CORE-LICENSE-AGPL-3.0.txt`、`bin/vpn-core-sources.zip` 和含来源与校验值的 `bin/vpn-core-manifest.json`。
    - 以上材料不代表已完成集成产品的整体许可证决策；公开发布前须完成该决策。
+
+9. **govpn SoftEther 报文实现（BlueWing 适配）**
+   - 官方主页: https://github.com/bclswl0827/govpn
+   - 基线: v0.2.4，提交 `78c78a37330f361c8f4922b0e7e126a3fc495742`
+   - 许可证: MIT，Copyright (c) 2026 ttyAMA0
+   - 用途: SoftEther 原生协议报文、密码挑战、ARP 和 DHCP；复用 BlueWing 现有私有网络栈，不安装 TAP 网卡。
+   - 许可全文与修改说明: `native/vpn/client/softether/LICENSE-MIT`、`UPSTREAM.md`，随维护源码一并打包。

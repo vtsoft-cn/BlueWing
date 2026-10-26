@@ -87,7 +87,7 @@ export function hosts(value: unknown): Record<string, string[]> {
 export function validateProfile(input: unknown): VpnProfile {
   const p = input as VpnProfile;
   if (!p || typeof p !== 'object') throw new Error('配置格式不正确');
-  if (!['easyconnect', 'atrust'].includes(p.protocol))
+  if (!['easyconnect', 'atrust', 'softether'].includes(p.protocol))
     throw new Error('不支持的 VPN 协议');
   if (p.id && !/^[a-zA-Z0-9-]{1,64}$/.test(p.id))
     throw new Error('配置 ID 不正确');
@@ -118,14 +118,38 @@ export function validateProfile(input: unknown): VpnProfile {
     throw new Error('CA 证书格式不正确');
   if (tls.pinSha256 && !/^[0-9a-fA-F]{64}$/.test(tls.pinSha256))
     throw new Error('证书 SHA256 必须为 64 位十六进制');
+  const loginDomain = text(p.loginDomain ?? '', 100);
+  const authMethod = text(p.authMethod ?? 'auth/psw', 100);
+  if (p.diagnosticMode !== undefined && !['off', 'detail', 'full'].includes(p.diagnosticMode))
+    throw new Error('诊断模式不正确');
+  const authChoices = p.protocol === 'atrust' ? list(p.authChoices || [], 128).map((value: any) => ({
+    authType: text(value.authType, 100), loginDomain: text(value.loginDomain, 100),
+    authName: text(value.authName, 100), supported: value.supported === true,
+  })) : [];
+  if (p.trafficMode !== undefined && !['split', 'vpn', 'custom'].includes(p.trafficMode))
+    throw new Error('不支持的 VPN 分流模式');
+  const customRouting = p.customRouting || { domestic: 'direct', foreign: 'proxy', lan: 'direct' };
+  if (![customRouting.domestic, customRouting.foreign, customRouting.lan].every(v => ['direct', 'proxy', 'vpn'].includes(v)))
+    throw new Error('自定义分流出口不正确');
+  if (p.protocol === 'softether') {
+    if (!loginDomain) throw new Error('请输入 SoftEther Virtual HUB 名称');
+    if (!text(p.username ?? '', 256)) throw new Error('请输入 SoftEther 登录账号');
+    if (!['auth/psw', 'softether/radius'].includes(authMethod))
+      throw new Error('不支持的 SoftEther 认证方式');
+  }
   return {
     id: p.id || randomUUID(),
     name,
     protocol: p.protocol,
     gateway: { host, port },
     username: text(p.username ?? '', 256),
-    authMethod: text(p.authMethod ?? 'auth/psw', 100),
-    loginDomain: text(p.loginDomain ?? '', 100),
+    authMethod,
+    loginDomain,
+    authName: text(p.authName || '', 100),
+    authChoices,
+    diagnosticMode: p.diagnosticMode || 'off',
+    trafficMode: p.trafficMode || 'split',
+    customRouting: { domestic: customRouting.domestic, foreign: customRouting.foreign, lan: customRouting.lan },
     rememberPassword: p.rememberPassword === true,
     rememberSession: p.rememberSession === true,
     tls: {
@@ -237,6 +261,7 @@ export class ProfileRepository {
       ...p,
       rememberPassword: false,
       rememberSession: false,
+      diagnosticMode: 'off',
       socksPort: 0,
       dnsPort: 0,
     }));
@@ -275,6 +300,7 @@ export class ProfileRepository {
     for (const p of incoming) {
       p.rememberPassword = false;
       p.rememberSession = false;
+      p.diagnosticMode = 'off';
       const old = this.profiles.find((v) => identity(v) === identity(p));
       if (old) {
         p.id = old.id;

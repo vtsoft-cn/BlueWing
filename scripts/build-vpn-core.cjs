@@ -71,6 +71,10 @@ fs.copyFileSync(
   path.join(source, 'LICENSE'),
   path.join(bin, 'VPN-CORE-LICENSE-AGPL-3.0.txt'),
 );
+fs.copyFileSync(
+  path.join(source, 'client', 'softether', 'LICENSE-MIT'),
+  path.join(bin, 'VPN-CORE-LICENSE-SOFTETHER-MIT.txt'),
+);
 const manifest = {
   schemaVersion: 1,
   name: 'bluewing-vpn-core',
@@ -81,6 +85,14 @@ const manifest = {
     commit: '5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da',
   },
   toolchain: version,
+  additionalProviders: [{
+    name: 'softether',
+    repository: 'https://github.com/bclswl0827/govpn',
+    tag: 'v0.2.4',
+    commit: '78c78a37330f361c8f4922b0e7e126a3fc495742',
+    license: 'MIT',
+    source: 'client/softether',
+  }],
   sourceSha256,
   sha256: createHash('sha256')
     .update(fs.readFileSync(path.join(bin, 'bluewing-vpn-core.exe')))
@@ -88,15 +100,17 @@ const manifest = {
   sourceArchiveSha256: createHash('sha256')
     .update(fs.readFileSync(path.join(bin, 'vpn-core-sources.zip')))
     .digest('hex'),
-  protocols: ['easyconnect', 'atrust'],
+  protocols: ['easyconnect', 'atrust', 'softether'],
   supportedAuth: {
     easyconnect: ['password', 'otp', 'image', 'sms'],
     atrust: ['auth/psw', 'auth/smsCheckCode', 'otp', 'image'],
+    softether: ['auth/psw', 'softether/radius'],
   },
   udp: false,
   verification: {
     easyconnect: 'NOT_RUN_REAL_GATEWAY',
     atrust: 'NOT_RUN_REAL_GATEWAY',
+    softether: 'NOT_RUN_REAL_GATEWAY',
     tun: 'NOT_RUN_REAL_WINDOWS',
   },
   license: 'AGPL-3.0',

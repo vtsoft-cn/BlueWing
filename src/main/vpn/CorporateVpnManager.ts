@@ -15,10 +15,12 @@ import { CorporatePolicy } from './CorporatePolicy';
 import { VpnCoreEvent, VpnCoreProcess } from './VpnCoreProcess';
 import { physicalInterface } from './PhysicalInterface';
 import { gatewayTrust } from './GatewayTrust';
+import { VpnDiagnostics } from './VpnDiagnostics';
 
 interface PublicCore {
   running(): boolean;
   pid(): number | undefined;
+  applyRouting?(isCurrent: () => boolean): Promise<boolean>;
   settings(): {
     mixedPort: number;
     inboundAuth?: boolean;
@@ -29,14 +31,17 @@ interface PublicCore {
 }
 function signature(runtime: VpnRuntime): string {
   return JSON.stringify(
-    runtime.profiles.map((r) => ({
+    [...runtime.profiles].sort((a, b) => a.profile.id.localeCompare(b.profile.id)).map((r) => ({
       id: r.profile.id,
       port: r.profile.socksPort,
       dns: r.profile.dnsPort,
+      trafficMode: r.profile.trafficMode || 'split',
+      customRouting: r.profile.customRouting,
     })),
   );
 }
 export class CorporateVpnManager extends EventEmitter {
+  readonly diagnostics: VpnDiagnostics;
   private state: VpnState = { state: 'idle', generation: 0 };
   private registered = '';
   private configured = '';
@@ -56,6 +61,7 @@ export class CorporateVpnManager extends EventEmitter {
     private retryDelays = [2000, 5000, 10000, 30000, 30000],
   ) {
     super();
+    this.diagnostics = new VpnDiagnostics(profiles.dir);
     policy.prepare(profiles.list());
     core.on('event', (e: VpnCoreEvent) => {
       this.event(e).catch(() => {
@@ -91,6 +97,7 @@ export class CorporateVpnManager extends EventEmitter {
           signature(this.policy.runtime()) !== this.registered,
       },
       encryptionAvailable: this.vault.available(),
+      diagnostics: Object.fromEntries(this.profiles.list().map(p => [p.id, this.diagnostics.info(p)])),
       passwordSaved: Object.fromEntries(
         this.profiles
           .list()
@@ -132,11 +139,14 @@ export class CorporateVpnManager extends EventEmitter {
         delete tls.autoTrustAnchor;
         value = { ...value, tls };
       }
+      if (before && (before.protocol !== value.protocol || before.gateway.host !== value.gateway?.host || before.gateway.port !== value.gateway?.port))
+        value = { ...value, authChoices: [], authName: '' };
       const p = this.profiles.save(value);
       // Credentials are bound to the complete gateway/protocol identity, not just a display name.
       if (!p.rememberPassword) this.vault.remove(`${p.id}:password:`);
       if (!p.rememberSession) this.vault.remove(`${p.id}:session:`);
       this.policy.prepare(this.profiles.list());
+      if (this.state.profileId === p.id) this.change({ error: undefined, errorDetail: undefined, state: 'idle' });
       this.emit('state', this.snapshot().state);
       return {
         profile: p,
@@ -240,6 +250,9 @@ export class CorporateVpnManager extends EventEmitter {
   }
   publicCoreStopped(): void {
     this.registered = '';
+    // A failed routing startup is reported by the awaiting connect operation.
+    // Explicit public-core stops cancel the VPN intent in handleCoreStop first.
+    if (this.state.state === 'starting' && this.state.preparingRouting) return;
     this.disconnect().catch(() => {});
   }
   async connect(id: string, password: string): Promise<void> {
@@ -260,23 +273,34 @@ export class CorporateVpnManager extends EventEmitter {
         this.retries = 0;
         this.desired = undefined;
       }
-      if (
-        !this.publicCore.running() ||
-        signature(this.policy.runtime()) !== this.registered
-      )
-        throw new Error('请先应用接入分流并启动本地分流服务，无需代理节点');
       let p = this.profiles.get(id);
+      const needsRouting = !this.publicCore.running() || signature(this.policy.runtime()) !== this.registered;
       this.clearConnectionTimeout();
       const generation = this.state.generation + 1;
+      this.diagnostics.begin(p, generation);
       this.change({
         state: 'starting',
         profileId: id,
         generation,
         error: undefined,
+        errorDetail: undefined,
         challenge: undefined,
         resources: undefined,
+        preparingRouting: needsRouting,
       });
+      const isCurrent = () => this.state.generation === generation && this.state.state === 'starting';
       try {
+        const key = this.credentialKey(p, 'password');
+        const secret = password || (p.rememberPassword ? this.vault.get(key) : undefined) || '';
+        if (!secret && p.authMethod !== 'auth/smsCheckCode') throw new Error('请输入密码');
+        if (needsRouting) {
+          const applied = await this.publicCore.applyRouting?.(isCurrent);
+          if (!isCurrent()) return;
+          if (!applied || !this.publicCore.running() || signature(this.policy.runtime()) !== this.registered)
+            throw new Error('ROUTING_PREPARE_FAILED');
+          p = this.profiles.get(id); // A new endpoint may have been reassigned during preparation.
+        }
+        this.change({ preparingRouting: false });
         await this.prepareRuntime();
         if (this.publicCore.settings().tunEnabled && !p.bindInterface)
           p.bindInterface = await physicalInterface();
@@ -292,13 +316,7 @@ export class CorporateVpnManager extends EventEmitter {
           this.state.state !== 'starting'
         )
           return;
-        const key = this.credentialKey(p, 'password');
-        const secret =
-          password ||
-          (p.rememberPassword ? this.vault.get(key) : undefined) ||
-          '';
-        if (!secret && p.authMethod !== 'auth/smsCheckCode')
-          throw new Error('请输入密码');
+        this.diagnostics.input(id, 'password', secret);
         this.desired = { id, password: secret };
         if (p.rememberPassword && password) this.vault.set(key, password);
         const session = p.rememberSession
@@ -335,6 +353,8 @@ export class CorporateVpnManager extends EventEmitter {
       generation,
       challenge: undefined,
       error: undefined,
+      errorDetail: undefined,
+      preparingRouting: false,
     });
   }
   async discover(id: string): Promise<VpnAuthMethod[]> {
@@ -354,12 +374,17 @@ export class CorporateVpnManager extends EventEmitter {
       );
       if (!Array.isArray(e.data) || e.data.length > 128)
         throw new Error('认证方式响应不正确');
-      return e.data.map((x: any) => ({
+      const methods: VpnAuthMethod[] = e.data.map((x: any) => ({
         authType: String(x.authType).slice(0, 100),
         authName: String(x.authName).slice(0, 100),
         loginDomain: String(x.loginDomain).slice(0, 100),
         supported: x.supported === true,
       }));
+      const latest = this.profiles.get(id);
+      const selected = methods.find(m => m.loginDomain === latest.loginDomain && m.authType === latest.authMethod);
+      this.profiles.save({ ...latest, authChoices: methods, authName: selected?.authName || latest.authName });
+      this.emit('state', this.snapshot().state);
+      return methods;
     });
   }
   async certificate(id: string): Promise<VpnCertificate> {
@@ -451,6 +476,7 @@ export class CorporateVpnManager extends EventEmitter {
       value.length > 65536
     )
       throw new Error('AUTH_CHALLENGE_EXPIRED');
+    if (this.state.profileId && challenge.kind !== 'confirm-sms') this.diagnostics.input(this.state.profileId, 'verification-code', value);
     this.core.send('respond', { challengeId: id, generation, value });
     this.change({ state: 'authenticating', challenge: undefined });
     this.armTimeout(45000, generation);
@@ -469,12 +495,13 @@ export class CorporateVpnManager extends EventEmitter {
       }
     }, ms);
   }
-  private fail(error: string): void {
+  private fail(error: string, errorDetail?: VpnState['errorDetail']): void {
     this.clearConnectionTimeout();
     const generation = this.state.generation + 1;
     if (this.core.isRunning()) this.core.send('disconnect', { generation });
     this.policy.deactivate(this.profiles.list());
-    this.change({ state: 'failed', generation, error, challenge: undefined });
+    if (this.state.profileId) this.diagnostics.write(this.state.profileId, { event: 'connection-error', generation: this.state.generation, code: error, ...errorDetail });
+    this.change({ state: 'failed', generation, error, errorDetail, challenge: undefined, preparingRouting: false });
     if (
       this.desired &&
       !this.disposing &&
@@ -505,7 +532,9 @@ export class CorporateVpnManager extends EventEmitter {
       e.profileId !== this.state.profileId
     )
       return;
-    if (e.type === 'challenge') {
+    if (e.type === 'diagnostic') {
+      if (e.data && typeof e.data === 'object') this.diagnostics.trace(e.profileId!, e.data);
+    } else if (e.type === 'challenge') {
       const d = e.data;
       if (!['starting', 'authenticating', 'waiting_user'].includes(this.state.state)) return;
       if (
@@ -580,8 +609,21 @@ export class CorporateVpnManager extends EventEmitter {
       )
         this.vault.set(this.credentialKey(p, 'session'), e.data);
     } else if (e.type === 'error') {
-      this.fail(e.code || 'VPN_TRANSPORT_DOWN');
+      const d = e.data;
+      const detail = d && typeof d.message === 'string' && typeof d.stage === 'string'
+        ? { stage: d.stage, message: d.message, serverCode: typeof d.serverCode === 'string' ? d.serverCode : undefined } : undefined;
+      this.fail(e.code || 'VPN_TRANSPORT_DOWN', detail);
     }
+  }
+  diagnosticFile(id: string): string {
+    const info = this.diagnostics.info(this.profiles.get(id));
+    if (!info.exists) throw new Error('尚无诊断日志，请先尝试连接');
+    return info.path;
+  }
+  clearDiagnostics(id: string): void {
+    this.profiles.get(id);
+    this.diagnostics.clear(id);
+    this.emit('state', this.snapshot().state);
   }
   private async verifyPolicy(
     host: string,

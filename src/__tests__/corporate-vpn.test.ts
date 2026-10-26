@@ -26,6 +26,8 @@ import { BackupService } from '../main/db/backup/BackupService';
 import { captchaAnswer } from '../utils/vpnChallenge';
 import { gatewayTrust } from '../main/vpn/GatewayTrust';
 import { dataDirArgument, launchDataDir } from '../main/system/LaunchDataDir';
+import { vpnRouting } from '../utils/vpnRouting';
+import { VpnDiagnostics } from '../main/vpn/VpnDiagnostics';
 
 export const sample = (): VpnProfile => ({
   id: '',
@@ -55,6 +57,50 @@ function temp(t: any) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test('SoftEther validates HUB/auth and strips secrets and the legacy broad VPN outlet', (t) => {
+  const repo = new ProfileRepository(temp(t));
+  const p = repo.save({ ...sample(), protocol: 'softether', gateway: { host: 'vpn.example.com', port: 5555 }, loginDomain: 'VPN', routeChina: true, password: 'must-not-persist' });
+  assert.equal('routeChina' in new ProfileRepository(repo.dir).get(p.id), false);
+  assert.equal(p.loginDomain, 'VPN');
+  assert.ok(!fs.readFileSync(path.join(repo.dir, 'vpn-profiles.json'), 'utf8').includes('must-not-persist'));
+  assert.throws(() => validateProfile({ ...p, loginDomain: '' }), /HUB/);
+  assert.throws(() => validateProfile({ ...p, authMethod: 'anonymous' }), /认证方式/);
+  assert.equal(validateProfile({ ...p, authMethod: 'softether/radius' }).authMethod, 'softether/radius');
+  for (const protocol of ['easyconnect', 'atrust'] as const)
+    assert.equal('routeChina' in validateProfile({ ...sample(), protocol, routeChina: true }), false);
+});
+
+test('Upgrading old profiles revokes a watched domestic VPN outlet without broadening company guards', (t) => {
+  const repo = new ProfileRepository(temp(t));
+  const a = repo.save({ ...sample(), routeChina: true });
+  const legacy = path.join(repo.dir, 'vpn-runtime', a.id, 'china-active.json');
+  fs.mkdirSync(path.dirname(legacy), { recursive: true });
+  fs.writeFileSync(legacy, JSON.stringify({ version: 3, rules: [{ ip_cidr: ['0.0.0.0/0'] }] }));
+  const policy = new CorporatePolicy(repo.dir);
+  policy.prepare(repo.list());
+  assert.deepEqual(JSON.parse(fs.readFileSync(legacy, 'utf8')).rules, []);
+  policy.setProbe(a.id, 'test', repo.list());
+  assert.deepEqual(JSON.parse(fs.readFileSync(legacy, 'utf8')).rules, []);
+  assert.ok(!fs.readFileSync(policy.runtime().profiles[0].guardPath, 'utf8').includes('0.0.0.0/0'));
+});
+
+test('Company-only rules discard previous broad outlets and remain idempotent', (t) => {
+  const repo = new ProfileRepository(temp(t)); repo.save({ ...sample(), routeChina: true });
+  const policy = new CorporatePolicy(repo.dir); const runtime = policy.prepare(repo.list());
+  const config: any = { inbounds: [], outbounds: [{ type: 'direct', tag: 'direct' }], route: { rule_set: [], rules: [
+    { action: 'reject', domain: ['blocked.cn'] }, { ip_is_private: true, outbound: 'direct' }, { rule_set: ['geosite-cn'], outbound: 'direct' },
+    { type: 'logical', mode: 'and', rules: [{ rule_set: ['corp-china-old'] }, { rule_set: ['geosite-cn'] }], outbound: 'corp-out-old' },
+  ] }, dns: { servers: [], rules: [] } };
+  applyCorporateConfig(config, runtime); const before = structuredClone(config);
+  applyCorporateConfig(config, runtime); assert.deepEqual(config, before);
+  const rules = config.route.rules;
+  const guard = rules.findIndex((r: any) => r.rule_set?.[0]?.startsWith('corp-guard-'));
+  assert.ok(guard < rules.findIndex((r: any) => r.ip_is_private));
+  assert.equal(rules[0].action, 'reject');
+  assert.equal(JSON.stringify(config).includes('corp-china-'), false);
+  assert.ok(config.dns.rules.every((r: any) => r.rule_set?.every((tag: string) => tag.startsWith('corp-dns-'))));
+});
 const unavailable = {
   isEncryptionAvailable: () => false,
   encryptString: () => {
@@ -62,6 +108,36 @@ const unavailable = {
   },
   decryptString: () => '',
 };
+
+test('VPN routing modes default to smart, persist custom choices and prefer an enabled foreign proxy', (t) => {
+  const repo = new ProfileRepository(temp(t)); const p = repo.save(sample());
+  assert.equal(p.trafficMode, 'split');
+  assert.deepEqual(vpnRouting(p, true), { domestic: 'direct', foreign: 'proxy', lan: 'direct' });
+  assert.deepEqual(vpnRouting({ trafficMode: 'vpn' }, true), { domestic: 'vpn', foreign: 'proxy', lan: 'vpn' });
+  assert.deepEqual(vpnRouting({ trafficMode: 'vpn' }, false), { domestic: 'vpn', foreign: 'vpn', lan: 'vpn' });
+  const customRouting = { domestic: 'proxy', foreign: 'direct', lan: 'vpn' } as const;
+  repo.save({ ...p, trafficMode: 'custom', customRouting });
+  assert.deepEqual(new ProfileRepository(repo.dir).get(p.id).customRouting, customRouting);
+  assert.deepEqual(vpnRouting({ trafficMode: 'custom', customRouting }, true), customRouting);
+  assert.equal(vpnRouting({ trafficMode: 'custom', customRouting }, false).domestic, 'direct');
+  assert.throws(() => validateProfile({ ...p, trafficMode: 'unknown' }), /分流模式/);
+  assert.throws(() => validateProfile({ ...p, customRouting: { ...customRouting, lan: 'unknown' } }), /出口/);
+});
+
+test('VPN mode defaults preserve explicit public routes and application exceptions after company protection', (t) => {
+  const repo = new ProfileRepository(temp(t)); repo.save(sample());
+  const policy = new CorporatePolicy(repo.dir); const runtime = policy.prepare(repo.list());
+  const config: any = { inbounds: [], outbounds: [{ type: 'selector', tag: 'proxy', outbounds: ['node-one'], default: 'node-one' }],
+    route: { rule_set: [], rules: [{ domain: ['special.example'], outbound: 'direct' },
+      { rule_set: ['geosite-cn'], outbound: 'direct' }, { process_name: ['tool.exe'], outbound: 'direct' }] }, dns: { servers: [], rules: [] } };
+  applyCorporateConfig(config, runtime);
+  const rules = config.route.rules;
+  const guard = rules.findIndex((r: any) => r.rule_set?.[0]?.startsWith('corp-guard-'));
+  const explicit = rules.findIndex((r: any) => r.domain?.includes('special.example'));
+  const fallback = rules.findLastIndex((r: any) => r.type === 'logical' && r.outbound === 'proxy');
+  assert.ok(guard < explicit && explicit < fallback);
+  assert.ok(rules.findIndex((r: any) => r.process_name?.includes('tool.exe')) < fallback);
+});
 
 test('Preview data directory survives scheduled-task elevation without inherited environment', () => {
   const dir = path.join(os.tmpdir(), "BlueWing 测试 O'Brien");
@@ -740,6 +816,8 @@ test('aTrust discovery applies first-use trust before querying authentication me
   t.after(() => manager.dispose());
   const methods = await manager.discover(p.id);
   assert.equal(methods[0].loginDomain, 'local');
+  assert.deepEqual(new ProfileRepository(dir).get(p.id).authChoices, methods);
+  assert.equal(new ProfileRepository(dir).get(p.id).tls.pinSha256, 'a'.repeat(64));
   assert.equal(
     core.commands.filter((command) => command.type === 'connect').length,
     0,
@@ -1111,4 +1189,130 @@ test('Company import failure rolls main database back with profile store', async
     beforeProfiles,
   );
   assert.notEqual(db.getSettings().mixedPort, 29999);
+});
+test('Only explicit full diagnostics records exact submitted input, and clear removes rotated logs', t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), log = new VpnDiagnostics(dir, 100);
+  const secret = '  fixture-password\\n!\n', otp = ' 123456 ';
+  for (const diagnosticMode of ['off', 'detail', 'full'] as const) {
+    const p = repo.save({ ...sample(), diagnosticMode });
+    log.begin(p, 1); log.input(p.id, 'password', secret); log.input(p.id, 'verification-code', otp);
+    const all = [log.file(p.id) + '.1', log.file(p.id)].filter(fs.existsSync).flatMap(f => fs.readFileSync(f, 'utf8').trim().split('\n').map(line => JSON.parse(line)));
+    const inputs = all.filter(e => e.event === 'submitted-input');
+    assert.equal(inputs.length, diagnosticMode === 'full' ? 2 : 0);
+    if (diagnosticMode === 'full') assert.deepEqual(inputs.map(e => e.value), [secret, otp]);
+    assert.ok(!JSON.stringify(repo.list()).includes('fixture-password'));
+    assert.ok(repo.export().every(profile => profile.diagnosticMode === 'off'));
+    const imported = new ProfileRepository(path.join(dir, 'imported-' + diagnosticMode));
+    imported.import([p], 'replace');
+    assert.equal(imported.list()[0].diagnosticMode, 'off');
+    log.clear(p.id); assert.equal(log.info(p).exists, false); assert.equal(fs.existsSync(log.file(p.id) + '.1'), false);
+  }
+  assert.throws(() => log.file('../outside'), /ID/);
+  assert.throws(() => validateProfile({ ...sample(), diagnosticMode: 'unknown' }), /诊断/);
+});
+
+test('VPN diagnostics correlate the active generation and preserve original trusted-endpoint failures', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), core = new FakeCore();
+  const p = repo.save({ ...sample(), protocol: 'atrust', diagnosticMode: 'full', loginDomain: 'custom', authName: '示例认证' });
+  const manager = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess,
+    { running: () => true, pid: () => 1, settings: () => ({ mixedPort: 12345 }) });
+  t.after(() => manager.dispose());
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  await manager.connect(p.id, 'example-local-password');
+  const generation = manager.snapshot().state.generation;
+  const emit = (type: string, data: any, gen = generation, code?: string) => core.emit('event', { v: 1, type, profileId: p.id, generation: gen, data, code });
+  emit('diagnostic', { responseBody: 'stale-content' }, generation - 1);
+  emit('diagnostic', { responseBody: 'original-cookie-123' });
+  emit('challenge', { id: 'otp', kind: 'otp', title: 'code', expiresAt: Date.now() + 30000 });
+  manager.respond('otp', generation, '654321');
+  assert.throws(() => manager.respond('otp', generation, 'stale-otp'), /EXPIRED/);
+  const detail = { stage: 'authCheck', serverCode: '75500503', message: 'authCheck failed with code 75500503: client is not installed' };
+  emit('error', detail, generation, 'ATRUST_TRUSTED_ENDPOINT_REQUIRED');
+  assert.deepEqual(manager.snapshot().state.errorDetail, detail);
+  const text = fs.readFileSync(manager.diagnosticFile(p.id), 'utf8');
+  for (const expected of ['example-local-password', '654321', 'original-cookie-123', '75500503']) assert.ok(text.includes(expected));
+  for (const stale of ['stale-content', 'stale-otp']) assert.ok(!text.includes(stale));
+  assert.ok(!JSON.stringify(manager.snapshot()).includes('example-local-password'));
+  await manager.save({ ...p, diagnosticMode: 'off' });
+  assert.equal(manager.snapshot().state.errorDetail, undefined);
+  manager.clearDiagnostics(p.id); assert.throws(() => manager.diagnosticFile(p.id), /尚无/);
+});
+test('Connecting prepares newly saved VPN routing once and leaves the public outlet alone on save', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), core = new FakeCore();
+  let applications = 0, manager!: CorporateVpnManager;
+  manager = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess, {
+    running: () => true, pid: () => 7, settings: () => ({ mixedPort: 12345 }),
+    applyRouting: async isCurrent => {
+      applications++; assert.equal(isCurrent(), true);
+      assert.equal(manager.snapshot().state.preparingRouting, true);
+      assert.ok(!core.commands.some(c => c.type === 'connect'));
+      manager.publicCoreStarted(await manager.prepareRuntime(true));
+      return true;
+    },
+  });
+  t.after(() => manager.dispose());
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  const p = (await manager.save(sample())).profile;
+  assert.equal(applications, 0); assert.equal(core.commands.length, 0);
+  assert.equal(manager.snapshot().state.requiresCoreRebuild, true);
+  await assert.rejects(manager.connect(p.id, ''), /请输入密码/);
+  assert.equal(applications, 0, 'missing credentials must not restart the public proxy');
+  const attempts = await Promise.allSettled([manager.connect(p.id, 'fixture-secret'), manager.connect(p.id, 'duplicate')]);
+  assert.equal(attempts[0].status, 'fulfilled'); assert.equal(attempts[1].status, 'rejected');
+  assert.equal(applications, 1);
+  assert.equal(core.commands.filter(c => c.type === 'connect').length, 1);
+  assert.equal(manager.snapshot().state.preparingRouting, false);
+  await manager.disconnect();
+  await manager.save({ ...p, name: 'Renamed only' });
+  await manager.connect(p.id, 'fixture-secret');
+  assert.equal(applications, 1, 'reconnect and rename must not reload routing');
+});
+
+test('Profile ordering and password changes do not invalidate installed VPN outbounds', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), a = repo.save(sample()); repo.save({ ...sample(), name: 'Second' });
+  const manager = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, unavailable), new FakeCore() as unknown as VpnCoreProcess,
+    { running: () => true, pid: () => 7, settings: () => ({ mixedPort: 12345 }) });
+  t.after(() => manager.dispose());
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  await manager.save({ ...a, name: 'Renamed' });
+  await manager.savePassword(a.id, '', false);
+  assert.equal(manager.snapshot().state.requiresCoreRebuild, false);
+  await manager.connect(a.id, 'fixture-secret');
+  assert.equal(manager.snapshot().state.state, 'authenticating');
+});
+
+test('Cold start prepares routing without a proxy node and refuses login when preparation fails', async t => {
+  for (const success of [true, false]) {
+    const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), core = new FakeCore();
+    let running = false, manager!: CorporateVpnManager;
+    manager = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess, {
+      running: () => running, pid: () => running ? 7 : undefined, settings: () => ({ mixedPort: 12345 }),
+      applyRouting: async () => {
+        if (success) { running = true; manager.publicCoreStarted(await manager.prepareRuntime(true)); }
+        else manager.publicCoreStopped();
+        return success;
+      },
+    });
+    t.after(() => manager.dispose());
+    if (success) await manager.connect(p.id, 'fixture-secret');
+    else await assert.rejects(manager.connect(p.id, 'fixture-secret'), /ROUTING_PREPARE_FAILED/);
+    assert.equal(manager.snapshot().state.state, success ? 'authenticating' : 'failed');
+    assert.equal(core.commands.some(c => c.type === 'connect'), success);
+  }
+});
+
+test('Cancelling automatic routing prevents late credentials and stale success from logging into VPN', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), core = new FakeCore();
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(r => release = r), ready = new Promise<void>(r => entered = r);
+  const manager = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess, {
+    running: () => true, pid: () => 7, settings: () => ({ mixedPort: 12345 }),
+    applyRouting: async isCurrent => { entered(); await gate; assert.equal(isCurrent(), false); return true; },
+  });
+  t.after(() => manager.dispose());
+  const pending = manager.connect(p.id, 'must-not-send');
+  await ready; await manager.disconnect(); release(); await pending;
+  assert.equal(manager.snapshot().state.state, 'idle');
+  assert.equal(manager.snapshot().state.preparingRouting, false);
+  assert.ok(!core.commands.some(c => c.type === 'connect'));
 });

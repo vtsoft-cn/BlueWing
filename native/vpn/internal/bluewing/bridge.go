@@ -28,6 +28,15 @@ var mu sync.RWMutex
 var prompt Prompt
 var policy Policy
 var requestContext = context.Background()
+var diagnosticTrace func(map[string]any)
+var diagnosticFull bool
+
+// A transport captures this callback when created, so stale sessions cannot write to a new connection.
+func SetDiagnostics(f func(map[string]any), full bool) {
+	mu.Lock()
+	defer mu.Unlock()
+	diagnosticTrace, diagnosticFull = f, full
+}
 
 func Configure(ctx context.Context, p Policy, f Prompt) {
 	mu.Lock()
@@ -69,10 +78,12 @@ func Context() context.Context { mu.RLock(); defer mu.RUnlock(); return requestC
 type contextTransport struct {
 	inner http.RoundTripper
 	ctx   context.Context
+	trace func(map[string]any)
+	full  bool
 }
 
 func (t contextTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	return t.inner.RoundTrip(r.WithContext(t.ctx))
+	return t.roundTrip(r)
 }
 func (t contextTransport) CloseIdleConnections() {
 	if closer, ok := t.inner.(interface{ CloseIdleConnections() }); ok {
@@ -83,7 +94,9 @@ func Transport(t http.RoundTripper) http.RoundTripper {
 	if !Enabled() {
 		return t
 	}
-	return contextTransport{t, Context()}
+	mu.RLock()
+	defer mu.RUnlock()
+	return contextTransport{inner: t, ctx: requestContext, trace: diagnosticTrace, full: diagnosticFull}
 }
 
 func TLS(host string) *tls.Config {

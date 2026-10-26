@@ -283,7 +283,19 @@ func targetMatch(t target, host string, port int, network string, ignorePorts bo
 	}
 	return false
 }
+func (s *session) broadVPN() bool {
+	return s.p.TrafficMode == "vpn" || (s.p.TrafficMode == "custom" && (s.p.CustomRouting.Domestic == "vpn" || s.p.CustomRouting.Foreign == "vpn" || s.p.CustomRouting.LAN == "vpn"))
+}
 func (s *session) allowed(host string, port int, network string) bool {
+	// Broad access is explicit and per profile; geographic/public-proxy
+	// selection stays in the managed sing-box layer, never in the VPN selector.
+	if s.broadVPN() && network == "tcp" && port > 0 && port <= 65535 {
+		if ip := net.ParseIP(host); ip == nil {
+			return !strings.HasSuffix(host, ".bluewing.invalid")
+		} else if ip.To4() != nil && ip.IsGlobalUnicast() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
+			return true
+		}
+	}
 	for _, t := range append(append([]target{}, s.p.Targets...), s.resources.Targets...) {
 		if targetMatch(t, host, port, network, false) {
 			return true
@@ -304,6 +316,9 @@ func (s *session) allowed(host string, port int, network string) bool {
 	return false
 }
 func (s *session) companyDomain(host string) bool {
+	if s.broadVPN() && net.ParseIP(host) == nil && !strings.HasSuffix(host, ".bluewing.invalid") {
+		return true
+	}
 	for _, t := range append(append([]target{}, s.p.Targets...), s.resources.Targets...) {
 		if targetMatch(t, host, 0, "", true) {
 			return true

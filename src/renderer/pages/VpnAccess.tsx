@@ -35,6 +35,7 @@ import {
 } from '../../types/corporateVpn';
 import { AppSettings } from '../../types';
 import { captchaAnswer } from '../../utils/vpnChallenge';
+import { vpnRouting, vpnTrafficModes } from '../../utils/vpnRouting';
 import { useVpnSnapshot } from '../vpn/useVpnSnapshot';
 import { vpnProviderList, vpnProviders } from '../vpn/providers';
 import {
@@ -42,7 +43,6 @@ import {
   VpnProfileEditor,
 } from '../components/VpnProfileEditor';
 import { Portal } from '../components/Portal';
-import { confirmDialog } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 import './vpn-access.css';
 
@@ -67,14 +67,21 @@ const errorLabels: Record<string, string> = {
   TLS_UNTRUSTED:
     '网关证书不受信任或名称不匹配。请在高级选项中配置 CA，或核对服务器证书。',
   AUTH_OR_TUNNEL_FAILED: '认证或隧道建立失败，请核对账号、认证方式和网关要求。',
+  ATRUST_TRUSTED_ENDPOINT_REQUIRED: '网关要求可信终端，当前接入未通过终端识别（75500503）。这一步发生在密码认证之后；请使用官方 aTrust 客户端完成接入，当前协议暂不兼容此网关要求。',
   GATEWAY_UNREACHABLE: '无法连接网关，请检查服务器地址、端口和物理网络。',
   AUTH_TIMEOUT: '认证等待超时，请重新连接。',
+  ROUTING_PREPARE_FAILED: '分流准备未完成，VPN 尚未登录。请检查代理核心日志后重试；原有节点和接入配置已保留。',
   AUTH_CHALLENGE_EXPIRED: '验证码已过期，请重新连接。',
   AUTH_METHOD_UNSUPPORTED:
     '当前认证方式尚不支持，请编辑配置并选择已支持的方式。',
   CORE_EXITED: 'VPN 组件已退出，已知接入资源保持保护，请重新连接。',
   POLICY_APPLY_FAILED: '隧道已就绪，但尚未确认分流生效，请检查日志后重新连接。',
   VPN_TRANSPORT_DOWN: 'VPN 隧道已断开，请重新连接。',
+  AUTH_FAILED: '账号或密码验证失败，请核对密码与认证方式。',
+  SOFTETHER_HUB_NOT_FOUND: '未找到 Virtual HUB，请核对名称及大小写。',
+  SOFTETHER_DHCP_FAILED: 'SoftEther 已认证，但未能获取虚拟地址，请检查网关 DHCP 配置。',
+  SOFTETHER_TRANSPORT_UNSUPPORTED: '网关要求的传输方式暂不支持，需要启用单连接加密 TCP 模式。',
+  SOFTETHER_CLIENT_VERSION_UNSUPPORTED: '网关要求的客户端协议版本高于当前兼容范围，请更新 BlueWing 或使用受支持的客户端。',
 };
 const inProgress = (state: VpnState['state']) =>
   !['idle', 'failed', 'connected'].includes(state);
@@ -119,7 +126,8 @@ function ConnectionBadge({ state }: { state: VpnState['state'] }) {
 export const VpnAccess: React.FC<{
   settings: Pick<AppSettings, 'mixedPort' | 'inboundAuth' | 'tunEnabled'>;
   coreState: string;
-}> = ({ settings, coreState }) => {
+  publicProxy?: { enabled: boolean; name?: string; mode?: 'rule' | 'global' | 'direct' };
+}> = ({ settings, coreState, publicProxy = { enabled: false } }) => {
   const { snapshot, loading, error: loadError, refresh } = useVpnSnapshot();
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
@@ -130,6 +138,7 @@ export const VpnAccess: React.FC<{
   const [password, setPassword] = useState('');
   const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [actionError, setActionError] = useState('');
   const [detailTab, setDetailTab] = useState<'resources' | 'help'>('resources');
   const [expanded, setExpanded] = useState(false);
@@ -140,6 +149,9 @@ export const VpnAccess: React.FC<{
   );
   const selectedState =
     selected && state.profileId === selected.id ? state.state : 'idle';
+  const selectedActive = active && state.profileId === selectedId;
+  const selectedDiagnostic = selected && snapshot.diagnostics?.[selected.id];
+  const errorDetail = state.profileId === selectedId ? state.errorDetail : undefined;
   useEffect(() => {
     if (!snapshot.profiles.some((profile) => profile.id === selectedId))
       setSelectedId(
@@ -177,7 +189,7 @@ export const VpnAccess: React.FC<{
         })),
         ...(resources?.targets || []).map((target) => ({
           target,
-          source: '服务器下发',
+          source: selected.protocol === 'softether' ? '网络发现' : '网关下发',
         })),
       ]
     : [];
@@ -193,8 +205,8 @@ export const VpnAccess: React.FC<{
       : '');
   const connectDisabled =
     busy ||
-    active ||
-    !!state.requiresCoreRebuild ||
+    cancelling ||
+    selectedActive ||
     state.coreAvailable === false;
   const passwordSaved = !!(selected && snapshot.passwordSaved?.[selected.id]);
   const openEditor = (
@@ -235,7 +247,7 @@ export const VpnAccess: React.FC<{
           </div>
           <div>
             <h2>VPN 接入</h2>
-            <p>指定资源通过 VPN 访问；无需代理节点，也可保持普通公网直连。</p>
+            <p>连接公司网络，同时为国内公网和国外网站选择合适的出口。</p>
           </div>
         </div>
         {!!snapshot.profiles.length && (
@@ -270,37 +282,15 @@ export const VpnAccess: React.FC<{
           <p>VPN 接入组件未安装，请使用包含该组件的 BlueWing 构建。</p>
         </div>
       )}
-      {state.requiresCoreRebuild && snapshot.profiles.length > 0 && (
-        <div className="vpn-notice warning vpn-apply-banner">
+      {!active && state.requiresCoreRebuild && snapshot.profiles.length > 0 && (
+        <div className="vpn-notice vpn-apply-banner" role="status">
           <RefreshCw size={18} />
           <div>
-            <strong>接入配置已更新</strong>
-            <p>应用分流后即可连接，此操作会短暂重连公网代理。</p>
+            <strong>连接时自动准备分流</strong>
+            <p>{coreState === 'running'
+              ? '点击“连接 VPN”即可。必要的配置更新可能使现有公网连接短暂重连。'
+              : '点击“连接 VPN”将自动启动本地分流服务，无需代理节点。'}</p>
           </div>
-          <button
-            className="vpn-button compact"
-            disabled={busy || active}
-            onClick={() =>
-              run(async () => {
-                if (
-                  await confirmDialog({
-                    title: '应用接入分流',
-                    message:
-                      '此操作会启动或更新本地分流服务；没有代理节点时，普通公网使用本机直连。服务运行中更新出口会短暂重连，后续正常连接或断开 VPN 无需重启分流服务。',
-                    confirmText: coreState === 'running' ? '应用并重连' : '应用并启动',
-                  })
-                ) {
-                  if (!(await window.electronAPI.corporateVpn.apply()))
-                    throw new Error('应用分流失败，请检查日志。');
-                  await refresh();
-                  toast.success('接入分流已应用');
-                }
-              })
-            }
-          >
-            应用分流
-            <ArrowRight size={14} />
-          </button>
         </div>
       )}
       {loading ? (
@@ -365,7 +355,6 @@ export const VpnAccess: React.FC<{
                   key={profile.id}
                   className={`vpn-profile-item ${selectedId === profile.id ? 'selected' : ''}`}
                   aria-pressed={selectedId === profile.id}
-                  disabled={active && state.profileId !== profile.id}
                   title={
                     active && state.profileId !== profile.id
                       ? '请先断开当前接入后切换'
@@ -459,16 +448,43 @@ export const VpnAccess: React.FC<{
                           ? '严格证书校验'
                           : '首次自动记住网关证书'}
                     </span>
-                    {selected.loginDomain && (
-                      <span>登录域：{selected.loginDomain}</span>
+                    {selected.protocol === 'atrust' && (
+                      <span>认证入口：{selected.authName || selected.authChoices?.find(m => m.loginDomain === selected.loginDomain && m.authType === selected.authMethod)?.authName || '尚未获取'}</span>
                     )}
                   </div>
+                  {selected.protocol === 'atrust' && <div className="vpn-auth-entry">
+                    <div className="vpn-section-heading"><div><h3>登录方式</h3><p>选择与官方客户端一致的入口，切换后按该入口重新验证。</p></div>
+                      <button type="button" className="vpn-button compact" disabled={busy || active} onClick={() => run(async () => {
+                        await window.electronAPI.corporateVpn.discover(selected.id); await refresh();
+                      })}><RefreshCw size={14} />{selected.authChoices?.length ? '刷新入口' : '获取登录方式'}</button>
+                    </div>
+                    {!!selected.authChoices?.length && <div className="vpn-auth-choices" role="group" aria-label="登录方式">
+                      {selected.authChoices.map((method, index) => <button type="button" key={index}
+                        className={`vpn-auth-choice ${method.loginDomain === selected.loginDomain && method.authType === selected.authMethod ? 'selected' : ''}`}
+                        aria-pressed={method.loginDomain === selected.loginDomain && method.authType === selected.authMethod}
+                        disabled={busy || active || !method.supported}
+                        onClick={() => run(async () => {
+                          await window.electronAPI.corporateVpn.save({ ...selected, authMethod: method.authType, loginDomain: method.loginDomain, authName: method.authName });
+                          setPassword(''); setReveal(false); await refresh();
+                        })}><KeyRound size={16} /><span>{method.authName}<small>{!method.supported ? '暂不支持此方式' : method.authType === 'auth/smsCheckCode' ? '短信验证码' : '账号密码'}</small></span></button>)}
+                    </div>}
+                    {!!selected.authChoices?.length && !selected.authChoices.some(m => m.loginDomain === selected.loginDomain && m.authType === selected.authMethod) &&
+                      <p className="vpn-inline-error">当前配置的入口不在最新列表中，请选择正确的登录方式。</p>}
+                    <details className="vpn-auth-parameters"><summary>认证参数</summary><code>登录域：{selected.loginDomain || '未指定'} · 方式：{selected.authMethod}</code></details>
+                  </div>}
                   {connectionError && (
                     <div
                       className="vpn-notice danger vpn-connection-error"
                       role="alert"
                     >
                       <p>{connectionError}</p>
+                      {errorDetail && <details className="vpn-error-detail" open={state.error === 'ATRUST_TRUSTED_ENDPOINT_REQUIRED'}>
+                        <summary>原始错误 · {errorDetail.stage}{errorDetail.serverCode ? ` · ${errorDetail.serverCode}` : ''}</summary>
+                        <pre>{errorDetail.message}</pre>
+                        <button type="button" className="vpn-text-button" onClick={() => run(async () => {
+                          await navigator.clipboard.writeText(JSON.stringify({ code: state.error, ...errorDetail }, null, 2)); toast.success('已复制原始错误');
+                        })}><Copy size={13} />复制错误详情</button>
+                      </details>}
                       {state.profileId === selectedId &&
                         [
                           'TLS_UNTRUSTED',
@@ -498,6 +514,7 @@ export const VpnAccess: React.FC<{
                         const secret = password;
                         setPassword('');
                         setReveal(false);
+                        if (active && !selectedActive) await window.electronAPI.corporateVpn.disconnect();
                         await window.electronAPI.corporateVpn.connect(
                           selected.id,
                           secret,
@@ -505,7 +522,7 @@ export const VpnAccess: React.FC<{
                       });
                     }}
                   >
-                    {!active && selected.authMethod !== 'auth/smsCheckCode' && (
+                    {!selectedActive && selected.authMethod !== 'auth/smsCheckCode' && (
                       <div className="vpn-field">
                         <div className="vpn-password-label">
                           <label htmlFor="vpn-login-password">登录密码</label>
@@ -521,7 +538,7 @@ export const VpnAccess: React.FC<{
                               type="checkbox"
                               aria-label="加密记住密码"
                               checked={selected.rememberPassword}
-                              disabled={busy || !snapshot.encryptionAvailable}
+                              disabled={busy || active || !snapshot.encryptionAvailable}
                               onChange={(event) =>
                                 storePassword(event.target.checked)
                               }
@@ -556,7 +573,7 @@ export const VpnAccess: React.FC<{
                         </div>
                       </div>
                     )}
-                    {!active && selected.authMethod === 'auth/smsCheckCode' && (
+                    {!selectedActive && selected.authMethod === 'auth/smsCheckCode' && (
                       <div className="vpn-notice">
                         <KeyRound size={17} />
                         <p>连接后按提示输入短信验证码，无需填写密码。</p>
@@ -576,11 +593,13 @@ export const VpnAccess: React.FC<{
                           <strong>
                             {selectedState === 'connected'
                               ? 'VPN 隧道已连接'
+                              : state.preparingRouting ? '正在准备分流'
                               : labels[selectedState]}
                           </strong>
                           <p>
                             {selectedState === 'connected'
                               ? '接入资源经专属隧道访问，其他流量沿用现有出口。'
+                              : state.preparingRouting ? '分流就绪后自动登录 VPN；准备期间可以取消。'
                               : selectedState === 'waiting_user'
                                 ? '请完成弹窗中的身份验证。'
                                 : '连接过程中可以随时取消。'}
@@ -609,16 +628,17 @@ export const VpnAccess: React.FC<{
                           </button>
                         )}
                       </div>
-                      {active ? (
+                      {selectedActive ? (
                         <button
                           type="button"
                           className="vpn-button"
-                          disabled={busy}
-                          onClick={() =>
-                            run(async () => {
-                              await window.electronAPI.corporateVpn.disconnect();
-                            })
-                          }
+                          disabled={cancelling}
+                          onClick={async () => {
+                            setCancelling(true);
+                            try { await window.electronAPI.corporateVpn.disconnect(); }
+                            catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
+                            finally { setCancelling(false); }
+                          }}
                         >
                           <Unplug size={16} />
                           {selectedState === 'connected'
@@ -639,11 +659,21 @@ export const VpnAccess: React.FC<{
                           ) : (
                             <Plug size={16} />
                           )}
-                          连接 VPN
+                          {active ? '切换并连接' : '连接 VPN'}
                         </button>
                       )}
                     </div>
                   </form>
+                  {active && !selectedActive && <p className="vpn-field-hint">当前连接：{snapshot.profiles.find(p => p.id === state.profileId)?.name}。切换会断开当前 VPN，公网代理继续保留。</p>}
+                  <div className="vpn-diagnostics-bar">
+                    <span>{selected.diagnosticMode === 'full' ? '完整诊断已开启 · 含明文凭据' : selected.diagnosticMode === 'detail' ? '连接诊断已开启' : '基础错误日志'}</span>
+                    <div><button type="button" className="vpn-text-button" disabled={busy || !selectedDiagnostic?.exists}
+                      onClick={() => run(async () => { await window.electronAPI.corporateVpn.openDiagnostics(selected.id); })}>打开日志</button>
+                    <button type="button" className="vpn-text-button" disabled={busy || !selectedDiagnostic?.exists}
+                      onClick={() => run(async () => { await window.electronAPI.corporateVpn.clearDiagnostics(selected.id); await refresh(); })}>清空日志</button>
+                    <button type="button" className="vpn-text-button" onClick={() => openEditor(selected, 'advanced')}>诊断设置</button></div>
+                    {selectedDiagnostic?.error && <p role="alert">日志写入失败：{selectedDiagnostic.error}</p>}
+                  </div>
                 </div>
                 <div className="vpn-flow-strip">
                   <span>
@@ -654,11 +684,43 @@ export const VpnAccess: React.FC<{
                   </span>
                   <span>
                     <Globe2 size={15} />
-                    其他流量
+                    当前策略
                     <ArrowRight size={13} />
-                    <strong>沿用原规则</strong>
+                    <strong>{vpnTrafficModes.find(m => m.id === (selected.trafficMode || 'split'))?.name}</strong>
                   </span>
                 </div>
+              </section>
+              <section className="vpn-routing-overview" aria-label="当前流量去向">
+                <div className="vpn-routing-overview-heading">
+                  <div><span className="vpn-eyebrow">流量去向</span>
+                    <h3>{vpnTrafficModes.find(m => m.id === (selected.trafficMode || 'split'))?.name}</h3></div>
+                  <button className="vpn-button compact" disabled={busy} onClick={() => openEditor(selected, 'routing')}>
+                    <Settings2 size={14} />{active ? '查看策略' : '调整策略'}
+                  </button>
+                </div>
+                <div className="vpn-outlet-grid">
+                  {([
+                    { label: '公司资源', icon: Network, outlet: 'vpn' as const },
+                    { label: '国内公网', icon: Globe2, outlet: vpnRouting(selected, publicProxy.enabled).domestic },
+                    { label: '国外网站', icon: Waypoints, outlet: vpnRouting(selected, publicProxy.enabled).foreign },
+                  ]).map(({ label, icon: Icon, outlet }) => {
+                    const connected = selectedState === 'connected';
+                    const actual = !connected && label !== '公司资源'
+                      ? (publicProxy.enabled && (label === '国外网站' || publicProxy.mode === 'global') ? 'proxy' : 'direct') : outlet;
+                    return <div className={`vpn-outlet-item ${actual}`} key={label}>
+                      <span className="vpn-outlet-icon"><Icon size={18} /></span><span className="vpn-outlet-label">{label}</span>
+                      <strong>{actual === 'vpn' ? 'VPN 隧道' : actual === 'proxy' ? '公网代理' : '本机直连'}</strong>
+                      <small>{actual === 'vpn' ? connected ? selected.name : '未连接 · 已知目标受保护'
+                        : actual === 'proxy' ? `${publicProxy.name || '当前节点'}${coreState !== 'running' ? ' · 未启动' : ''}` : '保留本地网络出口'}</small>
+                    </div>;
+                  })}
+                </div>
+                <div className="vpn-discovery-note"><ShieldCheck size={15} /><p>
+                  {selected.protocol === 'softether' ? 'SoftEther 自动发现部分网络，公司其他资源可手动补充。'
+                    : resources?.targets.length ? `已读取 ${resources.targets.length} 条网关资源；手动补充规则优先。`
+                    : '连接后自动读取公司资源；只知道业务网址或服务器 IP，也可以手动添加。'}
+                  {publicProxy.enabled ? ' 国外网站保持公网代理出口。' : ' 开启公网代理后，国外网站可走代理。'}
+                </p></div>
               </section>
               <section className="vpn-proxy-card" aria-label="应用代理">
                 <div className="vpn-proxy-heading">
@@ -737,7 +799,7 @@ export const VpnAccess: React.FC<{
                     ? '已启用代理认证，账号和密码见「设置」。'
                     : '无需代理账号密码。'}
                   {coreState !== 'running'
-                    ? '请在首页启动分流，或点击「应用分流」，无需代理节点。'
+                    ? '连接 VPN 时会自动启动本地分流服务，无需代理节点。'
                     : '访问公司资源前，请保持 VPN 已连接。'}
                 </p>
                 <p className="vpn-proxy-hint">
@@ -752,6 +814,7 @@ export const VpnAccess: React.FC<{
                     <h3>此接入的分流配置</h3>
                     <p>
                       仅用于「{selected.name}」，用户自定义规则优先。
+                      公网出口按当前选择的策略分配。
                       {active && '连接期间可查看，断开后可修改。'}
                     </p>
                   </div>
@@ -883,7 +946,7 @@ export const VpnAccess: React.FC<{
                       <div className="vpn-resources-empty">
                         <Waypoints size={23} />
                         <div>
-                          <h4>连接后自动获取授权资源</h4>
+                          <h4>{selected.protocol === 'softether' ? '添加需要通过 VPN 访问的公司资源' : '连接后自动获取授权资源'}</h4>
                           <p>可在「高级分流」中自行添加域名、IP 和固定解析，保存后下次继续使用。</p>
                         </div>
                       </div>
@@ -899,9 +962,9 @@ export const VpnAccess: React.FC<{
                     <div>
                       <span>01</span>
                       <section>
-                        <h4>保存配置，应用分流</h4>
+                        <h4>保存配置，直接连接</h4>
                         <p>
-                          新增或删除接入后应用一次分流，会短暂重连公网代理。
+                          保存不会重连当前代理。点击连接时自动准备必要的分流配置；配置未变化时直接连接。
                         </p>
                       </section>
                     </div>

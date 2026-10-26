@@ -25,6 +25,7 @@ import (
 	atrust "github.com/mythologyli/zju-connect/client/atrust"
 	"github.com/mythologyli/zju-connect/client/atrust/auth"
 	easy "github.com/mythologyli/zju-connect/client/easyconnect"
+	softether "github.com/mythologyli/zju-connect/client/softether"
 	bridge "github.com/mythologyli/zju-connect/internal/bluewing"
 	"github.com/mythologyli/zju-connect/internal/winproxy"
 	"github.com/mythologyli/zju-connect/stack/gvisor"
@@ -34,7 +35,7 @@ import (
 const protocolVersion = 1
 const maxFrame = 4 * 1024 * 1024
 
-var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.1"
+var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.2-softether"
 
 type target struct {
 	GuardOnly bool     `json:"guardOnly,omitempty"`
@@ -55,9 +56,16 @@ type profile struct {
 		Host string `json:"host"`
 		Port int    `json:"port"`
 	} `json:"gateway"`
-	Username      string              `json:"username"`
-	AuthMethod    string              `json:"authMethod"`
-	LoginDomain   string              `json:"loginDomain"`
+	Username       string `json:"username"`
+	AuthMethod     string `json:"authMethod"`
+	LoginDomain    string `json:"loginDomain"`
+	DiagnosticMode string `json:"diagnosticMode"`
+	TrafficMode    string `json:"trafficMode"`
+	CustomRouting  struct {
+		Domestic string `json:"domestic"`
+		Foreign  string `json:"foreign"`
+		LAN      string `json:"lan"`
+	} `json:"customRouting"`
 	TLS           bridge.Policy       `json:"tls"`
 	Targets       []target            `json:"targets"`
 	Hosts         map[string][]string `json:"hosts"`
@@ -204,6 +212,24 @@ func (c *controller) stop() {
 func normalizeHost(h string) string { return strings.ToLower(strings.TrimSuffix(h, ".")) }
 func safeCode(err error) string {
 	text := strings.ToLower(err.Error())
+	if strings.Contains(text, "75500503") {
+		return "ATRUST_TRUSTED_ENDPOINT_REQUIRED"
+	}
+	if strings.Contains(text, "softether_client_version_unsupported") {
+		return "SOFTETHER_CLIENT_VERSION_UNSUPPORTED"
+	}
+	if strings.Contains(text, "softether_dhcp_failed") {
+		return "SOFTETHER_DHCP_FAILED"
+	}
+	if strings.Contains(text, "softether_transport_unsupported") {
+		return "SOFTETHER_TRANSPORT_UNSUPPORTED"
+	}
+	if strings.Contains(text, "virtual hub was not found") {
+		return "SOFTETHER_HUB_NOT_FOUND"
+	}
+	if strings.Contains(text, "authentication failed") {
+		return "AUTH_FAILED"
+	}
 	if strings.Contains(text, "pin mismatch") {
 		return "TLS_CERT_CHANGED"
 	}
@@ -229,6 +255,7 @@ func safeCode(err error) string {
 }
 func (c *controller) setup(s *session, password, sessionData string) (res resources, err error) {
 	bridge.Configure(s.ctx, s.p.TLS, c.prompt(s))
+	c.configureDiagnostics(s)
 	s.lifeMu.Lock()
 	s.dialer, err = underlay.New(underlay.Options{InterfaceName: s.p.BindInterface, AutoDetect: s.p.BindInterface == ""})
 	s.lifeMu.Unlock()
@@ -236,6 +263,19 @@ func (c *controller) setup(s *session, password, sessionData string) (res resour
 		return res, err
 	}
 	switch s.p.Protocol {
+	case "softether":
+		method := softether.AuthPassword
+		if s.p.AuthMethod == "softether/radius" {
+			method = softether.AuthPlainPassword
+		} else if s.p.AuthMethod != "auth/psw" {
+			return res, errors.New("AUTH_METHOD_UNSUPPORTED")
+		}
+		sc := softether.NewClient(softether.Config{Server: s.p.Gateway.Host, Port: s.p.Gateway.Port, Hub: s.p.LoginDomain, Username: s.p.Username, Password: password, AuthType: method, TLS: bridge.TLS(s.p.Gateway.Host), DialContext: s.dialer.DialContext})
+		s.lifeMu.Lock()
+		s.c = sc
+		s.closeClient = sc.Close
+		s.lifeMu.Unlock()
+		err = sc.Setup(s.ctx)
 	case "easyconnect":
 		ec := easy.NewClient(easy.Options{Server: net.JoinHostPort(s.p.Gateway.Host, strconv.Itoa(s.p.Gateway.Port)), Auth: easy.AuthOptions{Username: s.p.Username, Password: password}, Resources: easy.ResourceOptions{Fetch: true, IncludeDomains: true}, UnderlayDialer: s.dialer})
 		s.lifeMu.Lock()
@@ -333,7 +373,7 @@ func (c *controller) connect(cmd command) {
 		cmd.Password = ""
 		cmd.Session = ""
 		if err != nil {
-			c.fail(s, safeCode(err))
+			c.fail(s, safeCode(err), err)
 			return
 		}
 		c.mu.Lock()
@@ -360,7 +400,31 @@ func (c *controller) connect(cmd command) {
 		c.emit(event{Type: "tunnelReady", Generation: s.gen, ProfileID: s.p.ID})
 	}()
 }
-func (c *controller) fail(s *session, code string) {
+func (c *controller) configureDiagnostics(s *session) {
+	var trace func(map[string]any)
+	if s.p.DiagnosticMode == "full" || s.p.DiagnosticMode == "detail" {
+		trace = func(data map[string]any) {
+			c.emit(event{Type: "diagnostic", Generation: s.gen, ProfileID: s.p.ID, Data: data})
+		}
+	}
+	bridge.SetDiagnostics(trace, s.p.DiagnosticMode == "full")
+}
+func failureDetail(err error) map[string]any {
+	message := err.Error()
+	stage := "connection-setup"
+	if i := strings.Index(message, " failed"); i > 0 {
+		stage = message[:i]
+	}
+	detail := map[string]any{"stage": stage, "message": message}
+	if i := strings.Index(message, "code "); i >= 0 {
+		number := strings.Fields(message[i+5:])
+		if len(number) > 0 {
+			detail["serverCode"] = strings.TrimRight(number[0], ":,;")
+		}
+	}
+	return detail
+}
+func (c *controller) fail(s *session, code string, original ...error) {
 	c.mu.Lock()
 	current := c.active == s || c.pending == s
 	if c.active == s {
@@ -372,7 +436,11 @@ func (c *controller) fail(s *session, code string) {
 	c.mu.Unlock()
 	s.close()
 	if current {
-		c.emit(event{Type: "error", Generation: s.gen, ProfileID: s.p.ID, Code: code})
+		var detail any
+		if len(original) > 0 {
+			detail = failureDetail(original[0])
+		}
+		c.emit(event{Type: "error", Generation: s.gen, ProfileID: s.p.ID, Code: code, Data: detail})
 	}
 }
 func (c *controller) discover(cmd command) {
@@ -381,6 +449,7 @@ func (c *controller) discover(cmd command) {
 	defer cancel()
 	s := &session{ctx: ctx, cancel: cancel, p: cmd.Profile, gen: cmd.Generation}
 	bridge.Configure(ctx, s.p.TLS, c.prompt(s))
+	c.configureDiagnostics(s)
 	infos, err := atrust.GetAuthInfoList(s.p.Gateway.Host, s.p.Gateway.Port, s.p.BindInterface, s.p.BindInterface == "", "", "")
 	if err != nil {
 		c.emit(event{Type: "error", ID: cmd.ID, Generation: cmd.Generation, ProfileID: s.p.ID, Code: safeCode(err)})
@@ -525,7 +594,7 @@ func main() {
 	// Upstream human logs contain tokens and plaintext challenge data. They never enter the host log bus.
 	stdlog.SetOutput(io.Discard)
 	c := &controller{endpoints: make(map[string]*endpoint), challenges: make(map[string]chan string), closing: make(chan struct{})}
-	c.emit(event{Type: "hello", Data: map[string]any{"protocolVersion": protocolVersion, "revision": buildRevision, "protocols": []string{"easyconnect", "atrust"}, "udp": false}})
+	c.emit(event{Type: "hello", Data: map[string]any{"protocolVersion": protocolVersion, "revision": buildRevision, "protocols": []string{"easyconnect", "atrust", "softether"}, "udp": false}})
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 65536), maxFrame)
 	for scanner.Scan() {

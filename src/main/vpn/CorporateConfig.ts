@@ -1,5 +1,13 @@
 import { isIP } from 'net';
 import { VpnRuntime } from '../../types/corporateVpn';
+import { vpnRouting } from '../../utils/vpnRouting';
+
+function managedRule(rule: any): boolean {
+  return (
+    rule.rule_set?.some((tag: string) => tag.startsWith('corp-')) ||
+    rule.rules?.some(managedRule) || false
+  );
+}
 
 /** Fixed managed layer. A company connection never enters the public selector. */
 export function applyCorporateConfig(
@@ -15,7 +23,7 @@ export function applyCorporateConfig(
   );
   config.route.rules = config.route.rules.filter(
     (r: any) =>
-      !r.rule_set?.some((tag: string) => tag.startsWith('corp-')) &&
+      !managedRule(r) &&
       !(
         r.process_name?.length === 1 &&
         r.process_name[0] === 'bluewing-vpn-core.exe'
@@ -25,11 +33,15 @@ export function applyCorporateConfig(
     (r: any) => !r.tag?.startsWith('corp-dns-'),
   );
   config.dns.rules = config.dns.rules.filter(
-    (r: any) => !r.server?.startsWith('corp-dns-'),
+    (r: any) => !r.server?.startsWith('corp-dns-') && !managedRule(r),
   );
   if (!runtime?.profiles.length) return;
   const managedRules: any[] = [],
-    dnsRules: any[] = [];
+    dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [];
+  const publicProxy = config.outbounds.find((o: any) => o.tag === 'proxy');
+  const proxyEnabled = publicProxy?.type === 'selector'
+    ? publicProxy.outbounds?.some((tag: string) => tag !== 'direct') && publicProxy.default !== 'direct'
+    : !!publicProxy && publicProxy.type !== 'direct';
   for (const r of runtime.profiles) {
     const id = r.profile.id;
     config.outbounds.push({
@@ -46,6 +58,8 @@ export function applyCorporateConfig(
       ['route', r.routePath],
       ['guard', r.guardPath],
       ['dns', r.dnsPath],
+      ...(r.internetPath ? [['internet', r.internetPath]] : []),
+      ...(r.internetDnsPath ? [['internet-dns', r.internetDnsPath]] : []),
     ])
       config.route.rule_set.push({
         type: 'local',
@@ -70,6 +84,46 @@ export function applyCorporateConfig(
       server: `corp-dns-${id}`,
       disable_cache: true,
     });
+    if (r.internetPath) {
+      const policy = vpnRouting(r.profile, !!proxyEnabled);
+      const active = (condition?: any) => ({ type: 'logical', mode: 'and', rules: [
+        { rule_set: [`corp-internet-${id}`] }, ...(condition ? [condition] : []),
+      ] });
+      const cn = { type: 'logical', mode: 'or', rules: [
+        { rule_set: ['geosite-cn', 'geoip-cn'] }, { domain_suffix: ['cn'] },
+      ] };
+      const route = (outlet: 'direct' | 'proxy' | 'vpn', condition?: any, fallback = false) => {
+        const rules = fallback ? internetFallback : internetRules;
+        if (outlet === 'vpn') rules.push(
+          { ...active(condition), rules: [...active(condition).rules, { network: ['tcp'] }], outbound: `corp-out-${id}` },
+          { ...active(condition), action: 'reject' },
+        );
+        else rules.push({ ...active(condition), outbound: outlet });
+      };
+      // Keep the app's local endpoints reachable; explicit company rules still
+      // precede this layer. Private/company overlaps are decided by those rules.
+      internetRules.push({ ...active({ ip_cidr: ['127.0.0.0/8', '::1/128'] }), outbound: 'direct' });
+      route(policy.lan, { ip_is_private: true });
+      route(policy.domestic, cn);
+      route(policy.foreign, undefined, true);
+      if (r.profile.trafficMode && r.profile.trafficMode !== 'split') {
+        const dns = (outlet: 'direct' | 'proxy' | 'vpn', condition?: any) => {
+          internetDNS.push({ type: 'logical', mode: 'and', rules: [
+            { rule_set: [`corp-internet-dns-${id}`] }, ...(condition ? [condition] : []),
+          ], action: 'route',
+            server: outlet === 'vpn' ? `corp-dns-${id}` : outlet === 'proxy' ? 'remote-dns' : 'direct-dns',
+            disable_cache: true, ...(outlet === 'vpn' ? { strategy: 'ipv4_only' } : {}),
+          });
+        };
+        dns(policy.lan, { type: 'logical', mode: 'or', rules: [
+          { domain_suffix: ['local', 'lan', 'localhost'] }, { domain_regex: ['^[^.]+$'] },
+        ] });
+        dns(policy.domestic, { type: 'logical', mode: 'or', rules: [
+          { rule_set: ['geosite-cn'] }, { domain_suffix: ['cn'] },
+        ] });
+        dns(policy.foreign);
+      }
+    }
   }
   // All authorized routes precede every guard; overlapping resources can use the active profile.
   for (const r of runtime.profiles)
@@ -107,11 +161,15 @@ export function applyCorporateConfig(
     { process_name: [runtime.coreProcessName], outbound: 'direct' },
     ...managedRules,
     ...ordinary,
+    ...internetRules,
     ...privateRules,
     ...domestic,
     ...apps,
+    ...internetFallback,
   ];
-  config.dns.rules = [...dnsRules, ...config.dns.rules];
+  const predefined = config.dns.rules.filter((r: any) => r.action === 'predefined');
+  config.dns.rules = [...dnsRules, ...predefined, ...internetDNS,
+    ...config.dns.rules.filter((r: any) => r.action !== 'predefined')];
   for (const inbound of config.inbounds) {
     if (inbound.type === 'tun') {
       // Never capture the fixed local endpoints or known gateway IPs into the company tunnel.
