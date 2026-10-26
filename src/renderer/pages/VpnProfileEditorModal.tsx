@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
-import { X, Check } from 'lucide-react';
+import { X, Check, KeyRound } from 'lucide-react';
 import { VpnProfile, VpnProfileType } from '../../types';
 import { Portal } from '../components/Portal';
 import { Select } from '../components/Select';
@@ -169,17 +169,28 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
   // 经 ModalShell Context 拿收场关闭;直接调 onClose prop 会跳过动画
   const requestClose = useModalClose();
   return (
-      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh]">
+      <div
+        className="vpn-surface vpn-editor"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vpn-engine-editor-title"
+      >
           {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-              {profile?.id ? '编辑 VPN 账号' : '添加 VPN 账号'}
-            </h3>
+          <header className="vpn-editor-header">
+            <div className="vpn-heading-icon">
+              <KeyRound size={21} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 id="vpn-engine-editor-title">
+                {profile?.id ? '编辑 VPN 账号' : '添加 VPN 账号'}
+              </h2>
+              <p>填写服务器与账号，保存后从列表连接。</p>
+            </div>
             <ModalCloseX onClick={requestClose} />
-          </div>
+          </header>
 
           {/* Form Body */}
-          <form onSubmit={handleSubmit} className="overflow-y-auto space-y-4 py-4 pr-1 flex-1 text-xs">
+          <form onSubmit={handleSubmit} className="vpn-editor-body space-y-4">
             {/* Type Selector(类型已在添加弹层选定时隐藏) */}
             <div style={lockType ? { display: 'none' } : undefined}>
               <FieldLabel>
@@ -572,7 +583,7 @@ className="font-mono"
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <footer className="vpn-editor-footer">
               <Button variant="ghost" onClick={requestClose}>
                 取消
               </Button>
@@ -580,7 +591,7 @@ className="font-mono"
                 <Check className="w-4 h-4" />
                 保存账号
               </Button>
-            </div>
+            </footer>
           </form>
         </div>
   );

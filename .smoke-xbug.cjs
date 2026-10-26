@@ -99,14 +99,14 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
   await sleep(400);
   await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.replace(/\s+/g,'').includes('IKEv2')&&b.offsetParent!==null)?.click()`);
   await sleep(900);
-  console.log('引擎弹窗打开:', await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`));
+  console.log('引擎弹窗打开:', await ev(`!![...document.querySelectorAll('h2')].find(h=>h.textContent.includes('添加 VPN 账号'))`));
   await ev(`(() => {
-    const h = [...document.querySelectorAll('h3')].find(h => h.textContent.includes('添加 VPN 账号'));
-    const panel = h?.closest('div.rounded-2xl');
+    const h = [...document.querySelectorAll('h2')].find(h => h.textContent.includes('添加 VPN 账号'));
+    const panel = h?.closest('.vpn-editor');
     panel && [...panel.querySelectorAll('button')].find(x => x.querySelector('svg.lucide-x'))?.click();
   })()`);
   await sleep(500);
-  console.log('引擎弹窗 X 点击后仍在:', await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`));
+  console.log('引擎弹窗 X 点击后仍在:', await ev(`!![...document.querySelectorAll('h2')].find(h=>h.textContent.includes('添加 VPN 账号'))`));
 })()
   .catch((e) => { console.error('ERR', e.message); process.exitCode = 1; })
   .finally(() => { try { execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' }); } catch {} setTimeout(() => process.exit(process.exitCode || 0), 600); });

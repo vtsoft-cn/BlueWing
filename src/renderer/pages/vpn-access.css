@@ -1,12 +1,25 @@
 .vpn-add-type-list {
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr);
-  max-height: 56vh;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 60vh;
   overflow-y: auto;
   padding-right: 2px;
 }
+.vpn-add-type-list .vpn-provider-option .vpn-provider-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+.vpn-add-type-list .vpn-provider-option strong {
+  font-size: 12px;
+}
+.vpn-add-type-list .vpn-provider-option small {
+  font-size: 10.5px;
+}
 .vpn-add-type-divider {
+  grid-column: 1 / -1;
   height: 1px;
   background: var(--vpn-border);
   margin: 2px 0;

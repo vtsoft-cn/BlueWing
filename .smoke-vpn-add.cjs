@@ -96,7 +96,7 @@ async function main() {
   await step('点 IKEv2 直开引擎编辑器', async () => {
     await evalJs(`clickByText('IKEv2')`);
     await evalJs(`__sleep(800)`);
-    const open = await evalJs(`textExists('添加 VPN 账号')`);
+    const open = await evalJs(`!![...document.querySelectorAll('h2')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(path.join(process.env.TEMP, 'bw-smoke-overlay.png'), Buffer.from(shot.data, 'base64'));
     return open;
@@ -104,7 +104,7 @@ async function main() {
 
   // 4. X 关闭引擎编辑器
   await step('X 关闭引擎编辑器', async () => {
-    await evalJs(`(() => { const h=[...document.querySelectorAll('h3')].find(h=>h.textContent.includes('VPN 账号')); const p=h?.closest('div.rounded-2xl'); p && [...p.querySelectorAll('button')].find(x=>x.querySelector('svg.lucide-x'))?.click(); })()`);
+    await evalJs(`(() => { const h=[...document.querySelectorAll('h2')].find(h=>h.textContent.includes('VPN 账号')); const p=h?.closest('.vpn-editor'); p && [...p.querySelectorAll('button')].find(x=>x.querySelector('svg.lucide-x'))?.click(); })()`);
     await evalJs(`__sleep(600)`);
     return evalJs(`!textExists('添加 VPN 账号')`);
   });

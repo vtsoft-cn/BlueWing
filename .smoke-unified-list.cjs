@@ -54,8 +54,8 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
     require('fs').writeFileSync(path.join(process.env.TEMP, 'bw-add-picker.png'), Buffer.from(shot.data, 'base64'));
     await clickText('IKEv2');
     await sleep(700);
-    const editorOpen = await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
-    const editorTitle = await ev(`[...document.querySelectorAll('h3')].find(h=>h.offsetParent!==null&&h.textContent.includes('VPN 账号'))?.textContent`);
+    const editorOpen = await ev(`!![...document.querySelectorAll('h2')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
+    const editorTitle = await ev(`[...document.querySelectorAll('h2')].find(h=>h.offsetParent!==null&&h.textContent.includes('VPN 账号'))?.textContent`);
     return hasAll && editorOpen && editorTitle === '添加 VPN 账号';
   });
 
@@ -64,7 +64,7 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
     await ev(`(${setInput})('vpn.example.com', '10.99.0.1')`);
     await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('保存账号'))?.click()`);
     await sleep(900);
-    return ev(`![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
+    return ev(`![...document.querySelectorAll('h2')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
   });
 
   await step('主列表出现引擎档案(不再空状态)', async () => {
