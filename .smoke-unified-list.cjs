@@ -46,14 +46,17 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
     return ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加你的第一个 VPN 接入'))`);
   });
 
-  await step('打开引擎账号编辑器', async () => {
+  await step('类型弹层直列全部类型,点 IKEv2 直开编辑器', async () => {
     await clickText('添加接入');
     await sleep(400);
-    await clickText('协议引擎类');
-    await sleep(600);
-    await clickText('添加VPN账号');
+    const hasAll = await ev(`['EasyConnect','aTrust','IKEv2','L2TP/IPsec','SSTP','OpenVPN','WireGuard','AnyConnect'].every(t=>[...document.querySelectorAll('button')].some(b=>b.textContent.includes(t)&&b.offsetParent!==null))`);
+    const shot = await send('Page.captureScreenshot', { format: 'png' });
+    require('fs').writeFileSync(path.join(process.env.TEMP, 'bw-add-picker.png'), Buffer.from(shot.data, 'base64'));
+    await clickText('IKEv2');
     await sleep(700);
-    return ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
+    const editorOpen = await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
+    const editorTitle = await ev(`[...document.querySelectorAll('h3')].find(h=>h.offsetParent!==null&&h.textContent.includes('VPN 账号'))?.textContent`);
+    return hasAll && editorOpen && editorTitle === '添加 VPN 账号';
   });
 
   await step('填写并保存引擎档案', async () => {
@@ -62,12 +65,6 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
     await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('保存账号'))?.click()`);
     await sleep(900);
     return ev(`![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`);
-  });
-
-  await step('关闭引擎覆盖层', async () => {
-    await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='关闭'&&b.offsetParent!==null)?.click()`);
-    await sleep(600);
-    return ev(`!document.querySelector('[aria-label="协议引擎类接入"]')`);
   });
 
   await step('主列表出现引擎档案(不再空状态)', async () => {

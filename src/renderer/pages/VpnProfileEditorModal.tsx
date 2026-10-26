@@ -15,7 +15,7 @@ interface VpnProfileEditorModalProps {
   onClose: () => void;
 }
 
-const TYPE_GROUPS: {
+export const TYPE_GROUPS: {
   id: VpnProfileType;
   label: string;
   hint: string;
@@ -172,7 +172,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-              {profile ? '编辑 VPN 账号' : '添加 VPN 账号'}
+              {profile?.id ? '编辑 VPN 账号' : '添加 VPN 账号'}
             </h3>
             <button
               onClick={requestClose}

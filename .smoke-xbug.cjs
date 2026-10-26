@@ -98,10 +98,8 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
   await sleep(600);
   await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('添加接入')||b.textContent.includes('新增接入'))?.click()`);
   await sleep(400);
-  await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('协议引擎类'))?.click()`);
-  await sleep(500);
-  await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('添加 VPN 账号'))?.click()`);
-  await sleep(700);
+  await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent.replace(/\s+/g,'').includes('IKEv2')&&b.offsetParent!==null)?.click()`);
+  await sleep(900);
   console.log('引擎弹窗打开:', await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('添加 VPN 账号'))`));
   await ev(`(() => {
     const h = [...document.querySelectorAll('h3')].find(h => h.textContent.includes('添加 VPN 账号'));

@@ -38,7 +38,7 @@ import { AppSettings } from '../../types';
 import { captchaAnswer } from '../../utils/vpnChallenge';
 import { useVpnSnapshot } from '../vpn/useVpnSnapshot';
 import { VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../../types';
-import { VpnProfileEditorModal } from './VpnProfileEditorModal';
+import { VpnProfileEditorModal, TYPE_GROUPS } from './VpnProfileEditorModal';
 import { vpnProviderList, vpnProviders } from '../vpn/providers';
 import {
   newVpnProfile,
@@ -48,7 +48,6 @@ import { Portal } from '../components/Portal';
 import { ModalShell } from '../components/ModalShell';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
-import { Vpn } from './Vpn';
 import './vpn-access.css';
 
 const input = 'vpn-input';
@@ -137,7 +136,6 @@ export const VpnAccess: React.FC<{
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [detailTab, setDetailTab] = useState<'resources' | 'help'>('resources');
-  const [engineEditorOpen, setEngineEditorOpen] = useState(false);
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   // ---- 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…,与原生协议并列在同一列表) ----
   const [engineProfiles, setEngineProfiles] = useState<EngineVpnProfile[]>([]);
@@ -1162,65 +1160,41 @@ export const VpnAccess: React.FC<{
                 <strong style={{ fontSize: 14 }}>选择接入类型</strong>
                 <button className="vpn-button compact" onClick={() => setAddPickerOpen(false)}>关闭</button>
               </div>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'minmax(0, 1fr)' }}>
-                <button
-                  className="vpn-button"
-                  style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
-                  onClick={() => { setAddPickerOpen(false); openEditor(newVpnProfile()); }}
-                >
-                  <strong>EasyConnect / aTrust</strong>
-                  <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>
-                    深信服系列网关,内置协议核心,支持密码/动态码/短信认证
-                  </div>
-                </button>
-                <button
-                  className="vpn-button"
-                  style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
-                  onClick={() => { setAddPickerOpen(false); setEngineEditorOpen(true); }}
-                >
-                  <strong>协议引擎类</strong>
-                  <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>
-                    IKEv2 / L2TP / SSTP / OpenVPN / SoftEther 兼容端点 / AnyConnect / FortiClient / GlobalProtect / Pulse / Juniper / F5 / Array / WireGuard
-                  </div>
-                </button>
+              <div className="vpn-add-type-list">
+                {vpnProviderList.map((provider) => (
+                  <button
+                    key={provider.id}
+                    className="vpn-button"
+                    style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+                    onClick={() => { setAddPickerOpen(false); openEditor({ ...newVpnProfile(), protocol: provider.id }); }}
+                  >
+                    <strong>{provider.name}</strong>
+                    <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{provider.description}</div>
+                  </button>
+                ))}
+                <div className="vpn-add-type-divider" />
+                {TYPE_GROUPS.map((t) => (
+                  <button
+                    key={t.id}
+                    className="vpn-button"
+                    style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+                    onClick={() => {
+                      setAddPickerOpen(false);
+                      // 空白引擎档案带类型直开编辑器(管理在主列表:连接/编辑/删除)
+                      setEngineEditorFor({
+                        id: '', name: '', server: '', username: '', password: '',
+                        type: t.id, splitTunnel: true, useMfa: false, authUserPass: false,
+                        configText: '', extraRoutes: [], createdAt: Date.now(),
+                      });
+                    }}
+                  >
+                    <strong>{t.label}</strong>
+                    <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{t.hint}</div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-        </Portal>
-      )}
-      {engineEditorOpen && (
-        <Portal>
-          <ModalShell
-            overlayClassName="vpn-modal-backdrop"
-            z={190}
-            onClose={() => setEngineEditorOpen(false)}
-          >
-            <div
-              className="vpn-surface"
-              role="dialog"
-              aria-modal="true"
-              aria-label="协议引擎类接入"
-              style={{
-                maxWidth: 880,
-                width: '100%',
-                borderRadius: 14,
-                padding: 20,
-                maxHeight: '86vh',
-                overflowY: 'auto',
-                background: 'var(--vpn-bg)',
-                border: '1px solid var(--vpn-border)',
-                boxShadow: '0 24px 80px #0005',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <strong style={{ fontSize: 14 }}>协议引擎类接入</strong>
-                <button className="vpn-button compact" onClick={() => setEngineEditorOpen(false)}>
-                  关闭
-                </button>
-              </div>
-              <Vpn embedded />
-            </div>
-          </ModalShell>
         </Portal>
       )}
       {engineEditorFor !== undefined && (

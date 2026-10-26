@@ -1,3 +1,16 @@
+.vpn-add-type-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  max-height: 56vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.vpn-add-type-divider {
+  height: 1px;
+  background: var(--vpn-border);
+  margin: 2px 0;
+}
 .vpn-surface {
   --vpn-bg: #fff;
   --vpn-soft: #f8fafc;

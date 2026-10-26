@@ -17,6 +17,7 @@ const proc = spawn(electronExe, ['.', '--remote-debugging-port=9222'], {
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const results = [];
 
 async function findPageTarget() {
   for (let i = 0; i < 60; i++) {
@@ -67,7 +68,6 @@ async function main() {
   await evalJs(`window.clickByText = ${clickByText}; window.q = ${q}; window.textExists = ${textExists}; (() => { window.__sleep = (ms) => new Promise(r => setTimeout(r, ms)); return 'helpers-ok'; })()`);
   await sleep(1500); // 等首屏渲染
 
-  const results = [];
   const step = async (name, fn) => {
     try { const ok = await fn(); results.push([ok ? 'PASS' : 'FAIL', name, ok === true ? '' : String(ok)]); if (!ok) throw new Error('step failed: ' + name); }
     catch (e) { results.push(['FAIL', name, e.message]); throw e; }
@@ -92,31 +92,28 @@ async function main() {
     return ok;
   });
 
-  // 3. 协议引擎类 → 覆盖层内嵌 Vpn 管理组件(回归点)
-  await step('协议引擎类打开引擎管理覆盖层', async () => {
-    await evalJs(`clickByText('协议引擎类')`);
+  // 3. 类型直选:IKEv2 直开引擎编辑器(回归点:类型弹层直列全部类型)
+  await step('点 IKEv2 直开引擎编辑器', async () => {
+    await evalJs(`clickByText('IKEv2')`);
     await evalJs(`__sleep(800)`);
-    const overlay = await evalJs(`q('[aria-label="协议引擎类接入"]')`);
-    const addBtn = await evalJs(`textExists('添加 VPN 账号')`);
-    return overlay && addBtn;
+    const open = await evalJs(`textExists('添加 VPN 账号')`);
+    const shot = await send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync(path.join(process.env.TEMP, 'bw-smoke-overlay.png'), Buffer.from(shot.data, 'base64'));
+    return open;
   });
 
-  // 4. 覆盖层截图
-  const shot = await send('Page.captureScreenshot', { format: 'png' });
-  fs.writeFileSync(path.join(process.env.TEMP, 'bw-smoke-overlay.png'), Buffer.from(shot.data, 'base64'));
-
-  // 5. 关闭覆盖层
-  await step('关闭引擎覆盖层', async () => {
-    await evalJs(`[...document.querySelectorAll('[aria-label="协议引擎类接入"] button')].find(b=>b.textContent.trim()==='关闭')?.click()`);
+  // 4. X 关闭引擎编辑器
+  await step('X 关闭引擎编辑器', async () => {
+    await evalJs(`(() => { const h=[...document.querySelectorAll('h3')].find(h=>h.textContent.includes('VPN 账号')); const p=h?.closest('div.rounded-2xl'); p && [...p.querySelectorAll('button')].find(x=>x.querySelector('svg.lucide-x'))?.click(); })()`);
     await evalJs(`__sleep(600)`);
-    return evalJs(`!q('[aria-label="协议引擎类接入"]')`);
+    return evalJs(`!textExists('添加 VPN 账号')`);
   });
 
   // 6. EasyConnect/aTrust 分支 → corporate 编辑器
   await step('EasyConnect/aTrust 打开编辑器', async () => {
     await evalJs(`clickByText('添加接入') || clickByText('新增接入')`);
     await evalJs(`__sleep(400)`);
-    await evalJs(`clickByText('EasyConnect / aTrust')`);
+    await evalJs(`clickByText('EasyConnect')`);
     await evalJs(`__sleep(800)`);
     return evalJs(`textExists('网关地址') || textExists('认证方式') || textExists('保存')`);
   });
