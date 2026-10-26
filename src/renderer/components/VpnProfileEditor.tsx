@@ -23,7 +23,7 @@ import {
   VpnCertificate,
   VpnProfile,
 } from '../../types/corporateVpn';
-import { vpnProviderList, vpnProviders } from '../vpn/providers';
+import { vpnProviders } from '../vpn/providers';
 import { vpnTrafficModes } from '../../utils/vpnRouting';
 import { Portal } from './Portal';
 import { Select } from './Select';
@@ -336,47 +336,7 @@ export function VpnProfileEditor({
                   hidden={tab !== 'connection'}
                   className="vpn-editor-section"
                 >
-                  <div className="vpn-field">
-                    <span className="vpn-field-label">接入协议</span>
-                    <div
-                      className="vpn-provider-options"
-                      role="group"
-                      aria-label="接入协议"
-                    >
-                      {vpnProviderList.map((item) => (
-                        <button
-                          type="button"
-                          key={item.id}
-                          className="vpn-provider-option"
-                          aria-pressed={form.protocol === item.id}
-                          onClick={() => {
-                            if (form.protocol === item.id) return;
-                            setForm({
-                              ...form,
-                              protocol: item.id,
-                              gateway: { ...form.gateway, port: item.id === 'softether' ? 5555 : 10443 },
-                              authMethod: 'auth/psw',
-                              loginDomain: item.id === 'softether' ? 'VPN' : '',
-                              rememberSession:
-                                item.deviceSession && form.rememberSession,
-                            });
-                            setMethods([]);
-                          }}
-                        >
-                          <span className={`vpn-provider-mark ${item.tone}`}>
-                            {item.mark}
-                          </span>
-                          <span>
-                            <strong>{item.name}</strong>
-                            <small>{item.description}</small>
-                          </span>
-                          {form.protocol === item.id && (
-                            <Check size={17} className="vpn-provider-check" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+
                   <label className="vpn-field">
                     <span>
                       配置名称 <em>*</em>

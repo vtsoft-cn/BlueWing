@@ -1240,6 +1240,7 @@ export const VpnAccess: React.FC<{
       {engineEditorFor !== undefined && (
         <VpnProfileEditorModal
           profile={engineEditorFor}
+          lockType={!engineEditorFor?.id}
           onSave={async (profile) => {
             const ok = await window.electronAPI?.vpn?.saveProfile(profile);
             if (ok) {
@@ -1256,6 +1257,13 @@ export const VpnAccess: React.FC<{
       )}
     </div>
   );
+};
+
+// 类型弹层里引擎类型的徽标缩写
+const ENGINE_TYPE_MARKS: Record<string, string> = {
+  ikev2: 'IK', l2tp: 'L2', sstp: 'SS', openvpn: 'OP', anyconnect: 'AC',
+  fortinet: 'FT', globalprotect: 'GP', pulse: 'PU', nc: 'JN', f5: 'F5',
+  array: 'AR', wireguard: 'WG',
 };
 
 /** 类型选择弹层:独立组件——useModalExit 的开/关状态随挂载/卸载自然复位。
@@ -1286,24 +1294,30 @@ const AddTypePicker: React.FC<{
           {vpnProviderList.map((provider) => (
             <button
               key={provider.id}
-              className="vpn-button"
-              style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+              type="button"
+              className="vpn-provider-option"
               onClick={() => { if (clickGuard()) return; onPickCorporate(provider.id); }}
             >
-              <strong>{provider.name}</strong>
-              <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{provider.description}</div>
+              <span className={`vpn-provider-mark ${provider.tone}`}>{provider.mark}</span>
+              <span>
+                <strong>{provider.name}</strong>
+                <small>{provider.description}</small>
+              </span>
             </button>
           ))}
           <div className="vpn-add-type-divider" />
           {TYPE_GROUPS.map((t) => (
             <button
               key={t.id}
-              className="vpn-button"
-              style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+              type="button"
+              className="vpn-provider-option"
               onClick={() => { if (clickGuard()) return; onPickEngine(t.id); }}
             >
-              <strong>{t.label}</strong>
-              <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{t.hint}</div>
+              <span className="vpn-provider-mark teal">{ENGINE_TYPE_MARKS[t.id] || 'EN'}</span>
+              <span>
+                <strong>{t.label}</strong>
+                <small>{t.hint}</small>
+              </span>
             </button>
           ))}
         </div>

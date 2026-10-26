@@ -10,6 +10,8 @@ import { Button, FieldLabel, inputCls, Input } from '../components/ui';
 
 interface VpnProfileEditorModalProps {
   profile?: VpnProfile | null;
+  /** 类型已在添加弹层选定:隐藏类型网格 */
+  lockType?: boolean;
   /** 引擎运行时可用性(安装包已内置;仅用户手动删除/替换引擎时才可能缺失) */
   engines?: { openvpn: boolean; openconnect: boolean } | null;
   onSave: (profile: VpnProfile) => void;
@@ -47,16 +49,16 @@ const SOFTETHER_MODE_HINTS: Record<string, string> = {
 };
 
 
-export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => (
+export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps & { lockType?: boolean }> = ({ profile, engines, onSave, onClose, lockType }) => (
   <Portal>
     <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={onClose}>
-      <VpnProfileEditorPanel profile={profile} engines={engines} onSave={onSave} onClose={onClose} />
+      <VpnProfileEditorPanel profile={profile} engines={engines} onSave={onSave} onClose={onClose} lockType={lockType} />
     </ModalShell>
   </Portal>
 );
 
 // 面板必须是 ModalShell 的真实子组件:useModalClose 的 Context 只提供给 children
-const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => {
+const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: boolean }> = ({ profile, engines, onSave, onClose, lockType }) => {
   const [formData, setFormData] = useState<Partial<VpnProfile>>({
     type: 'ikev2',
     name: '',
@@ -178,8 +180,8 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
 
           {/* Form Body */}
           <form onSubmit={handleSubmit} className="overflow-y-auto space-y-4 py-4 pr-1 flex-1 text-xs">
-            {/* Type Selector */}
-            <div>
+            {/* Type Selector(类型已在添加弹层选定时隐藏) */}
+            <div style={lockType ? { display: 'none' } : undefined}>
               <FieldLabel>
                 VPN 类型 (Protocol)
               </FieldLabel>
