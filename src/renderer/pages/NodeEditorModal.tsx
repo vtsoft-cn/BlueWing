@@ -5,6 +5,7 @@ import { X, Check } from 'lucide-react';
 import { ProxyNode, ProxyType } from '../../types';
 import { Select } from '../components/Select';
 import { Portal } from '../components/Portal';
+import { FieldLabel, inputCls } from '../components/ui';
 
 interface NodeEditorModalProps {
   node?: ProxyNode | null;
@@ -101,9 +102,9 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
         <form onSubmit={handleSubmit} className="overflow-y-auto space-y-4 py-4 pr-1 flex-1 text-xs">
           {/* Protocol Selector */}
           <div>
-            <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+            <FieldLabel>
               协议类型 (Protocol)
-            </label>
+            </FieldLabel>
             <div className="grid grid-cols-3 gap-2">
               {protocolTypes.map((p) => (
                 <button
@@ -125,44 +126,44 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
           {/* Basic Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-3">
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 节点名称 (Remark)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 required
                 value={formData.name || ''}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="例如: Japan Tokyo 01"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                className={inputCls}
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 服务器地址 (Server)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 required
                 value={formData.server || ''}
                 onChange={(e) => setFormData({ ...formData, server: e.target.value })}
                 placeholder="域名或 IP 地址"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                className={inputCls}
               />
             </div>
 
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 端口 (Port)
-              </label>
+              </FieldLabel>
               <input
                 type="number"
                 required
                 value={formData.port || ''}
                 onChange={(e) => setFormData({ ...formData, port: Number(e.target.value) })}
                 placeholder="443"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                className={inputCls}
               />
             </div>
           </div>
@@ -170,28 +171,28 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
           {/* Protocol-specific dynamic fields */}
           {(formData.type === 'vless' || formData.type === 'vmess' || formData.type === 'tuic') && (
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 用户 ID / UUID
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 value={formData.uuid || ''}
                 onChange={(e) => setFormData({ ...formData, uuid: e.target.value })}
                 placeholder="00000000-0000-0000-0000-000000000000"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-mono"
+                className={`${inputCls} font-mono`}
               />
             </div>
           )}
 
           {formData.type === 'vless' && (
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 流控 (Flow)
-              </label>
+              </FieldLabel>
               <Select
                 value={formData.flow || ''}
                 onChange={(v) => setFormData({ ...formData, flow: v })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                className={inputCls}
                 options={[
                   { value: '', label: '无 (None)' },
                   { value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' },
@@ -202,30 +203,30 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
 
           {formData.type === 'naive' && (
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 用户名 (Username)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 value={formData.username || ''}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 placeholder="HTTP 认证用户名"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-mono"
+                className={`${inputCls} font-mono`}
               />
             </div>
           )}
 
           {(formData.type === 'trojan' || formData.type === 'shadowsocks' || formData.type === 'hysteria2' || formData.type === 'naive') && (
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 认证密码 (Password / Secret)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 value={formData.password || ''}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="节点密码"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-mono"
+                className={`${inputCls} font-mono`}
               />
             </div>
           )}
@@ -234,13 +235,13 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
           {formData.type !== 'naive' && formData.type !== 'wireguard' && (
           <>
           <div>
-            <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <FieldLabel>
               传输协议 (Transport)
-            </label>
+            </FieldLabel>
             <Select
               value={formData.transport || 'tcp'}
               onChange={(v) => setFormData({ ...formData, transport: v as any })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+              className={inputCls}
               options={[
                 { value: 'tcp', label: 'TCP' },
                 { value: 'ws', label: 'WebSocket (WS)' },
@@ -254,27 +255,27 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
           {formData.transport && formData.transport !== 'tcp' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   路径 (Path)
-                </label>
+                </FieldLabel>
                 <input
                   type="text"
                   value={formData.transportPath || ''}
                   onChange={(e) => setFormData({ ...formData, transportPath: e.target.value })}
                   placeholder="/ws"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none"
+                  className={inputCls}
                 />
               </div>
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   请求头 / Host
-                </label>
+                </FieldLabel>
                 <input
                   type="text"
                   value={formData.transportHost || ''}
                   onChange={(e) => setFormData({ ...formData, transportHost: e.target.value })}
                   placeholder="example.com"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none"
+                  className={inputCls}
                 />
               </div>
             </div>
@@ -298,15 +299,15 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
             {(formData.tls || formData.type === 'naive') && (
               <div className="space-y-3 pt-2">
                 <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <FieldLabel>
                     SNI (Server Name Indication)
-                  </label>
+                  </FieldLabel>
                   <input
                     type="text"
                     value={formData.sni || ''}
                     onChange={(e) => setFormData({ ...formData, sni: e.target.value })}
                     placeholder="www.microsoft.com"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none"
+                    className={inputCls}
                   />
                 </div>
 
@@ -327,27 +328,27 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
                 {formData.reality && (
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <FieldLabel>
                         Public Key (pbk)
-                      </label>
+                      </FieldLabel>
                       <input
                         type="text"
                         value={formData.publicKey || ''}
                         onChange={(e) => setFormData({ ...formData, publicKey: e.target.value })}
                         placeholder="Reality 公钥"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none font-mono"
+                        className={`${inputCls} font-mono`}
                       />
                     </div>
                     <div>
-                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <FieldLabel>
                         Short ID (sid)
-                      </label>
+                      </FieldLabel>
                       <input
                         type="text"
                         value={formData.shortId || ''}
                         onChange={(e) => setFormData({ ...formData, shortId: e.target.value })}
                         placeholder="短 ID"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none font-mono"
+                        className={`${inputCls} font-mono`}
                       />
                     </div>
                   </div>

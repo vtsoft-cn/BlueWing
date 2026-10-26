@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {Check, Zap, Save, Plus, Trash2, FileCode2} from 'lucide-react';
 import { DnsConfig, HostsRecord } from '../../types';
 import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
+import { FieldLabel } from '../components/ui';
 
 const DNS_PRESETS = [
   { name: '阿里', primary: '223.5.5.5', secondary: '223.6.6.6' },
@@ -152,9 +153,9 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <FieldLabel>
                 远程代理 DNS (Remote DNS - 走节点代理)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 required
@@ -169,9 +170,9 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
             </div>
 
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <FieldLabel>
                 国内直连 DNS (Direct DNS - 直连国内)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 required
@@ -188,9 +189,9 @@ export const DNS: React.FC<DNSProps> = ({ dns, onSaveDns }) => {
 
           {formData.mode === 'fakeip' && (
             <div className="pt-2">
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <FieldLabel>
                 FakeIP 虚拟网段 (IPv4 CIDR)
-              </label>
+              </FieldLabel>
               <input
                 type="text"
                 value={formData.fakeIpRange}

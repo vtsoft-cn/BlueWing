@@ -5,6 +5,7 @@ import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, Arro
 import { RouteRule, AppSettings, ProxyNode } from '../../types';
 import { toast } from '../components/Toast';
 import { Select } from '../components/Select';
+import { FieldLabel, inputCls } from '../components/ui';
 
 interface RoutingProps {
   rules: RouteRule[];
@@ -366,27 +367,27 @@ export const Routing: React.FC<RoutingProps> = ({
 
             <form onSubmit={handleSaveRule} className="space-y-3 text-xs">
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   规则名称
-                </label>
+                </FieldLabel>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="例如: 我的特定域名代理"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  className={inputCls}
                 />
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   分流动作 (Outbound)
-                </label>
+                </FieldLabel>
                 <Select
                   value={formData.outbound || 'proxy'}
                   onChange={(v) => setFormData({ ...formData, outbound: v })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                  className={inputCls}
                   options={[
                     { value: 'proxy', label: '代理 (Proxy)' },
                     { value: 'direct', label: '直连 (Direct)' },
@@ -397,9 +398,9 @@ export const Routing: React.FC<RoutingProps> = ({
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   匹配域名 (一行一个，支持 domain:, full:, geosite:)
-                </label>
+                </FieldLabel>
                 <textarea
                   rows={3}
                   value={domainInput}
@@ -410,9 +411,9 @@ export const Routing: React.FC<RoutingProps> = ({
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   匹配 IP (一行一个，支持 CIDR 或 geoip:)
-                </label>
+                </FieldLabel>
                 <textarea
                   rows={2}
                   value={ipInput}

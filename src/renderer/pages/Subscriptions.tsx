@@ -13,6 +13,7 @@ import {Plus,
 import { Subscription } from '../../types';
 import { toast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
+import { FieldLabel, inputCls } from '../components/ui';
 
 interface SubscriptionsProps {
   subscriptions: Subscription[];
@@ -291,30 +292,30 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
 
             <form onSubmit={handleSaveSub} className="space-y-3 text-xs">
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   订阅名称
-                </label>
+                </FieldLabel>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="例如: 主力机场订阅"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                  className={inputCls}
                 />
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   订阅链接 (URL)
-                </label>
+                </FieldLabel>
                 <input
                   type="url"
                   required
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                   placeholder="https://..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-mono"
+                  className={`${inputCls} font-mono`}
                 />
               </div>
 
@@ -332,9 +333,9 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
 
               {formData.autoUpdate && (
                 <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <FieldLabel>
                     更新周期 (小时)
-                  </label>
+                  </FieldLabel>
                   <input
                     type="number"
                     min={1}
@@ -343,7 +344,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
                     onChange={(e) =>
                       setFormData({ ...formData, updateIntervalHours: Number(e.target.value) })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none"
+                    className={inputCls}
                   />
                 </div>
               )}

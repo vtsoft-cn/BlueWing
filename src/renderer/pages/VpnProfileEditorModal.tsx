@@ -6,6 +6,7 @@ import { VpnProfile, VpnProfileType } from '../../types';
 import { Portal } from '../components/Portal';
 import { Select } from '../components/Select';
 import { InfoTip } from '../components/InfoTip';
+import { FieldLabel, inputCls } from '../components/ui';
 
 interface VpnProfileEditorModalProps {
   profile?: VpnProfile | null;
@@ -45,8 +46,6 @@ const SOFTETHER_MODE_HINTS: Record<string, string> = {
   openvpn: 'OpenVPN 兼容端点:填写服务器/端口/证书(可自动获取)',
 };
 
-const inputCls =
-  'w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500';
 
 export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => (
   <Portal>
@@ -181,9 +180,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
           <form onSubmit={handleSubmit} className="overflow-y-auto space-y-4 py-4 pr-1 flex-1 text-xs">
             {/* Type Selector */}
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <FieldLabel>
                 VPN 类型 (Protocol)
-              </label>
+              </FieldLabel>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {TYPE_GROUPS.map((t) => (
                   <button
@@ -229,9 +228,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
             {/* Basic fields */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={isOpenVpn ? 'sm:col-span-3' : 'sm:col-span-2'}>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <FieldLabel>
                   名称{isOpenVpn && '(.ovpn 内已含服务器地址,此处仅作显示名)'}
-                </label>
+                </FieldLabel>
                 <input
                   type="text"
                   required
@@ -243,9 +242,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
               </div>
               {!isOpenVpn && (
                 <div className={isOpenConnect ? '' : 'sm:col-span-1'}>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <FieldLabel>
                     服务器
-                  </label>
+                  </FieldLabel>
                   <input
                     type="text"
                     required
@@ -262,9 +261,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
             {!isOpenVpn && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <FieldLabel>
                     用户名{formData.type === 'softether' && '(服务器未设默认 Hub 时用 Hub名\\用户名)'}
-                  </label>
+                  </FieldLabel>
                   <input
                     type="text"
                     autoComplete="off"
@@ -275,9 +274,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <FieldLabel>
                     密码
-                  </label>
+                  </FieldLabel>
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -296,9 +295,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {effType === 'l2tp' && (
                     <div>
-                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <FieldLabel>
                         预共享密钥 (PSK){formData.type === 'softether' && ' — SoftEther L2TP 必填'}
-                      </label>
+                      </FieldLabel>
                       <input
                         type="password"
                         autoComplete="off"
@@ -311,9 +310,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                     </div>
                   )}
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <FieldLabel>
                       内网域名后缀
-                    </label>
+                    </FieldLabel>
                     <input
                       type="text"
                       value={formData.dnsSuffix || ''}
@@ -358,9 +357,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
 
                 {ovpnMode === 'file' && (
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <FieldLabel>
                       .ovpn 配置内容
-                    </label>
+                    </FieldLabel>
                     <textarea
                       required
                       rows={8}
@@ -376,9 +375,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-2">
-                        <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <FieldLabel>
                           服务器地址
-                        </label>
+                        </FieldLabel>
                         <input
                           type="text"
                           value={formData.server || ''}
@@ -388,9 +387,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                         />
                       </div>
                       <div>
-                        <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <FieldLabel>
                           端口
-                        </label>
+                        </FieldLabel>
                         <input
                           type="number"
                           value={formData.port || 1194}
@@ -399,13 +398,13 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                         />
                       </div>
                       <div>
-                        <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <FieldLabel>
                           协议
-                        </label>
+                        </FieldLabel>
                         <Select
                           value={formData.ovpnProto || 'udp'}
                           onChange={(v) => setFormData({ ...formData, ovpnProto: v as 'udp' | 'tcp' })}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                          className={inputCls}
                           options={[
                             { value: 'udp', label: 'UDP' },
                             { value: 'tcp', label: 'TCP' },
@@ -415,9 +414,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="block font-medium text-slate-700 dark:text-slate-300">
+                        <FieldLabel>
                           服务器证书
-                        </label>
+                        </FieldLabel>
                         <button
                           type="button"
                           disabled={!formData.server || certFetching}
@@ -456,7 +455,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                 {formData.authUserPass && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">用户名</label>
+                      <FieldLabel>用户名</FieldLabel>
                       <input
                         type="text"
                         value={formData.username || ''}
@@ -465,7 +464,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                       />
                     </div>
                     <div>
-                      <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">密码</label>
+                      <FieldLabel>密码</FieldLabel>
                       <input
                         type="password"
                         autoComplete="new-password"
@@ -484,9 +483,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
               <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <FieldLabel>
                       用户组 / 登录入口
-                    </label>
+                    </FieldLabel>
                     <input
                       type="text"
                       value={formData.usergroup || ''}
@@ -496,9 +495,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                     />
                   </div>
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <FieldLabel>
                       服务器端口
-                    </label>
+                    </FieldLabel>
                     <input
                       type="number"
                       value={formData.port || ''}
@@ -509,9 +508,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
                   </div>
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <FieldLabel>
                     服务器证书指纹 (--servercert)
-                  </label>
+                  </FieldLabel>
                   <input
                     type="text"
                     value={formData.servercert || ''}
@@ -537,31 +536,31 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
               <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">端口</label>
+                    <FieldLabel>端口</FieldLabel>
                     <input type="number" value={formData.port || 51820} onChange={(e) => setFormData({ ...formData, port: Number(e.target.value) || 51820 })} className={inputCls} />
                   </div>
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">本机隧道地址</label>
+                    <FieldLabel>本机隧道地址</FieldLabel>
                     <input type="text" value={formData.localAddress || ''} onChange={(e) => setFormData({ ...formData, localAddress: e.target.value })} placeholder="10.7.0.2/32" className={`${inputCls} font-mono`} />
                   </div>
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">MTU(可选)</label>
+                    <FieldLabel>MTU(可选)</FieldLabel>
                     <input type="number" value={formData.wireguardMtu || ''} onChange={(e) => setFormData({ ...formData, wireguardMtu: Number(e.target.value) || undefined })} placeholder="1420" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">私钥(Private Key)</label>
+                    <FieldLabel>私钥(Private Key)</FieldLabel>
                     <input type="password" autoComplete="off" value={formData.privateKey || ''} onChange={(e) => setFormData({ ...formData, privateKey: e.target.value })} placeholder="本机接口私钥" className={`${inputCls} font-mono`} />
                   </div>
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">对端公钥(Peer Key)</label>
+                    <FieldLabel>对端公钥(Peer Key)</FieldLabel>
                     <input type="text" value={formData.peerPublicKey || ''} onChange={(e) => setFormData({ ...formData, peerPublicKey: e.target.value })} placeholder="服务器公钥" className={`${inputCls} font-mono`} />
                   </div>
                   <div>
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">预共享密钥(可选)</label>
+                    <FieldLabel>预共享密钥(可选)</FieldLabel>
                     <input type="password" autoComplete="off" value={formData.presharedKey || ''} onChange={(e) => setFormData({ ...formData, presharedKey: e.target.value })} className={`${inputCls} font-mono`} />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">企业内网 DNS(可选)</label>
+                    <FieldLabel>企业内网 DNS(可选)</FieldLabel>
                     <input type="text" value={formData.corpDns || ''} onChange={(e) => setFormData({ ...formData, corpDns: e.target.value })} placeholder="如 10.7.0.1(内网域名解析经隧道)" className={inputCls} />
                   </div>
                 </div>
@@ -570,9 +569,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
 
             {/* Common: extra routes */}
             <div>
-              <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <FieldLabel>
                 {isWireGuard ? '内网网段(WireGuard AllowedIPs,必填)' : '补充内网网段(可选,与自动上报合并)'}
-              </label>
+              </FieldLabel>
               <textarea
                 rows={2}
                 value={extraRoutesText}

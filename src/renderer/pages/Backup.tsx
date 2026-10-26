@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
-import {HardDrive,
+import {
+  HardDrive,
   CloudUpload,
   Share2,
   Smartphone,
@@ -17,7 +18,9 @@ import {HardDrive,
   CheckCircle2,
   Download,
   Upload,
-  RotateCcw,} from 'lucide-react';
+  RotateCcw,
+} from 'lucide-react';
+import { FieldLabel } from '../components/ui';
 import {
   AppSettings,
   WebDAVConfig,
@@ -665,9 +668,9 @@ export const Backup: React.FC<BackupProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <FieldLabel>
               WebDAV 服务器地址 (Server URL)
-            </label>
+            </FieldLabel>
             <input
               type="url"
               value={webdavForm.serverUrl}
@@ -678,9 +681,9 @@ export const Backup: React.FC<BackupProps> = ({
           </div>
 
           <div>
-            <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <FieldLabel>
               账号 (Username)
-            </label>
+            </FieldLabel>
             <input
               type="text"
               value={webdavForm.username}
@@ -691,9 +694,9 @@ export const Backup: React.FC<BackupProps> = ({
           </div>
 
           <div>
-            <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <FieldLabel>
               密码 / 应用凭据 (Password)
-            </label>
+            </FieldLabel>
             <input
               type="password"
               value={webdavForm.password}
@@ -704,9 +707,9 @@ export const Backup: React.FC<BackupProps> = ({
           </div>
 
           <div>
-            <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <FieldLabel>
               远端存放目录
-            </label>
+            </FieldLabel>
             <input
               type="text"
               value={webdavForm.remotePath}
