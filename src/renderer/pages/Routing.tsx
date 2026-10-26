@@ -5,7 +5,7 @@ import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, Arro
 import { RouteRule, AppSettings, ProxyNode } from '../../types';
 import { toast } from '../components/Toast';
 import { Select } from '../components/Select';
-import { FieldLabel, inputCls } from '../components/ui';
+import { FieldLabel, inputCls, Input } from '../components/ui';
 
 interface RoutingProps {
   rules: RouteRule[];
@@ -370,13 +370,12 @@ export const Routing: React.FC<RoutingProps> = ({
                 <FieldLabel>
                   规则名称
                 </FieldLabel>
-                <input
+                <Input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="例如: 我的特定域名代理"
-                  className={inputCls}
                 />
               </div>
 

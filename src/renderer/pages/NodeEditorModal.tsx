@@ -5,7 +5,7 @@ import { X, Check } from 'lucide-react';
 import { ProxyNode, ProxyType } from '../../types';
 import { Select } from '../components/Select';
 import { Portal } from '../components/Portal';
-import { FieldLabel, inputCls } from '../components/ui';
+import { FieldLabel, inputCls, Input, Button } from '../components/ui';
 
 interface NodeEditorModalProps {
   node?: ProxyNode | null;
@@ -129,13 +129,12 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
               <FieldLabel>
                 节点名称 (Remark)
               </FieldLabel>
-              <input
+              <Input
                 type="text"
                 required
                 value={formData.name || ''}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="例如: Japan Tokyo 01"
-                className={inputCls}
               />
             </div>
 
@@ -143,13 +142,12 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
               <FieldLabel>
                 服务器地址 (Server)
               </FieldLabel>
-              <input
+              <Input
                 type="text"
                 required
                 value={formData.server || ''}
                 onChange={(e) => setFormData({ ...formData, server: e.target.value })}
                 placeholder="域名或 IP 地址"
-                className={inputCls}
               />
             </div>
 
@@ -157,13 +155,12 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
               <FieldLabel>
                 端口 (Port)
               </FieldLabel>
-              <input
+              <Input
                 type="number"
                 required
                 value={formData.port || ''}
                 onChange={(e) => setFormData({ ...formData, port: Number(e.target.value) })}
                 placeholder="443"
-                className={inputCls}
               />
             </div>
           </div>
@@ -174,12 +171,12 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
               <FieldLabel>
                 用户 ID / UUID
               </FieldLabel>
-              <input
+              <Input
                 type="text"
                 value={formData.uuid || ''}
                 onChange={(e) => setFormData({ ...formData, uuid: e.target.value })}
                 placeholder="00000000-0000-0000-0000-000000000000"
-                className={`${inputCls} font-mono`}
+className="font-mono"
               />
             </div>
           )}
@@ -206,12 +203,12 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
               <FieldLabel>
                 用户名 (Username)
               </FieldLabel>
-              <input
+              <Input
                 type="text"
                 value={formData.username || ''}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 placeholder="HTTP 认证用户名"
-                className={`${inputCls} font-mono`}
+className="font-mono"
               />
             </div>
           )}
@@ -221,12 +218,12 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
               <FieldLabel>
                 认证密码 (Password / Secret)
               </FieldLabel>
-              <input
+              <Input
                 type="text"
                 value={formData.password || ''}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="节点密码"
-                className={`${inputCls} font-mono`}
+className="font-mono"
               />
             </div>
           )}
@@ -258,24 +255,22 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
                 <FieldLabel>
                   路径 (Path)
                 </FieldLabel>
-                <input
+                <Input
                   type="text"
                   value={formData.transportPath || ''}
                   onChange={(e) => setFormData({ ...formData, transportPath: e.target.value })}
                   placeholder="/ws"
-                  className={inputCls}
                 />
               </div>
               <div>
                 <FieldLabel>
                   请求头 / Host
                 </FieldLabel>
-                <input
+                <Input
                   type="text"
                   value={formData.transportHost || ''}
                   onChange={(e) => setFormData({ ...formData, transportHost: e.target.value })}
                   placeholder="example.com"
-                  className={inputCls}
                 />
               </div>
             </div>
@@ -302,12 +297,11 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
                   <FieldLabel>
                     SNI (Server Name Indication)
                   </FieldLabel>
-                  <input
+                  <Input
                     type="text"
                     value={formData.sni || ''}
                     onChange={(e) => setFormData({ ...formData, sni: e.target.value })}
                     placeholder="www.microsoft.com"
-                    className={inputCls}
                   />
                 </div>
 
@@ -331,24 +325,24 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
                       <FieldLabel>
                         Public Key (pbk)
                       </FieldLabel>
-                      <input
+                      <Input
                         type="text"
                         value={formData.publicKey || ''}
                         onChange={(e) => setFormData({ ...formData, publicKey: e.target.value })}
                         placeholder="Reality 公钥"
-                        className={`${inputCls} font-mono`}
+className="font-mono"
                       />
                     </div>
                     <div>
                       <FieldLabel>
                         Short ID (sid)
                       </FieldLabel>
-                      <input
+                      <Input
                         type="text"
                         value={formData.shortId || ''}
                         onChange={(e) => setFormData({ ...formData, shortId: e.target.value })}
                         placeholder="短 ID"
-                        className={`${inputCls} font-mono`}
+className="font-mono"
                       />
                     </div>
                   </div>
@@ -359,20 +353,13 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
 
           {/* Footer Buttons */}
           <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={requestClose}
-              className="px-4 py-2 rounded-lg font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
+            <Button variant="ghost" onClick={requestClose}>
               取消
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white flex items-center space-x-1.5 shadow-sm shadow-blue-500/25 transition-colors"
-            >
+            </Button>
+            <Button type="submit">
               <Check className="w-4 h-4" />
-              <span>保存节点</span>
-            </button>
+              保存节点
+            </Button>
           </div>
         </form>
       </div>

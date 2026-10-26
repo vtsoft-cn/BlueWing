@@ -13,7 +13,7 @@ import {Plus,
 import { Subscription } from '../../types';
 import { toast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
-import { FieldLabel, inputCls } from '../components/ui';
+import { FieldLabel, Input } from '../components/ui';
 
 interface SubscriptionsProps {
   subscriptions: Subscription[];
@@ -295,13 +295,12 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
                 <FieldLabel>
                   订阅名称
                 </FieldLabel>
-                <input
+                <Input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="例如: 主力机场订阅"
-                  className={inputCls}
                 />
               </div>
 
@@ -309,13 +308,13 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
                 <FieldLabel>
                   订阅链接 (URL)
                 </FieldLabel>
-                <input
+                <Input
                   type="url"
                   required
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                   placeholder="https://..."
-                  className={`${inputCls} font-mono`}
+className="font-mono"
                 />
               </div>
 
@@ -336,7 +335,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
                   <FieldLabel>
                     更新周期 (小时)
                   </FieldLabel>
-                  <input
+                  <Input
                     type="number"
                     min={1}
                     max={168}
@@ -344,7 +343,6 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
                     onChange={(e) =>
                       setFormData({ ...formData, updateIntervalHours: Number(e.target.value) })
                     }
-                    className={inputCls}
                   />
                 </div>
               )}
