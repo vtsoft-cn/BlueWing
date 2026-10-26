@@ -108,6 +108,9 @@ export class ConfigGenerator {
       }
     }
 
+    // No subscription is required for company VPN access. Direct mode also keeps
+    // ordinary traffic local even when the user has saved proxy nodes.
+    const directOnly = nodeTags.length === 0 || settings.routingMode === 'direct';
     // 1) Main proxy selector (user live traffic)
     const validMainTag = (activeNode && nodeTags.includes(`node-${activeNode.id}`))
       ? `node-${activeNode.id}`
@@ -116,8 +119,8 @@ export class ConfigGenerator {
     outbounds.unshift({
       type: 'selector',
       tag: 'proxy',
-      outbounds: nodeTags.length > 0 ? nodeTags : ['direct'],
-      default: validMainTag,
+      outbounds: directOnly ? ['direct'] : nodeTags,
+      default: directOnly ? 'direct' : validMainTag,
     });
 
     // 2) Dedicated speedtest selector (isolated for speed testing, never touches 'proxy')
@@ -131,7 +134,7 @@ export class ConfigGenerator {
     // 3. DNS Configuration (Sing-box 1.14 compliant)
     // Note: direct-dns must NOT have detour: 'direct' because detour to empty direct outbound is fatal in sing-box
     const dnsServers: any[] = [
-      this.parseDnsServer('remote-dns', dns.remoteDns || 'https://1.1.1.1/dns-query', 'proxy'),
+      this.parseDnsServer('remote-dns', directOnly ? (dns.directDns || '223.5.5.5') : (dns.remoteDns || 'https://1.1.1.1/dns-query'), directOnly ? undefined : 'proxy'),
       this.parseDnsServer('direct-dns', dns.directDns || '223.5.5.5'),
       {
         tag: 'dns-local',
@@ -387,6 +390,8 @@ export class ConfigGenerator {
       const ruleObj: any = {};
       if (r.outbound === 'block') {
         ruleObj.action = 'reject';
+      } else if (directOnly) {
+        ruleObj.outbound = 'direct';
       } else if (r.outbound === 'proxy' || r.outbound === 'direct') {
         ruleObj.outbound = r.outbound;
       } else if (nodes.some((n) => n.id === r.outbound)) {
@@ -501,7 +506,7 @@ export class ConfigGenerator {
       if (ruleItem) routeRules.push(ruleItem);
     }
 
-    const finalOutbound = settings.routingMode === 'direct' ? 'direct' : 'proxy';
+    const finalOutbound = directOnly ? 'direct' : 'proxy';
 
     // 域名解析器:出站(含系统代理模式 direct 出站)的域名解析入口。
     // 注意:一旦显式指定 server tag,sing-box 会"直连该服务器"解析,完全绕过

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Circle,
+  Copy,
   Eye,
   EyeOff,
   FileKey2,
@@ -19,11 +20,13 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings2,
   Server,
   ShieldCheck,
   Unplug,
   Waypoints,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   VpnChallenge,
@@ -31,6 +34,7 @@ import {
   VpnState,
   VpnTarget,
 } from '../../types/corporateVpn';
+import { AppSettings } from '../../types';
 import { captchaAnswer } from '../../utils/vpnChallenge';
 import { useVpnSnapshot } from '../vpn/useVpnSnapshot';
 import { VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../../types';
@@ -59,6 +63,10 @@ const labels: Record<VpnState['state'], string> = {
   reconnect_wait: '等待重试',
 };
 const errorLabels: Record<string, string> = {
+  TLS_CERT_CHANGED:
+    '网关证书与之前记录的不一致，已停止发送登录信息。请检查网关地址，并确认是否更换过证书。',
+  TLS_CERT_EXPIRED: '网关证书已过期，请检查系统时间或联系网关管理员更新证书。',
+  TLS_CERT_NOT_YET_VALID: '网关证书尚未生效，请检查电脑的日期和时间。',
   TLS_UNTRUSTED:
     '网关证书不受信任或名称不匹配。请在高级选项中配置 CA，或核对服务器证书。',
   AUTH_OR_TUNNEL_FAILED: '认证或隧道建立失败，请核对账号、认证方式和网关要求。',
@@ -111,11 +119,17 @@ function ConnectionBadge({ state }: { state: VpnState['state'] }) {
   );
 }
 
-export const VpnAccess: React.FC = () => {
+export const VpnAccess: React.FC<{
+  settings: Pick<AppSettings, 'mixedPort' | 'inboundAuth' | 'tunEnabled'>;
+  coreState: string;
+}> = ({ settings, coreState }) => {
   const { snapshot, loading, error: loadError, refresh } = useVpnSnapshot();
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<VpnProfile>();
+  const [editorTab, setEditorTab] = useState<'connection' | 'routing' | 'advanced'>(
+    'connection',
+  );
   const [password, setPassword] = useState('');
   const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -250,18 +264,17 @@ export const VpnAccess: React.FC = () => {
   const resourceRows: Array<{ target: VpnTarget; source: string }> =
     selected && !selected.engine
       ? [
+          ...selected.profile.targets.map((target) => ({ target, source: '用户自定义' })),
+          ...Object.entries(selected.profile.hosts).map(([domain, ips]) => ({
+            target: { domains: [domain], cidrs: ips, network: 'tcp' as const },
+            source: '用户固定解析',
+          })),
           ...(resources?.targets || []).map((target) => ({
             target,
             source: '服务器下发',
           })),
-          ...selected.profile.targets.map((target) => ({ target, source: '手动补充' })),
-          ...Object.entries(selected.profile.hosts).map(([domain, ips]) => ({
-            target: { domains: [domain], cidrs: ips, network: 'tcp' as const },
-            source: '固定解析',
-          })),
         ]
       : [];
-
 
   const connectionError =
     actionError ||
@@ -273,6 +286,36 @@ export const VpnAccess: React.FC = () => {
     active ||
     !!state.requiresCoreRebuild ||
     state.coreAvailable === false;
+  const passwordSaved = !!(selected && snapshot.passwordSaved?.[selected.id]);
+  const openEditor = (
+    profile: VpnProfile,
+    tab: 'connection' | 'routing' | 'advanced' = 'connection',
+  ) => {
+    setEditorTab(tab);
+    setEditor(profile);
+  };
+  const storePassword = (remember: boolean) =>
+    run(async () => {
+      if (!selected) return;
+      const saving = remember && !!password;
+      await window.electronAPI.corporateVpn.savePassword(
+        selected.id,
+        password,
+        remember,
+      );
+      await refresh();
+      if (saving) {
+        setPassword('');
+        setReveal(false);
+      }
+      toast.success(
+        saving
+          ? '密码已加密保存，下次连接可留空'
+          : remember
+            ? '已开启密码记忆，连接时自动保存'
+            : '已清除此接入保存的密码',
+      );
+    });
   return (
     <div className="vpn-surface vpn-access">
       <header className="vpn-page-header">
@@ -282,7 +325,7 @@ export const VpnAccess: React.FC = () => {
           </div>
           <div>
             <h2>VPN 接入</h2>
-            <p>统一管理不同协议的连接，让指定资源通过 VPN 访问。</p>
+            <p>指定资源通过 VPN 访问；无需代理节点，也可保持普通公网直连。</p>
           </div>
         </div>
         {!!snapshot.profiles.length && (
@@ -333,8 +376,8 @@ export const VpnAccess: React.FC = () => {
                   await confirmDialog({
                     title: '应用接入分流',
                     message:
-                      '需要重启代理核心来注册 VPN 出口，现有公网连接会短暂重连。之后正常连接、断开 VPN 无需重启公网代理。',
-                    confirmText: '应用并重连',
+                      '此操作会启动或更新本地分流服务；没有代理节点时，普通公网使用本机直连。服务运行中更新出口会短暂重连，后续正常连接或断开 VPN 无需重启分流服务。',
+                    confirmText: coreState === 'running' ? '应用并重连' : '应用并启动',
                   })
                 ) {
                   if (!(await window.electronAPI.corporateVpn.apply()))
@@ -592,12 +635,12 @@ export const VpnAccess: React.FC = () => {
                   </div>
                   <button
                     className="vpn-icon-button"
-                    aria-label="编辑接入配置"
-                    title="编辑接入配置"
-                    disabled={active || busy}
-                    onClick={() => setEditor(selected.profile)}
+                    aria-label={active ? '查看接入配置' : '编辑接入配置'}
+                    title={active ? '查看接入配置（连接期间只读）' : '编辑接入配置'}
+                    disabled={busy}
+                    onClick={() => openEditor(selected.profile)}
                   >
-                    <Pencil size={17} />
+                    {active ? <Eye size={17} /> : <Pencil size={17} />}
                   </button>
                 </header>
                 <div className="vpn-connection-body">
@@ -608,15 +651,40 @@ export const VpnAccess: React.FC = () => {
                     </span>
                     <span>
                       <ShieldCheck size={14} />
-                      按资源分流
+                      {selected.profile.tls.pinSha256
+                        ? '证书指纹已固定'
+                        : selected.profile.tls.trustMode === 'strict'
+                          ? '严格证书校验'
+                          : '首次自动记住网关证书'}
                     </span>
                     {selected.profile.loginDomain && (
                       <span>登录域：{selected.profile.loginDomain}</span>
                     )}
                   </div>
                   {connectionError && (
-                    <div className="vpn-notice danger" role="alert">
-                      {connectionError}
+                    <div
+                      className="vpn-notice danger vpn-connection-error"
+                      role="alert"
+                    >
+                      <p>{connectionError}</p>
+                      {state.profileId === selectedId &&
+                        [
+                          'TLS_UNTRUSTED',
+                          'TLS_CERT_CHANGED',
+                          'TLS_CERT_EXPIRED',
+                          'TLS_CERT_NOT_YET_VALID',
+                        ].includes(state.error || '') &&
+                        !active && (
+                          <button
+                            type="button"
+                            className="vpn-button compact"
+                            disabled={busy}
+                            onClick={() => openEditor(selected.profile, 'advanced')}
+                          >
+                            <ShieldCheck size={14} />
+                            检查网关证书
+                          </button>
+                        )}
                     </div>
                   )}
                   <form
@@ -636,15 +704,37 @@ export const VpnAccess: React.FC = () => {
                     }}
                   >
                     {!active && selected.profile.authMethod !== 'auth/smsCheckCode' && (
-                      <label className="vpn-field">
-                        <span>登录密码</span>
+                      <div className="vpn-field">
+                        <div className="vpn-password-label">
+                          <label htmlFor="vpn-login-password">登录密码</label>
+                          <label
+                            className="vpn-remember-option"
+                            title={
+                              snapshot.encryptionAvailable
+                                ? '使用 Windows 系统加密保存，不包含验证码'
+                                : '当前系统加密不可用'
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label="加密记住密码"
+                              checked={selected.profile.rememberPassword}
+                              disabled={busy || !snapshot.encryptionAvailable}
+                              onChange={(event) =>
+                                storePassword(event.target.checked)
+                              }
+                            />
+                            加密记住密码
+                          </label>
+                        </div>
                         <div className="vpn-password-input">
                           <input
                             type={reveal ? 'text' : 'password'}
                             aria-label="登录密码"
+                            id="vpn-login-password"
                             autoComplete="off"
                             placeholder={
-                              selected.profile.rememberPassword
+                              passwordSaved
                                 ? '留空使用已保存的密码'
                                 : '输入本次连接的密码'
                             }
@@ -662,7 +752,7 @@ export const VpnAccess: React.FC = () => {
                             {reveal ? <EyeOff size={17} /> : <Eye size={17} />}
                           </button>
                         </div>
-                      </label>
+                      </div>
                     )}
                     {!active && selected.profile.authMethod === 'auth/smsCheckCode' && (
                       <div className="vpn-notice">
@@ -697,12 +787,26 @@ export const VpnAccess: React.FC = () => {
                       </div>
                     )}
                     <div className="vpn-connect-actions">
-                      <p>
-                        <LockKeyhole size={13} />
-                        {selected.profile.rememberPassword
-                          ? '已开启系统加密记忆'
-                          : '密码仅用于本次连接'}
-                      </p>
+                      <div className="vpn-credential-summary">
+                        <p>
+                          <LockKeyhole size={13} />
+                          {passwordSaved
+                            ? '密码已加密保存，下次连接可留空'
+                            : selected.profile.rememberPassword
+                              ? '连接时自动加密保存密码'
+                              : '密码仅用于本次连接'}
+                        </p>
+                        {!active && selected.profile.rememberPassword && !!password && (
+                          <button
+                            type="button"
+                            className="vpn-text-button"
+                            disabled={busy}
+                            onClick={() => storePassword(true)}
+                          >
+                            保存密码
+                          </button>
+                        )}
+                      </div>
                       {active ? (
                         <button
                           type="button"
@@ -754,7 +858,111 @@ export const VpnAccess: React.FC = () => {
                   </span>
                 </div>
               </section>
+              <section className="vpn-proxy-card" aria-label="应用代理">
+                <div className="vpn-proxy-heading">
+                  <div>
+                    <h3>应用代理</h3>
+                    <p>Xshell 等软件使用此入口，自动按资源分流。</p>
+                  </div>
+                  <span
+                    className={`vpn-state-badge ${coreState === 'running' ? 'connected' : ''}`}
+                    role="status"
+                  >
+                    <Circle size={11} />
+                    {coreState === 'running'
+                      ? '代理运行中'
+                      : coreState === 'starting'
+                        ? '代理启动中'
+                        : coreState === 'stopping'
+                          ? '代理停止中'
+                          : '代理未运行'}
+                  </span>
+                </div>
+                <dl className="vpn-proxy-fields">
+                  <div>
+                    <dt>类型</dt>
+                    <dd>SOCKS5</dd>
+                  </div>
+                  <div>
+                    <dt>地址</dt>
+                    <dd>
+                      <code>127.0.0.1</code>
+                      <button
+                        className="vpn-icon-button"
+                        type="button"
+                        aria-label="复制代理地址"
+                        title="复制代理地址"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText('127.0.0.1');
+                            toast.success('代理地址已复制');
+                          } catch {
+                            toast.error('复制失败，请手动复制代理地址');
+                          }
+                        }}
+                      >
+                        <Copy size={15} />
+                      </button>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>端口</dt>
+                    <dd aria-live="polite">
+                      <code>{settings.mixedPort}</code>
+                      <button
+                        className="vpn-icon-button"
+                        type="button"
+                        aria-label="复制代理端口"
+                        title="复制代理端口"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(
+                              String(settings.mixedPort),
+                            );
+                            toast.success('代理端口已复制');
+                          } catch {
+                            toast.error('复制失败，请手动复制代理端口');
+                          }
+                        }}
+                      >
+                        <Copy size={15} />
+                      </button>
+                    </dd>
+                  </div>
+                </dl>
+                <p className="vpn-proxy-hint">
+                  {settings.inboundAuth
+                    ? '已启用代理认证，账号和密码见「设置」。'
+                    : '无需代理账号密码。'}
+                  {coreState !== 'running'
+                    ? '请在首页启动分流，或点击「应用分流」，无需代理节点。'
+                    : '访问公司资源前，请保持 VPN 已连接。'}
+                </p>
+                <p className="vpn-proxy-hint">
+                  {settings.tunEnabled
+                    ? '已开启 TUN，使用自动接管的软件可以不单独设置代理。'
+                    : '未开启 TUN，Xshell 需要在会话中选择 SOCKS5 并填写以上地址和端口。'}
+                </p>
+              </section>
               <section className="vpn-resource-card">
+                <div className="vpn-resource-heading">
+                  <div>
+                    <h3>此接入的分流配置</h3>
+                    <p>
+                      仅用于「{selected.name}」，用户自定义规则优先。
+                      {active && '连接期间可查看，断开后可修改。'}
+                    </p>
+                  </div>
+                  <button
+                    className="vpn-button compact"
+                    disabled={busy}
+                    title={active ? '查看高级分流（连接期间只读）' : '配置此接入的域名、IP 和固定解析'}
+                    onClick={() => openEditor(selected.profile, 'routing')}
+                  >
+                    <Settings2 size={15} />
+                    高级分流
+                  </button>
+                </div>
                 <div
                   className="vpn-detail-tabs"
                   role="tablist"
@@ -874,7 +1082,7 @@ export const VpnAccess: React.FC = () => {
                         <Waypoints size={23} />
                         <div>
                           <h4>连接后自动获取授权资源</h4>
-                          <p>也可以在编辑配置中补充域名、IP 和固定解析。</p>
+                          <p>可在「高级分流」中自行添加域名、IP 和固定解析，保存后下次继续使用。</p>
                         </div>
                       </div>
                     )}
@@ -923,6 +1131,9 @@ export const VpnAccess: React.FC = () => {
       {editor && (
         <VpnProfileEditor
           profile={editor}
+          initialTab={editorTab}
+          readOnly={active}
+          passwordSaved={!!snapshot.passwordSaved?.[editor.id]}
           encryptionAvailable={snapshot.encryptionAvailable}
           onClose={() => setEditor(undefined)}
           onSaved={async (profile, keepOpen) => {
@@ -948,7 +1159,7 @@ export const VpnAccess: React.FC = () => {
                 <button
                   className="vpn-button"
                   style={{ textAlign: 'left', padding: '12px 14px' }}
-                  onClick={() => { setAddPickerOpen(false); setEditor(newVpnProfile()); }}
+                  onClick={() => { setAddPickerOpen(false); openEditor(newVpnProfile()); }}
                 >
                   <strong>EasyConnect / aTrust</strong>
                   <div style={{ fontSize: 11, color: 'var(--vpn-muted)', marginTop: 2 }}>
@@ -997,16 +1208,18 @@ export const VpnAccessStatus: React.FC<{
 }> = ({ onOpen, showSummary = true }) => {
   const { snapshot } = useVpnSnapshot();
   const { state } = snapshot;
+  const [challengeOpen, setChallengeOpen] = useState(true);
   const challengeRoot = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!state.challenge) return;
+    setChallengeOpen(true);
+  }, [state.challenge?.profileId, state.challenge?.generation, state.challenge?.id]);
+  useEffect(() => {
+    if (!state.challenge || !challengeOpen) return;
     const previous = document.activeElement as HTMLElement | null;
     const listener = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        window.electronAPI.corporateVpn
-          .disconnect()
-          .catch((e) => toast.error(String(e)));
+        setChallengeOpen(false);
       }
       if (event.key !== 'Tab') return;
       const elements = Array.from(
@@ -1024,27 +1237,27 @@ export const VpnAccessStatus: React.FC<{
         first?.focus();
       }
     };
-    challengeRoot.current?.querySelector<HTMLElement>('input, button')?.focus();
+    (challengeRoot.current?.querySelector<HTMLElement>('input') || challengeRoot.current?.querySelector<HTMLElement>('button'))?.focus();
     document.addEventListener('keydown', listener);
     return () => {
       document.removeEventListener('keydown', listener);
       previous?.focus();
     };
-  }, [state.challenge?.id]);
+  }, [challengeOpen, state.challenge?.profileId, state.challenge?.generation, state.challenge?.id]);
   return (
     <>
-      {showSummary && (state.profileId || snapshot.profiles.length > 0) && (
-        <button onClick={onOpen} className="vpn-surface vpn-global-status">
+      {(showSummary || (state.challenge && !challengeOpen)) && (state.profileId || snapshot.profiles.length > 0) && (
+        <button onClick={() => state.challenge ? setChallengeOpen(true) : onOpen()} className="vpn-surface vpn-global-status">
           <Network size={14} />
           <span>VPN 接入</span>
           <ConnectionBadge state={state.state} />
-          <span className="vpn-global-hint">查看接入</span>
+          <span className="vpn-global-hint">{state.challenge ? '继续填写验证码' : '查看接入'}</span>
           <ArrowRight size={13} />
         </button>
       )}
       {state.challenge && (
         <Portal>
-          <div className="vpn-modal-backdrop vpn-challenge-backdrop no-drag">
+          <div className="vpn-modal-backdrop vpn-challenge-backdrop no-drag" style={{ display: challengeOpen ? undefined : 'none' }}>
             <div
               className="vpn-surface vpn-auth-dialog"
               ref={challengeRoot}
@@ -1054,15 +1267,16 @@ export const VpnAccessStatus: React.FC<{
             >
               <div className="vpn-auth-label">
                 <ShieldCheck size={16} />
-                VPN 身份验证
+                <span className="flex-1">VPN 身份验证</span>
+                <button type="button" className="vpn-icon-button" aria-label="收起身份验证" title="稍后继续填写" onClick={() => setChallengeOpen(false)}><X size={17} /></button>
               </div>
               <ChallengeForm
-                key={state.challenge.id}
+                key={`${state.challenge.profileId}:${state.challenge.generation}:${state.challenge.id}`}
                 challenge={state.challenge}
+                onDismiss={() => setChallengeOpen(false)}
                 onSubmit={(value) =>
                   window.electronAPI.corporateVpn
-                    .respond(state.challenge!.id, state.generation, value)
-                    .catch((e) => toast.error(String(e)))
+                    .respond(state.challenge!.id, state.challenge!.generation, value)
                 }
               />
             </div>
@@ -1076,37 +1290,67 @@ export const VpnAccessStatus: React.FC<{
 function ChallengeForm({
   challenge,
   onSubmit,
+  onDismiss,
 }: {
   challenge: VpnChallenge;
-  onSubmit: (value: string) => void;
+  onSubmit: (value: string) => Promise<void>;
+  onDismiss: () => void;
 }) {
   const [value, setValue] = useState('');
   const [points, setPoints] = useState<Array<{ x: number; y: number }>>([]);
-  const [time, setTime] = useState(Date.now());
+  const [time, setTime] = useState(() => Date.now());
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const pending = useRef(false);
+  const mounted = useRef(true);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   useEffect(() => {
+    mounted.current = true;
     const timer = setInterval(() => setTime(Date.now()), 1000);
-    return () => clearInterval(timer);
+    return () => {
+      mounted.current = false;
+      clearInterval(timer);
+    };
   }, []);
   const expired = time >= challenge.expiresAt;
   return (
     <form
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        onSubmit(
-          challenge.kind === 'confirm-sms'
-            ? 'confirm'
-            : challenge.kind === 'structured'
-              ? captchaAnswer(points, dimensions.width, dimensions.height)
-              : value,
-        );
+        if (pending.current) return;
+        if (Date.now() >= challenge.expiresAt) {
+          setTime(Date.now());
+          return;
+        }
+        if (challenge.kind === 'structured' ? !points.length : challenge.kind !== 'confirm-sms' && !value) return;
+        pending.current = true;
+        setSubmitting(true);
+        setSubmitError('');
+        try {
+          await onSubmit(
+            challenge.kind === 'confirm-sms'
+              ? 'confirm'
+              : challenge.kind === 'structured'
+                ? captchaAnswer(points, dimensions.width, dimensions.height)
+                : value,
+          );
+        } catch (error) {
+          if (mounted.current) {
+            pending.current = false;
+            setSubmitting(false);
+            setSubmitError(error instanceof Error ? error.message : String(error));
+          }
+        }
       }}
       className="space-y-4"
     >
       <h3 className="text-base font-semibold">{challenge.title}</h3>
-      <p className="text-xs text-slate-600 dark:text-slate-400">
-        剩余 {Math.max(0, Math.ceil((challenge.expiresAt - time) / 1000))} 秒
+      <p className="text-xs text-slate-600 dark:text-slate-400" role="timer" aria-label="本轮验证剩余时间">
+        本轮验证剩余 {Math.max(0, Math.ceil((challenge.expiresAt - time) / 1000))} 秒
       </p>
+      <p className="vpn-field-hint">可先收起，稍后继续填写。取消连接后重试会开始新一轮计时。</p>
+      {expired && <p className="vpn-inline-error" role="status">本轮验证已超时，请取消后重新连接。</p>}
+      {submitError && <p className="vpn-inline-error" role="alert">{submitError}</p>}
       {challenge.imageBase64 && (
         <div>
           <div className="relative inline-block">
@@ -1204,16 +1448,18 @@ function ChallengeForm({
         >
           取消连接
         </button>
+        <button type="button" className={button} onClick={onDismiss}>稍后填写</button>
         <button
           type="submit"
           className={button + ' primary'}
           disabled={
             expired ||
+            submitting ||
             (challenge.kind === 'structured' && !points.length) ||
             (!['structured', 'confirm-sms'].includes(challenge.kind) && !value)
           }
         >
-          {challenge.kind === 'confirm-sms' ? '发送短信' : '提交验证码'}
+          {submitting ? '正在提交…' : challenge.kind === 'confirm-sms' ? '发送短信' : '提交验证码'}
         </button>
       </div>
     </form>

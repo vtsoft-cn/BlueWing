@@ -53,6 +53,11 @@ export class CredentialVault {
       throw new Error('CREDENTIAL_STORE_LOCKED');
     }
   }
+  has(key: string): boolean {
+    return (
+      typeof this.data[key] === 'string' && this.data[key].startsWith('dpapi:')
+    );
+  }
   remove(prefix: string): void {
     const next = { ...this.data };
     for (const key of Object.keys(next))

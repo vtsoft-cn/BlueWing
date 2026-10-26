@@ -204,6 +204,9 @@ func (c *controller) stop() {
 func normalizeHost(h string) string { return strings.ToLower(strings.TrimSuffix(h, ".")) }
 func safeCode(err error) string {
 	text := strings.ToLower(err.Error())
+	if strings.Contains(text, "pin mismatch") {
+		return "TLS_CERT_CHANGED"
+	}
 	if strings.Contains(text, "resource_schema_unsupported") {
 		return "RESOURCE_SCHEMA_UNSUPPORTED"
 	}

@@ -155,10 +155,16 @@ func TestCompanyDNSOfflineAndNoPublicFallback(t *testing.T) {
 		t.Fatal("offline DNS should SERVFAIL", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	c.active = &session{ctx: ctx, cancel: cancel, p: profile{ID: "fixture", Hosts: map[string][]string{"dev.corp.example": {"10.20.30.40"}}}, resources: resources{Hosts: map[string][]string{}}, leases: map[string]dnsLease{}}
+	c.active = &session{ctx: ctx, cancel: cancel, p: profile{ID: "fixture", Hosts: map[string][]string{"dev.corp.example": {"10.20.30.40"}}}, resources: resources{Hosts: map[string][]string{"dev.corp.example": {"10.99.0.1"}}}, leases: map[string]dnsLease{}}
 	response, _, err = dnsClient.Exchange(q, ep.dns.Listener.Addr().String())
 	if err != nil || len(response.Answer) != 1 {
 		t.Fatal("company hosts not applied", err)
+	}
+	if record, ok := response.Answer[0].(*dns.A); !ok || record.A.String() != "10.20.30.40" {
+		t.Fatal("user fixed DNS must override server DNS", response.Answer)
+	}
+	if ip, err := c.active.lookup(ctx, "dev.corp.example"); err != nil || ip.String() != "10.20.30.40" {
+		t.Fatal("SOCKS lookup must prefer user fixed DNS", ip, err)
 	}
 	q.SetQuestion("www.public.example.", dns.TypeA)
 	response, _, err = dnsClient.Exchange(q, ep.dns.Listener.Addr().String())

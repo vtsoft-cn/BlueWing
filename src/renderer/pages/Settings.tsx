@@ -200,7 +200,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 options={[
                   { value: 'rule', label: '规则分流 (绕过大陆与局域网)' },
                   { value: 'global', label: '全局代理 (所有流量走节点)' },
-                  { value: 'direct', label: '全局直连 (不走任何代理)' },
+                  { value: 'direct', label: '公网直连 (保留 VPN 分流)' },
                 ]}
               />
             </div>

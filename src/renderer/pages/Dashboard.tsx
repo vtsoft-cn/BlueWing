@@ -23,6 +23,7 @@ interface DashboardProps {
   nodes: ProxyNode[];
   activeNodeId: string;
   onSelectNode: (id: string) => void;
+  onSelectDirect: () => void;
   traffic: TrafficStats;
   settings: AppSettings;
   onUpdateSettings: (settings: Partial<AppSettings>) => void;
@@ -38,6 +39,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   nodes,
   activeNodeId,
   onSelectNode,
+  onSelectDirect,
   traffic,
   settings,
   onUpdateSettings,
@@ -59,11 +61,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const isConnected = coreState === 'running';
   const isConnecting = coreState === 'starting' || coreState === 'stopping';
   const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
+  const directOnly = nodes.length === 0 || settings.routingMode === 'direct';
 
   const [showNodeSelector, setShowNodeSelector] = useState(false);
   const requestClose = () => { setShowNodeSelector(false); };
   const [speedHistory, setSpeedHistory] = useState<number[]>(new Array(24).fill(0));
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!showNodeSelector) return;
+    const opener = document.querySelector<HTMLButtonElement>('[aria-label="选择网络出口"]');
+    return () => opener?.focus();
+  }, [showNodeSelector]);
 
   // Update speed history
   useEffect(() => {
@@ -157,28 +165,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }`}
               />
               <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                {isConnected ? '已连接到安全代理' : isConnecting ? '正在处理中...' : '已断开代理连接'}
+                {isConnected ? (directOnly ? '直连分流已启动' : '已连接到安全代理') : isConnecting ? '正在处理中...' : directOnly ? '直连分流未启动' : '已断开代理连接'}
               </span>
             </div>
 
             {/* Selected Node Details */}
-            <div
+            <button
+              type="button"
+              disabled={isConnecting}
               onClick={() => setShowNodeSelector(true)}
-              className="flex items-center space-x-3 p-2.5 -ml-2.5 rounded-xl hover:bg-slate-100/80 dark:hover:bg-slate-800/80 cursor-pointer transition-colors w-fit"
-              title="点击快速切换节点"
+              className="flex items-center space-x-3 p-2.5 -ml-2.5 rounded-xl text-left hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors w-fit disabled:opacity-60"
+              aria-label="选择网络出口"
+              title="选择本机直连或代理节点"
             >
               <div className="h-9 px-2.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                {activeNode?.type || 'PROXY'}
+                {directOnly ? 'DIRECT' : activeNode?.type || 'PROXY'}
               </div>
               <div>
                 <div className="flex items-center space-x-2">
                   <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                    {activeNode?.name || (nodes.length === 0 ? '暂无节点，请先导入订阅' : '请选择节点')}
+                    {directOnly ? '本机直连，无需代理节点' : activeNode?.name || '请选择节点'}
                   </h3>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
                 <div className="flex items-center space-x-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {activeNode ? (
+                  {directOnly ? (
+                    <span>普通公网直连，公司资源按 VPN 接入配置分流</span>
+                  ) : activeNode ? (
                     <>
                       <span>{activeNode.server}:{activeNode.port}</span>
                       {activeNode.ping !== undefined && activeNode.ping > 0 && (
@@ -200,7 +213,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   )}
                 </div>
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Big Connect Button */}
@@ -214,7 +227,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             } ${isConnecting ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
             <Power className={`w-5 h-5 ${isConnected ? 'animate-none' : ''}`} />
-            <span>{isConnected ? '断开代理连接' : isConnecting ? '连接中...' : '立即连接代理'}</span>
+            <span>{isConnected ? (directOnly ? '停止分流' : '断开代理连接') : isConnecting ? '连接中...' : directOnly ? '启动直连分流' : '立即连接代理'}</span>
           </button>
         </div>
       </div>
@@ -298,12 +311,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 连接中但无任何接管方式:流量全部直连、节点空转,明确提示避免误以为已走代理 */}
+      {/* 本地服务运行但无自动接管:显式使用本地代理的应用仍可按 VPN 资源分流。 */}
       {isConnected && !settings.systemProxyEnabled && !settings.tunEnabled && (
         <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed flex items-center space-x-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>
-            已连接节点,但系统代理与 TUN 均未开启:本机流量不经节点,仅手动指向本地端口的程序走代理。请至少开启一个开关。
+            分流服务已启动。需要自动接管应用时，请开启系统代理或 TUN；已手动设置本地代理的应用可继续使用。
           </span>
         </div>
       )}
@@ -390,13 +403,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {showNodeSelector && (
         <Portal>
         <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
+          <div role="dialog" aria-modal="true" aria-label="选择网络出口" className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col" onKeyDown={e => {
+            if (e.key !== 'Tab') return;
+            const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+            const first = buttons[0], last = buttons[buttons.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+          }}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center space-x-2">
                 <Server className="w-4 h-4 text-blue-500" />
-                <span>选择当前代理节点</span>
+                <span>选择网络出口</span>
               </h3>
               <button
+                autoFocus
                 onClick={requestClose}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-2 py-1"
               >
@@ -405,15 +425,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="overflow-y-auto space-y-2 flex-1 pr-1">
+              <button type="button" aria-pressed={directOnly} disabled={isConnecting} onClick={() => { onSelectDirect(); setShowNodeSelector(false); }} className={`w-full p-3 rounded-xl border text-left transition-colors disabled:opacity-60 ${directOnly ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <span className="block font-semibold text-sm text-slate-900 dark:text-slate-100">本机直连（无需节点）{directOnly && ' · 当前选择'}</span>
+                <span className="block mt-1 text-xs text-slate-500 dark:text-slate-400">普通公网直连，公司资源继续走 VPN 接入</span>
+              </button>
+              {!nodes.length && <p className="px-1 text-xs text-slate-500">可直接使用 VPN 接入；需要公网代理时再添加节点。</p>}
               {nodes.map((n) => (
-                <div
+                <button
+                  type="button"
+                  disabled={isConnecting}
+                  aria-pressed={!directOnly && n.id === activeNodeId}
                   key={n.id}
                   onClick={() => {
                     onSelectNode(n.id);
                     setShowNodeSelector(false);
                   }}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                    n.id === activeNodeId
+                  className={`w-full text-left p-3 rounded-xl border disabled:opacity-60 transition-all flex items-center justify-between ${
+                    !directOnly && n.id === activeNodeId
                       ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20'
                       : 'border-slate-200/80 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                   }`}
@@ -431,7 +459,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       {n.ping} ms
                     </span>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           </div>

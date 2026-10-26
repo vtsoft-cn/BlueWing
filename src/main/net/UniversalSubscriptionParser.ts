@@ -358,6 +358,18 @@ export class UniversalSubscriptionParser {
     const name = this.safeDecodeUri(rawTag) || url.hostname;
     const search = url.searchParams;
 
+    const insecure = search.get('allowInsecure') ?? search.get('insecure');
+    let extraHeaders: Record<string, string> | undefined;
+    if (search.get('extra')) {
+      try {
+        const headers: unknown = JSON.parse(search.get('extra')!).headers;
+        if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+          const entries = Object.entries(headers).filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+          extraHeaders = Object.fromEntries(entries);
+        }
+      } catch { /* Ignore malformed optional transport metadata. */ }
+    }
+
     return {
       id: Math.random().toString(36).substring(2),
       name,
@@ -373,9 +385,13 @@ export class UniversalSubscriptionParser {
       publicKey: search.get('pbk') || undefined,
       shortId: search.get('sid') || undefined,
       fingerprint: search.get('fp') || 'chrome',
+      alpn: search.get('alpn')?.split(',').map(value => value.trim()).filter(Boolean),
+      insecure: insecure === null ? undefined : ['1', 'true'].includes(insecure.toLowerCase()),
       transport: (search.get('type') as any) || 'tcp',
       transportPath: search.get('path') || undefined,
-      transportHost: search.get('host') || undefined,
+      transportHost: search.get('host') || search.get('serviceName') || undefined,
+      xhttpMode: (search.get('mode') as ProxyNode['xhttpMode']) || undefined,
+      xhttpExtraHeaders: extraHeaders,
     };
   }
 

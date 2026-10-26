@@ -13,6 +13,7 @@ export const api = {
     certificate: (id: string) => ipcRenderer.invoke('vpn:certificate', id),
     respond: (id: string, generation: number, value: string) => ipcRenderer.invoke('vpn:respond', id, generation, value),
     clearCredentials: (id: string) => ipcRenderer.invoke('vpn:clearCredentials', id),
+    savePassword: (id: string, password: string, remember: boolean) => ipcRenderer.invoke('vpn:savePassword', id, password, remember),
     apply: () => ipcRenderer.invoke('vpn:apply'),
     onState: (callback: (state: VpnState) => void) => {
       const handler = (_: unknown, state: VpnState) => callback(state);
@@ -70,6 +71,7 @@ export const api = {
     remove: (id: string) => ipcRenderer.invoke('nodes:delete', id),
     getActiveId: (): Promise<string> => ipcRenderer.invoke('nodes:getActiveId'),
     setActiveId: (id: string) => ipcRenderer.invoke('nodes:setActiveId', id),
+    selectDirect: (): Promise<boolean> => ipcRenderer.invoke('nodes:selectDirect'),
     ping: (host: string, port: number) => ipcRenderer.invoke('nodes:ping', host, port),
     batchPing: (nodes: { id: string; host: string; port: number }[]) =>
       ipcRenderer.invoke('nodes:batchPing', nodes),

@@ -105,6 +105,11 @@ export function validateProfile(input: unknown): VpnProfile {
   if (!name) throw new Error('请输入配置名称');
   const tls = p.tls ?? {};
   if (
+    tls.trustMode !== undefined &&
+    !['auto', 'strict'].includes(tls.trustMode)
+  )
+    throw new Error('证书校验方式不正确');
+  if (
     tls.caPem !== undefined &&
     (typeof tls.caPem !== 'string' ||
       tls.caPem.length > 262144 ||
@@ -124,6 +129,10 @@ export function validateProfile(input: unknown): VpnProfile {
     rememberPassword: p.rememberPassword === true,
     rememberSession: p.rememberSession === true,
     tls: {
+      trustMode: tls.trustMode || 'auto',
+      ...(['system', 'pin'].includes(tls.autoTrustAnchor || '')
+        ? { autoTrustAnchor: tls.autoTrustAnchor }
+        : {}),
       ...(tls.caPem ? { caPem: tls.caPem } : {}),
       ...(tls.pinSha256 ? { pinSha256: tls.pinSha256.toLowerCase() } : {}),
       ...(tls.serverName ? { serverName: domain(tls.serverName) } : {}),

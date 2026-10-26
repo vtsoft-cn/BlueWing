@@ -24,6 +24,7 @@ import { ImportJournal } from '../main/db/backup/ImportJournal';
 import { Database } from '../main/db/Database';
 import { BackupService } from '../main/db/backup/BackupService';
 import { captchaAnswer } from '../utils/vpnChallenge';
+import { gatewayTrust } from '../main/vpn/GatewayTrust';
 import { dataDirArgument, launchDataDir } from '../main/system/LaunchDataDir';
 
 export const sample = (): VpnProfile => ({
@@ -36,7 +37,7 @@ export const sample = (): VpnProfile => ({
   loginDomain: '',
   rememberPassword: false,
   rememberSession: false,
-  tls: {},
+  tls: { trustMode: 'strict' },
   targets: [
     {
       domains: ['dev.corp.example'],
@@ -152,6 +153,37 @@ test('VPN repository persists profiles without arbitrary secret fields and reser
   const raw = fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8');
   assert.ok(!raw.includes('NEVER_PERSIST') && !raw.includes('SESSION_SECRET'));
 });
+test('Custom company routing survives restart, overrides server hosts and stays scoped to its profile', (t) => {
+  const dir = temp(t), repo = new ProfileRepository(dir);
+  const a = repo.save({
+    ...sample(), name: 'Company A',
+    targets: [{ domains: ['shared.corp.example'], cidrs: [], network: 'tcp' }],
+    hosts: { 'shared.corp.example': ['10.20.30.40'] },
+  });
+  const b = repo.save({ ...sample(), name: 'Company B', targets: [], hosts: {} });
+  const policy = new CorporatePolicy(dir);
+  policy.update(a.id, {
+    targets: [{ domains: ['auto.corp.example'], cidrs: [] }],
+    hosts: { 'shared.corp.example': ['10.99.0.1'] }, dnsServers: ['10.0.0.53'],
+  }, repo.list());
+  const restored = new ProfileRepository(dir);
+  assert.deepEqual(restored.get(a.id).targets, a.targets);
+  assert.deepEqual(restored.get(a.id).hosts, a.hosts);
+  assert.deepEqual(restored.get(b.id).targets, []);
+  assert.deepEqual(restored.get(b.id).hosts, {});
+  const restartedPolicy = new CorporatePolicy(dir);
+  restartedPolicy.setProbe(a.id, 'nonce', restored.list());
+  const runtime = restartedPolicy.runtime();
+  const aRules = JSON.parse(fs.readFileSync(runtime.profiles.find(p => p.profile.id === a.id)!.routePath, 'utf8')).rules;
+  assert.deepEqual(aRules[0].domain_suffix, ['shared.corp.example']);
+  const fixedRules = aRules.filter((r: any) => r.domain_suffix?.includes('shared.corp.example') && r.ip_cidr);
+  assert.deepEqual(fixedRules.map((r: any) => r.ip_cidr), [['10.20.30.40/32']]);
+  assert.ok(!JSON.stringify(aRules).includes('10.99.0.1'));
+  const bRuntime = runtime.profiles.find(p => p.profile.id === b.id)!;
+  assert.deepEqual(JSON.parse(fs.readFileSync(bRuntime.routePath, 'utf8')).rules, []);
+  assert.ok(!fs.readFileSync(bRuntime.dnsPath, 'utf8').includes('shared.corp.example'));
+});
+
 test('VPN vault refuses plaintext/base64 fallback and distinguishes decryption failure', (t) => {
   const dir = temp(t),
     vault = new CredentialVault(dir, unavailable);
@@ -390,6 +422,204 @@ class FakeCore extends EventEmitter {
   }
 }
 
+const untrustedCertificate = () => ({
+  fingerprint: 'a'.repeat(64),
+  subject: 'CN=fixture',
+  issuer: 'CN=fixture',
+  validTo: '2040-01-01T00:00:00Z',
+  chainTrusted: false,
+  trustIssues: ['UNTRUSTED_AUTHORITY', 'NAME_MISMATCH'],
+});
+
+test('Automatic gateway trust binds first use, detects changed pins and never downgrades a known CA', () => {
+  const certificate = untrustedCertificate();
+  const pinned = gatewayTrust({ trustMode: 'auto' }, certificate);
+  assert.equal(pinned.pinSha256, certificate.fingerprint);
+  assert.equal(pinned.autoTrustAnchor, 'pin');
+  assert.throws(
+    () => gatewayTrust(pinned, { ...certificate, fingerprint: 'b'.repeat(64) }),
+    /TLS_CERT_CHANGED/,
+  );
+  const trusted = gatewayTrust(
+    {},
+    { ...certificate, chainTrusted: true, trustIssues: [] },
+  );
+  assert.equal(trusted.autoTrustAnchor, 'system');
+  assert.equal(trusted.pinSha256, undefined);
+  assert.throws(() => gatewayTrust(trusted, certificate), /TLS_CERT_CHANGED/);
+  assert.equal(
+    gatewayTrust(trusted, {
+      ...certificate,
+      fingerprint: 'b'.repeat(64),
+      chainTrusted: true,
+      trustIssues: [],
+    }).autoTrustAnchor,
+    'system',
+  );
+  for (const issue of [
+    'EXPIRED',
+    'NOT_YET_VALID',
+    'INVALID_CA',
+    'CHAIN_INVALID',
+  ])
+    assert.throws(() =>
+      gatewayTrust(
+        {},
+        { ...certificate, trustIssues: [...certificate.trustIssues, issue] },
+      ),
+    );
+  assert.throws(
+    () => gatewayTrust({ caPem: 'configured CA' }, certificate),
+    /TLS_UNTRUSTED/,
+  );
+  assert.throws(
+    () => gatewayTrust({}, { ...certificate, trustIssues: ['NAME_MISMATCH'] }),
+    /TLS_UNTRUSTED/,
+  );
+});
+
+test('Passwords save without a login, persist encrypted, restore on reconnect and clear when disabled', async (t) => {
+  const dir = temp(t),
+    repo = new ProfileRepository(dir),
+    p = repo.save(sample()),
+    core = new FakeCore();
+  const encryption = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value: string) => Buffer.from('fixture:' + value),
+    decryptString: (value: Buffer) => value.toString().slice(8),
+  };
+  const manager = new CorporateVpnManager(
+    repo,
+    new CorporatePolicy(dir),
+    new CredentialVault(dir, encryption),
+    core as unknown as VpnCoreProcess,
+    {
+      running: () => true,
+      pid: () => 1,
+      settings: () => ({ mixedPort: 12345 }),
+    },
+  );
+  t.after(() => manager.dispose());
+  await manager.savePassword(p.id, 'fixture-saved-secret', true);
+  assert.equal(manager.snapshot().passwordSaved?.[p.id], true);
+  assert.equal(core.commands.filter((c) => c.type === 'connect').length, 0);
+  assert.ok(
+    !JSON.stringify(manager.snapshot()).includes('fixture-saved-secret'),
+  );
+  assert.ok(
+    !fs
+      .readFileSync(path.join(dir, 'vpn-vault.json'), 'utf8')
+      .includes('fixture-saved-secret'),
+  );
+  assert.ok(
+    !fs
+      .readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')
+      .includes('fixture-saved-secret'),
+  );
+  const reloaded = new CorporateVpnManager(
+    new ProfileRepository(dir),
+    new CorporatePolicy(dir),
+    new CredentialVault(dir, encryption),
+    core as unknown as VpnCoreProcess,
+    {
+      running: () => true,
+      pid: () => 1,
+      settings: () => ({ mixedPort: 12345 }),
+    },
+  );
+  t.after(() => reloaded.dispose());
+  reloaded.publicCoreStarted(await reloaded.prepareRuntime());
+  await reloaded.connect(p.id, '');
+  assert.equal(
+    core.commands.find((c) => c.type === 'connect').password,
+    'fixture-saved-secret',
+  );
+  await reloaded.disconnect();
+  await reloaded.savePassword(p.id, '', false);
+  assert.equal(reloaded.snapshot().passwordSaved?.[p.id], false);
+  await assert.rejects(reloaded.connect(p.id, ''), /请输入密码/);
+});
+
+test('Unavailable system encryption cannot enable password memory', async (t) => {
+  const dir = temp(t),
+    repo = new ProfileRepository(dir),
+    p = repo.save(sample()),
+    manager = new CorporateVpnManager(
+      repo,
+      new CorporatePolicy(dir),
+      new CredentialVault(dir, unavailable),
+      new FakeCore() as unknown as VpnCoreProcess,
+      {
+        running: () => true,
+        pid: () => 1,
+        settings: () => ({ mixedPort: 12345 }),
+      },
+    );
+  t.after(() => manager.dispose());
+  await assert.rejects(
+    manager.savePassword(p.id, 'fixture-secret', true),
+    /CREDENTIAL_STORE_LOCKED/,
+  );
+  assert.equal(repo.get(p.id).rememberPassword, false);
+  assert.ok(!fs.existsSync(path.join(dir, 'vpn-vault.json')));
+});
+
+test('Automatic pin is persisted before credentials are sent and a changed certificate stops login', async (t) => {
+  const dir = temp(t),
+    repo = new ProfileRepository(dir),
+    p = repo.save({ ...sample(), tls: { trustMode: 'auto' } }),
+    core = new FakeCore();
+  let certificate = untrustedCertificate();
+  const request = core.request.bind(core);
+  core.request = async (type, data) =>
+    type === 'serverCertificate'
+      ? ({
+          v: 1,
+          type: 'serverCertificate',
+          generation: 0,
+          data: certificate,
+        } as any)
+      : request(type, data);
+  const manager = new CorporateVpnManager(
+    repo,
+    new CorporatePolicy(dir),
+    new CredentialVault(dir, unavailable),
+    core as unknown as VpnCoreProcess,
+    {
+      running: () => true,
+      pid: () => 1,
+      settings: () => ({ mixedPort: 12345 }),
+    },
+  );
+  t.after(() => manager.dispose());
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  const send = core.send.bind(core);
+  core.send = (type, data = {}) => {
+    if (type === 'connect')
+      assert.equal(repo.get(p.id).tls.pinSha256, certificate.fingerprint);
+    send(type, data);
+  };
+  await manager.connect(p.id, 'fixture-secret');
+  assert.equal(
+    core.commands.find((c) => c.type === 'connect').profile.tls.pinSha256,
+    certificate.fingerprint,
+  );
+  await manager.disconnect();
+  certificate = { ...certificate, fingerprint: 'b'.repeat(64) };
+  await assert.rejects(
+    manager.connect(p.id, 'fixture-secret'),
+    /TLS_CERT_CHANGED/,
+  );
+  assert.equal(core.commands.filter((c) => c.type === 'connect').length, 1);
+  assert.equal(repo.get(p.id).tls.pinSha256, 'a'.repeat(64));
+  await manager.save({
+    ...repo.get(p.id),
+    gateway: { host: 'new.example.com', port: 10443 },
+  });
+  assert.equal(repo.get(p.id).tls.pinSha256, undefined);
+  assert.equal(repo.get(p.id).tls.autoTrustAnchor, undefined);
+});
+
 test('Port collisions preserve leases on reconnect and reassign only on explicit policy rebuild', async (t) => {
   const dir = temp(t),
     repo = new ProfileRepository(dir),
@@ -419,6 +649,101 @@ test('Port collisions preserve leases on reconnect and reassign only on explicit
   const runtime = await manager.prepareRuntime(true);
   assert.notEqual(repo.get(p.id).socksPort, p.socksPort);
   assert.equal(runtime.profiles[0].profile.socksPort, repo.get(p.id).socksPort);
+});
+
+test('Cancel during certificate inspection neither binds trust nor sends a late password', async (t) => {
+  const dir = temp(t),
+    repo = new ProfileRepository(dir),
+    p = repo.save({ ...sample(), tls: { trustMode: 'auto' } }),
+    core = new FakeCore();
+  let release!: () => void, inspecting!: () => void;
+  const ready = new Promise<void>((resolve) => (inspecting = resolve)),
+    gate = new Promise<void>((resolve) => (release = resolve));
+  const request = core.request.bind(core);
+  core.request = async (type, data) => {
+    if (type !== 'serverCertificate') return request(type, data);
+    inspecting();
+    await gate;
+    return {
+      v: 1,
+      type: 'serverCertificate',
+      generation: 0,
+      data: untrustedCertificate(),
+    } as any;
+  };
+  const manager = new CorporateVpnManager(
+    repo,
+    new CorporatePolicy(dir),
+    new CredentialVault(dir, unavailable),
+    core as unknown as VpnCoreProcess,
+    {
+      running: () => true,
+      pid: () => 1,
+      settings: () => ({ mixedPort: 12345 }),
+    },
+  );
+  t.after(() => manager.dispose());
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  const connecting = manager.connect(p.id, 'fixture-secret');
+  await ready;
+  await manager.disconnect();
+  release();
+  await connecting;
+  assert.equal(repo.get(p.id).tls.pinSha256, undefined);
+  assert.equal(
+    core.commands.filter((command) => command.type === 'connect').length,
+    0,
+  );
+  assert.equal(manager.snapshot().state.state, 'idle');
+});
+
+test('aTrust discovery applies first-use trust before querying authentication methods', async (t) => {
+  const dir = temp(t),
+    repo = new ProfileRepository(dir),
+    p = repo.save({
+      ...sample(),
+      protocol: 'atrust',
+      tls: { trustMode: 'auto' },
+    }),
+    core = new FakeCore();
+  core.request = async (type, data) => {
+    if (type === 'serverCertificate')
+      return { v: 1, type, generation: 0, data: untrustedCertificate() } as any;
+    assert.equal(type, 'discoverAuth');
+    assert.equal(data.profile.tls.pinSha256, 'a'.repeat(64));
+    assert.equal(repo.get(p.id).tls.pinSha256, 'a'.repeat(64));
+    return {
+      v: 1,
+      type,
+      generation: 0,
+      data: [
+        {
+          authType: 'auth/psw',
+          authName: 'fixture',
+          loginDomain: 'local',
+          supported: true,
+        },
+      ],
+    } as any;
+  };
+  const manager = new CorporateVpnManager(
+    repo,
+    new CorporatePolicy(dir),
+    new CredentialVault(dir, unavailable),
+    core as unknown as VpnCoreProcess,
+    {
+      running: () => true,
+      pid: () => 1,
+      settings: () => ({ mixedPort: 12345 }),
+    },
+  );
+  t.after(() => manager.dispose());
+  const methods = await manager.discover(p.id);
+  assert.equal(methods[0].loginDomain, 'local');
+  assert.equal(
+    core.commands.filter((command) => command.type === 'connect').length,
+    0,
+  );
 });
 
 test('Repeated transport failures stop after the configured retry budget', async (t) => {
@@ -597,6 +922,45 @@ test('Manager waits for user challenge, rejects stale/duplicate answers and neve
   assert.equal(pid, 123);
   assert.ok(!JSON.stringify(manager.snapshot()).includes('SENSITIVE_PASSWORD'));
 });
+test('Cancelling authentication gives the next challenge a fresh deadline and ignores previous-round timeouts', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 9, 23) });
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), core = new FakeCore();
+  const manager = new CorporateVpnManager(repo, new CorporatePolicy(dir), new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess, {
+    running: () => true, pid: () => 123, settings: () => ({ mixedPort: 12345 }),
+  });
+  t.after(() => manager.dispose());
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  await manager.connect(p.id, 'fixture-password');
+  const oldGeneration = manager.snapshot().state.generation;
+  const challenge = (generation: number, id: string, expiresAt: number) => core.emit('event', {
+    v: 1, type: 'challenge', profileId: p.id, generation,
+    data: { id, kind: 'otp', title: '验证码', expiresAt },
+  });
+  challenge(oldGeneration, 'old', Date.now() + 30000);
+  t.mock.timers.tick(20000);
+  await manager.disconnect();
+  await manager.connect(p.id, 'fixture-password');
+  const generation = manager.snapshot().state.generation, expiresAt = Date.now() + 120000;
+  challenge(generation, 'fresh', expiresAt);
+  t.mock.timers.tick(11000);
+  core.emit('event', { v: 1, type: 'error', profileId: p.id, generation: oldGeneration, code: 'AUTH_CHALLENGE_EXPIRED' });
+  assert.equal(manager.snapshot().state.state, 'waiting_user');
+  assert.equal(manager.snapshot().state.challenge?.expiresAt, expiresAt);
+  assert.throws(() => manager.respond('old', oldGeneration, '123456'), /EXPIRED/);
+  challenge(generation, 'fresh', Date.now() + 120000);
+  assert.equal(manager.snapshot().state.challenge?.expiresAt, expiresAt, 'reopening/replaying the same challenge must not extend its deadline');
+  t.mock.timers.tick(108999);
+  manager.respond('fresh', generation, '123456');
+  challenge(generation, 'second-step', Date.now() + 60000);
+  t.mock.timers.tick(1);
+  assert.equal(manager.snapshot().state.state, 'waiting_user', 'previous challenge timer cannot expire a subsequent step');
+  const disconnects = core.commands.filter(c => c.type === 'disconnect').length;
+  t.mock.timers.tick(59999);
+  assert.equal(manager.snapshot().state.error, 'AUTH_CHALLENGE_EXPIRED');
+  assert.equal(core.commands.filter(c => c.type === 'disconnect').length, disconnects + 1);
+  assert.throws(() => manager.respond('second-step', generation, '123456'), /EXPIRED/);
+});
+
 test('VPN backup excludes remember flags, changes conflicting IDs and preserves local port ownership', (t) => {
   const dir = temp(t),
     repo = new ProfileRepository(dir),

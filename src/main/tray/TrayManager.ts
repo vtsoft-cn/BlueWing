@@ -86,7 +86,7 @@ export class TrayManager {
 
     this.tray.setToolTip(
       isRunning
-        ? `青翼连接 BlueWing Connect - 已连接: ${activeNode?.name || '未知'}`
+        ? `青翼连接 BlueWing Connect - 已连接: ${settings.routingMode === 'direct' || !activeNode ? '本机直连' : activeNode.name}`
         : '青翼连接 BlueWing Connect - 未连接'
     );
 
@@ -159,18 +159,29 @@ export class TrayManager {
         },
       },
       {
-        label: `当前节点: ${activeNode?.name || '无'}`,
-        submenu: nodes.map((n) => ({
+        label: `网络出口: ${settings.routingMode === 'direct' || !activeNode ? '本机直连' : activeNode.name}`,
+        submenu: [{
+          label: '本机直连（无需节点）',
+          type: 'radio' as const,
+          checked: settings.routingMode === 'direct' || nodes.length === 0,
+          click: async () => {
+            const { ProxySelectionService } = await import('../core/ProxySelectionService');
+            await ProxySelectionService.selectDirect();
+            this.mainWindow?.webContents.send('settings:changed', db.getSettings());
+            this.updateMenu();
+          },
+        }, ...nodes.map((n) => ({
           label: `${n.name} (${n.type.toUpperCase()})`,
-          type: 'radio',
-          checked: n.id === activeNodeId,
+          type: 'radio' as const,
+          checked: settings.routingMode !== 'direct' && n.id === activeNodeId,
           click: async () => {
             const { ProxySelectionService } = await import('../core/ProxySelectionService');
             await ProxySelectionService.selectNode(n.id);
             this.updateMenu();
             this.mainWindow?.webContents.send('node:changed', n.id);
+            this.mainWindow?.webContents.send('settings:changed', db.getSettings());
           },
-        })),
+        }))],
       },
       { type: 'separator' },
       {
