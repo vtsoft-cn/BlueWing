@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {
   Power,
@@ -60,6 +61,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
 
   const [showNodeSelector, setShowNodeSelector] = useState(false);
+  const requestClose = () => { setShowNodeSelector(false); };
   const [speedHistory, setSpeedHistory] = useState<number[]>(new Array(24).fill(0));
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -387,15 +389,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Node Selector Drawer Modal */}
       {showNodeSelector && (
         <Portal>
-        <div className="no-drag fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
+        <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center space-x-2">
                 <Server className="w-4 h-4 text-blue-500" />
                 <span>选择当前代理节点</span>
               </h3>
               <button
-                onClick={() => setShowNodeSelector(false)}
+                onClick={requestClose}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-2 py-1"
               >
                 关闭
@@ -433,7 +435,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               ))}
             </div>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   Check,
@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Unplug,
   Waypoints,
+  Trash2,
 } from 'lucide-react';
 import {
   VpnChallenge,
@@ -32,6 +33,8 @@ import {
 } from '../../types/corporateVpn';
 import { captchaAnswer } from '../../utils/vpnChallenge';
 import { useVpnSnapshot } from '../vpn/useVpnSnapshot';
+import { VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../../types';
+import { VpnProfileEditorModal } from './VpnProfileEditorModal';
 import { vpnProviderList, vpnProviders } from '../vpn/providers';
 import {
   newVpnProfile,
@@ -118,14 +121,104 @@ export const VpnAccess: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [detailTab, setDetailTab] = useState<'resources' | 'help'>('resources');
+  const [engineEditorOpen, setEngineEditorOpen] = useState(false);
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
+  // ---- 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…,与原生协议并列在同一列表) ----
+  const [engineProfiles, setEngineProfiles] = useState<EngineVpnProfile[]>([]);
+  const [engineRuntime, setEngineRuntime] = useState<VpnRuntimeInfo | null>(null);
+  const [engineEditorFor, setEngineEditorFor] = useState<EngineVpnProfile | null | undefined>(undefined);
+  const isEngine = (id: string): boolean => id.startsWith('eng-');
+  const refreshEngineProfiles = useCallback(async (): Promise<EngineVpnProfile[]> => {
+    if (!window.electronAPI?.vpn) return [];
+    const list = await window.electronAPI.vpn.getProfiles();
+    setEngineProfiles(list);
+    return list;
+  }, []);
+  useEffect(() => {
+    void refreshEngineProfiles();
+    void window.electronAPI?.vpn?.getState().then(setEngineRuntime);
+    const offState = window.electronAPI?.vpn?.onStateChange((info) => setEngineRuntime(info));
+    const offProfiles = window.electronAPI?.vpn?.onProfilesChanged((list) => setEngineProfiles(list));
+    return () => { offState?.(); offProfiles?.(); };
+  }, [refreshEngineProfiles]);
+  // 引擎类在主列表里的稳定 id 前缀(避免与 corporate id 撞)
+  const engineKey = (id: string): string => `eng-${id}`;
+  // 引擎档案的显示摘要
+  const engineGatewayText = (p: EngineVpnProfile): string => {
+    if (p.type === 'openvpn') return p.server ? `${p.server}${p.port ? ':' + p.port : ''}` : '内嵌 .ovpn';
+    if (p.type === 'wireguard') return p.server;
+    return p.server;
+  };
+  const ENGINE_LABELS: Record<string, string> = {
+    ikev2: 'IKEv2', l2tp: 'L2TP/IPsec', sstp: 'SSTP', openvpn: 'OpenVPN',
+    anyconnect: 'AnyConnect', fortinet: 'FortiClient', globalprotect: 'GlobalProtect',
+    pulse: 'Pulse/Ivanti', nc: 'Juniper NC', f5: 'F5 BIG-IP', array: 'Array AG',
+    softether: 'SoftEther', wireguard: 'WireGuard',
+  };
+  const engineBadge = (state?: string): { text: string; tone: string } => {
+    switch (state) {
+      case 'connecting': return { text: '连接中', tone: 'vpn-badge-warn' };
+      case 'connected': return { text: '已连接', tone: 'vpn-badge-ok' };
+      case 'disconnecting': return { text: '断开中', tone: '' };
+      case 'error': return { text: '失败', tone: 'vpn-badge-bad' };
+      default: return { text: '', tone: '' };
+    }
+  };
+  const engineActive = !!(
+    engineRuntime &&
+    engineRuntime.state !== 'disconnected' &&
+    engineRuntime.state !== 'error'
+  );
+  const engineStateFor = (id: string): VpnRuntimeInfo | null =>
+    engineRuntime && engineRuntime.profileId === id && engineRuntime.state !== 'disconnected'
+      ? engineRuntime
+      : null;
+  const requestEngineClose = async (): Promise<void> => {
+    await window.electronAPI?.vpn?.disconnect();
+    await refreshEngineProfiles();
+  };
   const [expanded, setExpanded] = useState(false);
   const state = snapshot.state;
   const active = !['idle', 'failed'].includes(state.state);
-  const selected = snapshot.profiles.find(
-    (profile) => profile.id === selectedId,
-  );
+  const engineItems = engineProfiles.map((p) => ({
+    key: engineKey(p.id),
+    engineProfile: p,
+    name: p.name,
+    host: engineGatewayText(p),
+    label: ENGINE_LABELS[p.type] || p.type,
+  }));
+  const profiles = [
+    // 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…)
+    ...engineItems
+      .filter((item) =>
+        `${item.name} ${item.host} ${item.label}`.toLowerCase().includes(search.toLowerCase()))
+      .map((item) => ({
+        engine: item.engineProfile,
+        id: item.key,
+        name: item.name,
+        host: item.host,
+        label: item.label,
+      })),
+    // 原生协议档案(EasyConnect/aTrust)
+    ...snapshot.profiles
+      .filter((profile) =>
+        `${profile.name} ${profile.gateway.host} ${vpnProviders[profile.protocol].name}`
+          .toLowerCase()
+          .includes(search.toLowerCase()))
+      .map((profile) => ({
+        engine: undefined,
+        id: profile.id,
+        name: profile.name,
+        host: `${profile.gateway.host}:${profile.gateway.port}`,
+        label: vpnProviders[profile.protocol].name,
+        profile,
+      })),
+  ];
+  const selected = profiles.find((profile) => profile.id === selectedId);
   const selectedState =
-    selected && state.profileId === selected.id ? state.state : 'idle';
+    selected && !selected.engine && state.profileId === selected.id
+      ? state.state
+      : 'idle';
   useEffect(() => {
     if (!snapshot.profiles.some((profile) => profile.id === selectedId))
       setSelectedId(
@@ -154,24 +247,22 @@ export const VpnAccess: React.FC = () => {
   };
   const resources =
     selected && state.profileId === selected.id ? state.resources : undefined;
-  const resourceRows: Array<{ target: VpnTarget; source: string }> = selected
-    ? [
-        ...(resources?.targets || []).map((target) => ({
-          target,
-          source: '服务器下发',
-        })),
-        ...selected.targets.map((target) => ({ target, source: '手动补充' })),
-        ...Object.entries(selected.hosts).map(([domain, ips]) => ({
-          target: { domains: [domain], cidrs: ips, network: 'tcp' as const },
-          source: '固定解析',
-        })),
-      ]
-    : [];
-  const profiles = snapshot.profiles.filter((profile) =>
-    `${profile.name} ${profile.gateway.host} ${vpnProviders[profile.protocol].name}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  const resourceRows: Array<{ target: VpnTarget; source: string }> =
+    selected && !selected.engine
+      ? [
+          ...(resources?.targets || []).map((target) => ({
+            target,
+            source: '服务器下发',
+          })),
+          ...selected.profile.targets.map((target) => ({ target, source: '手动补充' })),
+          ...Object.entries(selected.profile.hosts).map(([domain, ips]) => ({
+            target: { domains: [domain], cidrs: ips, network: 'tcp' as const },
+            source: '固定解析',
+          })),
+        ]
+      : [];
+
+
   const connectionError =
     actionError ||
     (state.profileId === selectedId && state.error
@@ -198,7 +289,7 @@ export const VpnAccess: React.FC = () => {
           <button
             className="vpn-button"
             disabled={active || busy}
-            onClick={() => setEditor(newVpnProfile())}
+            onClick={() => setAddPickerOpen(true)}
           >
             <Plus size={16} />
             新增接入
@@ -283,7 +374,7 @@ export const VpnAccess: React.FC = () => {
           </p>
           <button
             className="vpn-button primary"
-            onClick={() => setEditor(newVpnProfile())}
+            onClick={() => setAddPickerOpen(true)}
           >
             <Plus size={17} />
             添加接入
@@ -321,33 +412,45 @@ export const VpnAccess: React.FC = () => {
                   key={profile.id}
                   className={`vpn-profile-item ${selectedId === profile.id ? 'selected' : ''}`}
                   aria-pressed={selectedId === profile.id}
-                  disabled={active && state.profileId !== profile.id}
+                  disabled={
+                    (active && state.profileId !== profile.id) ||
+                    (engineActive && engineRuntime?.profileId !== profile.id.replace(/^eng-/, ''))
+                  }
                   title={
                     active && state.profileId !== profile.id
                       ? '请先断开当前接入后切换'
-                      : profile.gateway.host
+                      : profile.host
                   }
                   onClick={() => setSelectedId(profile.id)}
                 >
                   <div className="vpn-profile-item-top">
-                    <ProviderMark protocol={profile.protocol} small />
-                    <strong>{profile.name}</strong>
-                    {state.profileId === profile.id &&
-                      state.state === 'connected' && (
-                        <CheckCircle2
-                          size={15}
-                          className="vpn-success-text shrink-0"
-                        />
-                      )}
-                  </div>
-                  <span className="vpn-profile-gateway">
-                    {profile.gateway.host}:{profile.gateway.port}
-                  </span>
-                  <span className="vpn-profile-protocol">
-                    {vpnProviders[profile.protocol].name}
-                    {state.profileId === profile.id && active && (
-                      <span>{labels[state.state]}</span>
+                    {profile.engine ? (
+                      <span className="vpn-provider-mark violet small" aria-hidden="true">
+                        {ENGINE_LABELS[profile.engine.type]?.slice(0, 2).toUpperCase() || 'EN'}
+                      </span>
+                    ) : (
+                      <ProviderMark protocol={profile.profile.protocol} small />
                     )}
+                    <strong>{profile.name}</strong>
+                    {profile.engine
+                      ? engineStateFor(profile.engine.id)?.state === 'connected' && (
+                          <CheckCircle2 size={15} className="vpn-success-text shrink-0" />
+                        )
+                      : state.profileId === profile.id &&
+                        state.state === 'connected' && (
+                          <CheckCircle2 size={15} className="vpn-success-text shrink-0" />
+                        )}
+                  </div>
+                  <span className="vpn-profile-gateway">{profile.host}</span>
+                  <span className="vpn-profile-protocol">
+                    {profile.label}
+                    {profile.engine
+                      ? engineStateFor(profile.engine.id) && (
+                          <span>{engineStateFor(profile.engine.id)!.state === 'connected' ? '已连接' : engineStateFor(profile.engine.id)!.state === 'connecting' ? '连接中' : ''}</span>
+                        )
+                      : state.profileId === profile.id && active && (
+                          <span>{labels[state.state]}</span>
+                        )}
                   </span>
                 </button>
               ))}
@@ -368,25 +471,121 @@ export const VpnAccess: React.FC = () => {
               同一时间连接一个接入
             </p>
           </aside>
-          {selected && (
+          {selected && selected.engine && (
             <div className="vpn-detail-column">
               <section className="vpn-connection-card" aria-label="连接面板">
                 <header className="vpn-connection-header">
                   <div className="vpn-connection-identity">
-                    <ProviderMark protocol={selected.protocol} />
+                    <span className="vpn-provider-mark blue" aria-hidden="true">
+                      {(ENGINE_LABELS[selected.engine.type] || 'EN').slice(0, 2).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="vpn-connection-title">
+                        <h3>{selected.name}</h3>
+                        {(() => {
+                          const rt = engineStateFor(selected.engine.id);
+                          const st = rt?.state || 'disconnected';
+                          const map: Record<string, string> = { connected: '已连接', connecting: '连接中', error: '失败', disconnecting: '断开中' };
+                          return st !== 'disconnected' ? (
+                            <span className={`vpn-state-badge ${st === 'connected' ? 'ok' : st === 'error' ? 'bad' : 'warn'}`}>{map[st]}</span>
+                          ) : null;
+                        })()}
+                      </div>
+                      <p>
+                        {ENGINE_LABELS[selected.engine.type] || selected.engine.type}
+                        <span>·</span>
+                        <span className="font-mono">{selected.host}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="vpn-icon-button"
+                      aria-label="编辑接入配置"
+                      title="编辑接入配置"
+                      onClick={() => setEngineEditorFor(selected.engine)}
+                    >
+                      <Pencil size={17} />
+                    </button>
+                    <button
+                      className="vpn-icon-button"
+                      aria-label="删除接入配置"
+                      title="删除接入配置"
+                      onClick={async () => {
+                        if (!(await confirmDialog({ title: '删除 VPN 账号', message: `确定要删除「${selected.name}」吗?正在连接时会先断开。`, danger: true }))) return;
+                        await window.electronAPI?.vpn?.deleteProfile(selected.engine.id);
+                        await refreshEngineProfiles();
+                        setSelectedId('');
+                      }}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                </header>
+                <div className="vpn-connection-body">
+                  {(engineStateFor(selected.engine.id)?.state === 'error') && (
+                    <div className="vpn-notice danger" role="alert">
+                      {engineStateFor(selected.engine.id)!.message}
+                    </div>
+                  )}
+                  <div className="vpn-connect-actions">
+                    {(() => {
+                      const rt = engineStateFor(selected.engine.id);
+                      const st = rt?.state || 'disconnected';
+                      return st === 'connected' || st === 'connecting' ? (
+                        <button
+                          className="vpn-button primary"
+                          disabled={st === 'connecting'}
+                          onClick={async () => {
+                            await window.electronAPI?.vpn?.disconnect();
+                            await refreshEngineProfiles();
+                          }}
+                        >
+                          <Unplug size={16} />
+                          {st === 'connected' ? '断开连接' : '连接中...'}
+                        </button>
+                      ) : (
+                        <button
+                          className="vpn-button primary"
+                          onClick={async () => {
+                            if (selected.engine.useMfa) {
+                              // 引擎类 MFA:走引擎编辑弹窗补验证码(简化:直接连接,验证码在弹窗内补充)
+                              setEngineEditorFor(selected.engine);
+                              return;
+                            }
+                            await window.electronAPI?.vpn?.connect(selected.engine.id);
+                            await refreshEngineProfiles();
+                          }}
+                        >
+                          <Unplug size={16} />
+                          连接
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+          {selected && !selected.engine && (
+            <div className="vpn-detail-column">
+              <section className="vpn-connection-card" aria-label="连接面板">
+                <header className="vpn-connection-header">
+                  <div className="vpn-connection-identity">
+                    <ProviderMark protocol={selected.profile.protocol} />
                     <div className="min-w-0">
                       <div className="vpn-connection-title">
                         <h3>{selected.name}</h3>
                         <ConnectionBadge state={selectedState} />
                       </div>
                       <p>
-                        {vpnProviders[selected.protocol].name}
+                        {vpnProviders[selected.profile.protocol].name}
                         <span>·</span>
                         <span
                           className="font-mono"
-                          title={`${selected.gateway.host}:${selected.gateway.port}`}
+                          title={`${selected.profile.gateway.host}:${selected.profile.gateway.port}`}
                         >
-                          {selected.gateway.host}:{selected.gateway.port}
+                          {selected.profile.gateway.host}:{selected.profile.gateway.port}
                         </span>
                       </p>
                     </div>
@@ -396,7 +595,7 @@ export const VpnAccess: React.FC = () => {
                     aria-label="编辑接入配置"
                     title="编辑接入配置"
                     disabled={active || busy}
-                    onClick={() => setEditor(selected)}
+                    onClick={() => setEditor(selected.profile)}
                   >
                     <Pencil size={17} />
                   </button>
@@ -405,14 +604,14 @@ export const VpnAccess: React.FC = () => {
                   <div className="vpn-connection-meta">
                     <span>
                       <KeyRound size={14} />
-                      {selected.username || '尚未填写账号'}
+                      {selected.profile.username || '尚未填写账号'}
                     </span>
                     <span>
                       <ShieldCheck size={14} />
                       按资源分流
                     </span>
-                    {selected.loginDomain && (
-                      <span>登录域：{selected.loginDomain}</span>
+                    {selected.profile.loginDomain && (
+                      <span>登录域：{selected.profile.loginDomain}</span>
                     )}
                   </div>
                   {connectionError && (
@@ -436,7 +635,7 @@ export const VpnAccess: React.FC = () => {
                       });
                     }}
                   >
-                    {!active && selected.authMethod !== 'auth/smsCheckCode' && (
+                    {!active && selected.profile.authMethod !== 'auth/smsCheckCode' && (
                       <label className="vpn-field">
                         <span>登录密码</span>
                         <div className="vpn-password-input">
@@ -445,7 +644,7 @@ export const VpnAccess: React.FC = () => {
                             aria-label="登录密码"
                             autoComplete="off"
                             placeholder={
-                              selected.rememberPassword
+                              selected.profile.rememberPassword
                                 ? '留空使用已保存的密码'
                                 : '输入本次连接的密码'
                             }
@@ -465,7 +664,7 @@ export const VpnAccess: React.FC = () => {
                         </div>
                       </label>
                     )}
-                    {!active && selected.authMethod === 'auth/smsCheckCode' && (
+                    {!active && selected.profile.authMethod === 'auth/smsCheckCode' && (
                       <div className="vpn-notice">
                         <KeyRound size={17} />
                         <p>连接后按提示输入短信验证码，无需填写密码。</p>
@@ -500,7 +699,7 @@ export const VpnAccess: React.FC = () => {
                     <div className="vpn-connect-actions">
                       <p>
                         <LockKeyhole size={13} />
-                        {selected.rememberPassword
+                        {selected.profile.rememberPassword
                           ? '已开启系统加密记忆'
                           : '密码仅用于本次连接'}
                       </p>
@@ -735,6 +934,57 @@ export const VpnAccess: React.FC = () => {
             await refresh();
             setEditor(undefined);
           }}
+        />
+      )}
+      {addPickerOpen && (
+        <Portal>
+          <div className="vpn-modal-backdrop no-drag" onClick={(e) => { if (e.target === e.currentTarget) setAddPickerOpen(false); }}>
+            <div className="vpn-surface" role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <strong style={{ fontSize: 14 }}>选择接入类型</strong>
+                <button className="vpn-button compact" onClick={() => setAddPickerOpen(false)}>关闭</button>
+              </div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                <button
+                  className="vpn-button"
+                  style={{ textAlign: 'left', padding: '12px 14px' }}
+                  onClick={() => { setAddPickerOpen(false); setEditor(newVpnProfile()); }}
+                >
+                  <strong>EasyConnect / aTrust</strong>
+                  <div style={{ fontSize: 11, color: 'var(--vpn-muted)', marginTop: 2 }}>
+                    深信服系列网关,内置协议核心,支持密码/动态码/短信认证
+                  </div>
+                </button>
+                <button
+                  className="vpn-button"
+                  style={{ textAlign: 'left', padding: '12px 14px' }}
+                  onClick={() => { setAddPickerOpen(false); setEngineEditorOpen(true); }}
+                >
+                  <strong>协议引擎类</strong>
+                  <div style={{ fontSize: 11, color: 'var(--vpn-muted)', marginTop: 2 }}>
+                    IKEv2 / L2TP / SSTP / OpenVPN / SoftEther 兼容端点 / AnyConnect / FortiClient / GlobalProtect / Pulse / Juniper / F5 / Array / WireGuard
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+      {engineEditorFor !== undefined && (
+        <VpnProfileEditorModal
+          profile={engineEditorFor}
+          onSave={async (profile) => {
+            const ok = await window.electronAPI?.vpn?.saveProfile(profile);
+            if (ok) {
+              await refreshEngineProfiles();
+              setSelectedId(engineKey(profile.id));
+              toast.success('VPN 账号已保存');
+            } else {
+              toast.warn('保存失败:名称与服务器为必填项');
+            }
+            setEngineEditorFor(undefined);
+          }}
+          onClose={() => setEngineEditorFor(undefined)}
         />
       )}
     </div>

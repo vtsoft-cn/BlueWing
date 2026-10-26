@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ModalShell } from '../components/ModalShell';
+import { useModalClose } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { toast } from '../components/Toast';
 import {
@@ -213,9 +215,11 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
 
   const speedData = formatSpeed(downloadSpeed);
 
+  // 经 ModalShell Context 拿收场关闭;直接调 onClose prop 会跳过动画
+  const requestClose = useModalClose();
   return (
     <Portal>
-    <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 fade-enter">
+    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 border border-slate-200/90 dark:border-slate-800/90 shadow-2xl space-y-5 text-slate-900 dark:text-slate-100">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
@@ -238,7 +242,7 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -517,7 +521,7 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
             )}
 
             <button
-              onClick={onClose}
+              onClick={requestClose}
               className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
             >
               关闭
@@ -525,7 +529,7 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
     </Portal>
   );
 };

@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings } from '../../types';
+import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings, VpnProfile } from '../../types';
 import { CredentialSecurity } from '../security/CredentialSecurity';
 import { ImportJournal } from './backup/ImportJournal';
 
@@ -19,6 +19,7 @@ export class Database {
   private appRules: AppRule[] = [];
   private dns: DnsConfig;
   private settings: AppSettings;
+  private vpnProfiles: VpnProfile[] = [];
 
   private saveTimer: NodeJS.Timeout | null = null;
 
@@ -234,6 +235,14 @@ export class Database {
     if (Array.isArray(data.appRules)) {
       this.appRules = data.appRules.filter((a: any) => a && a.id);
     }
+    if (Array.isArray(data.vpnProfiles)) {
+      this.vpnProfiles = (data.vpnProfiles as VpnProfile[]).filter((p) => p && p.id && p.server);
+      // 内存态持明文密码(webdav 同一约定),落库时再加密
+      for (const p of this.vpnProfiles) {
+        if (p.password) p.password = CredentialSecurity.decrypt(p.password);
+        if (p.l2tpPsk) p.l2tpPsk = CredentialSecurity.decrypt(p.l2tpPsk);
+      }
+    }
     if (data.dns && typeof data.dns === 'object') {
       this.dns = { ...this.dns, ...data.dns };
     }
@@ -322,6 +331,11 @@ export class Database {
         appRules: this.appRules,
         dns: this.dns,
         settings: diskSettings,
+        vpnProfiles: this.vpnProfiles.map((p) => ({
+          ...p,
+          password: CredentialSecurity.encrypt(p.password || ''),
+          l2tpPsk: p.l2tpPsk ? CredentialSecurity.encrypt(p.l2tpPsk) : undefined,
+        })),
       };
 
       const jsonStr = JSON.stringify(data, null, 2);
@@ -453,6 +467,27 @@ export class Database {
   public saveAppRules(appRules: AppRule[]): void {
     this.appRules = appRules;
     this.save();
+  }
+
+  // ---- VPN 账号(应用内直接登录第三方 VPN) ----
+
+  public getVpnProfiles(): VpnProfile[] {
+    return this.vpnProfiles;
+  }
+
+  /** 新增或按 id 整体替换 */
+  public upsertVpnProfile(profile: VpnProfile): void {
+    const idx = this.vpnProfiles.findIndex((p) => p.id === profile.id);
+    if (idx >= 0) this.vpnProfiles[idx] = { ...profile, id: this.vpnProfiles[idx].id };
+    else this.vpnProfiles.push(profile);
+    this.save();
+  }
+
+  public deleteVpnProfile(id: string): boolean {
+    if (!this.vpnProfiles.some((p) => p.id === id)) return false;
+    this.vpnProfiles = this.vpnProfiles.filter((p) => p.id !== id);
+    this.save();
+    return true;
   }
 
   public getDns(): DnsConfig {

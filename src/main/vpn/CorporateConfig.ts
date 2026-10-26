@@ -7,13 +7,13 @@ export function applyCorporateConfig(
   runtime?: VpnRuntime,
 ): void {
   // Callers that rebuild through the tray or selector fallback receive the same managed layer.
-  config.outbounds = config.outbounds.filter(
+  config.outbounds = (config.outbounds || []).filter(
     (r: any) => !r.tag?.startsWith('corp-out-'),
   );
-  config.route.rule_set = config.route.rule_set.filter(
+  config.route.rule_set = (config.route.rule_set || []).filter(
     (r: any) => !r.tag?.startsWith('corp-'),
   );
-  config.route.rules = config.route.rules.filter(
+  config.route.rules = (config.route.rules || []).filter(
     (r: any) =>
       !r.rule_set?.some((tag: string) => tag.startsWith('corp-')) &&
       !(
@@ -21,10 +21,10 @@ export function applyCorporateConfig(
         r.process_name[0] === 'bluewing-vpn-core.exe'
       ),
   );
-  config.dns.servers = config.dns.servers.filter(
+  config.dns.servers = (config.dns.servers || []).filter(
     (r: any) => !r.tag?.startsWith('corp-dns-'),
   );
-  config.dns.rules = config.dns.rules.filter(
+  config.dns.rules = (config.dns.rules || []).filter(
     (r: any) => !r.server?.startsWith('corp-dns-'),
   );
   if (!runtime?.profiles.length) return;
@@ -77,6 +77,7 @@ export function applyCorporateConfig(
       rule_set: [`corp-guard-${r.profile.id}`],
       action: 'reject',
     });
+  for (const arr of [config.dns.rules]) { if (!Array.isArray(arr)) { config.dns.rules = []; break; } }
   const setup: any[] = [],
     blocked: any[] = [],
     ordinary: any[] = [],

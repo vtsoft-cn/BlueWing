@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Select } from '../components/Select';
@@ -38,6 +39,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const requestClose = () => { setShowConfigModal(false); };
   const [liveConfigText, setLiveConfigText] = useState('');
   const [copiedConfig, setCopiedConfig] = useState(false);
   const [flushStatus, setFlushStatus] = useState<string | null>(null);
@@ -583,8 +585,8 @@ export const Settings: React.FC<SettingsProps> = ({
       {/* Inspect Live Config Modal */}
       {showConfigModal && (
         <Portal>
-        <div className="no-drag fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] overflow-hidden pop-enter">
+        <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Code2 className="w-5 h-5 text-blue-600" />
@@ -603,7 +605,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowConfigModal(false)}
+                  onClick={requestClose}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   <X className="w-4 h-4" />
@@ -619,14 +621,14 @@ export const Settings: React.FC<SettingsProps> = ({
               <span>此配置为当前送入 Sing-box 内核执行的真实完整 JSON。</span>
               <button
                 type="button"
-                onClick={() => setShowConfigModal(false)}
+                onClick={requestClose}
                 className="px-4 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-medium transition-colors"
               >
                 关闭
               </button>
             </div>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
     </div>

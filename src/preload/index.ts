@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings, LogEntry, LatencyResult } from '../types';
+import { ProxyNode, Subscription, RouteRule, AppRule, DnsConfig, AppSettings, LogEntry, LatencyResult, VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../types';
 import { CorporateVpnAPI, VpnProfile, VpnState } from '../types/corporateVpn';
 
 export const api = {
@@ -7,8 +7,8 @@ export const api = {
     snapshot: () => ipcRenderer.invoke('vpn:snapshot'),
     save: (profile: VpnProfile) => ipcRenderer.invoke('vpn:save', profile),
     remove: (id: string) => ipcRenderer.invoke('vpn:remove', id),
-    connect: (id: string, password: string) => ipcRenderer.invoke('vpn:connect', id, password),
-    disconnect: () => ipcRenderer.invoke('vpn:disconnect'),
+    connect: (id: string, password: string) => ipcRenderer.invoke('evpn:connect', id, password),
+    disconnect: () => ipcRenderer.invoke('evpn:disconnect'),
     discover: (id: string) => ipcRenderer.invoke('vpn:discover', id),
     certificate: (id: string) => ipcRenderer.invoke('vpn:certificate', id),
     respond: (id: string, generation: number, value: string) => ipcRenderer.invoke('vpn:respond', id, generation, value),
@@ -16,8 +16,8 @@ export const api = {
     apply: () => ipcRenderer.invoke('vpn:apply'),
     onState: (callback: (state: VpnState) => void) => {
       const handler = (_: unknown, state: VpnState) => callback(state);
-      ipcRenderer.on('vpn:state', handler);
-      return () => ipcRenderer.removeListener('vpn:state', handler);
+      ipcRenderer.on('evpn:state', handler);
+      return () => ipcRenderer.removeListener('evpn:state', handler);
     },
   } satisfies CorporateVpnAPI,
   // Window controls
@@ -206,6 +206,41 @@ export const api = {
     relaunchAsAdmin: (): Promise<void> => ipcRenderer.invoke('system:relaunchAsAdmin'),
     flushDns: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke('system:flushDns'),
     getAppVersion: (): Promise<string> => ipcRenderer.invoke('system:getAppVersion'),
+    /** 在资源管理器中打开本地目录(不存在则创建;用于 VPN 引擎放置目录) */
+    openPath: (p: string): Promise<boolean> => ipcRenderer.invoke('system:openPath', p),
+  },
+
+  // VPN 接入(应用内直接登录第三方 VPN 账号)
+  vpn: {
+    getProfiles: (): Promise<EngineVpnProfile[]> => ipcRenderer.invoke('evpn:getProfiles'),
+    saveProfile: (profile: EngineVpnProfile): Promise<boolean> => ipcRenderer.invoke('evpn:saveProfile', profile),
+    deleteProfile: (id: string): Promise<boolean> => ipcRenderer.invoke('evpn:deleteProfile', id),
+    connect: (id: string, extra?: { mfaCode?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('evpn:connect', id, extra),
+    disconnect: (): Promise<void> => ipcRenderer.invoke('evpn:disconnect'),
+    getState: (): Promise<VpnRuntimeInfo | null> => ipcRenderer.invoke('evpn:getState'),
+    /** 引擎可用性(openvpn/openconnect 二进制是否存在)与放置目录 */
+    getEngines: (): Promise<{
+      openvpn: { available: boolean; dir: string };
+      openconnect: { available: boolean; dir: string };
+    }> => ipcRenderer.invoke('evpn:getEngines'),
+    /** 自动获取 VPN 网关的服务器证书 PEM(依次尝试 443/992/5555 的 TLS 端口) */
+    fetchServerCert: (host: string, ports?: number[]): Promise<{ pem?: string; port?: number; error?: string }> =>
+      ipcRenderer.invoke('evpn:fetchServerCert', host, ports),
+    onStateChange: (callback: (info: VpnRuntimeInfo | null) => void): (() => void) => {
+      const sub = (_e: unknown, info: VpnRuntimeInfo | null) => callback(info);
+      ipcRenderer.on('evpn:state', sub);
+      return () => {
+        ipcRenderer.removeListener('evpn:state', sub);
+      };
+    },
+    onProfilesChanged: (callback: (profiles: EngineVpnProfile[]) => void): (() => void) => {
+      const sub = (_e: unknown, profiles: EngineVpnProfile[]) => callback(profiles);
+      ipcRenderer.on('evpn:profiles', sub);
+      return () => {
+        ipcRenderer.removeListener('evpn:profiles', sub);
+      };
+    },
   },
 
   // TUN 提权引导(自定义弹窗,不使用系统原生对话框)

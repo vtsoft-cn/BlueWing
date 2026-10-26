@@ -232,7 +232,16 @@ export class SingBoxManager extends EventEmitter {
     try {
       fs.writeFileSync(testConfigPath, JSON.stringify(config, null, 2), 'utf8');
       return new Promise((resolve) => {
-        const proc = spawn(this.binaryPath, ['check', '-c', testConfigPath]);
+        const proc = spawn(this.binaryPath, ['check', '-c', testConfigPath], {
+          // 与 run 一致:配置在 hosts/VPN 分流激活时省略 default_domain_resolver,
+          // check 子进程必须携带同一 deprecated 豁免,否则启动前校验即 FATAL
+          windowsHide: true,
+          env: {
+            ...process.env,
+            ENABLE_DEPRECATED_LEGACY_DNS_ADDRESS_FILTER: 'true',
+            ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true',
+          },
+        });
         let stderr = '';
         // check 挂起会永久占住 start() 的互斥锁(state 卡 starting、stop 排队永不执行,
         // 界面"无法停止"),超时强杀兜底
@@ -310,9 +319,15 @@ export class SingBoxManager extends EventEmitter {
         this.process = spawn(this.binaryPath, ['run', '-c', this.configPath], {
           cwd: workingDir,
           windowsHide: true,
-          // sing-box 对配置中 DNS 旧版地址过滤字段直接拒启(FATAL);
-          // 豁免仅注入本应用拉起的核心子进程,不污染系统环境
-          env: { ...process.env, ENABLE_DEPRECATED_LEGACY_DNS_ADDRESS_FILTER: 'true' },
+          // sing-box 对配置中 DNS 旧版地址过滤字段直接拒启(FATAL);DNS 旧版"缺省
+          // 域名解析器"移除后,出站解析改为绕过 dns.rules(Hosts 映射/VPN 内网 DNS
+          // 在系统代理模式失效),该 env 恢复"经规则解析"行为。两变量均仅注入本
+          // 应用拉起的核心子进程,不污染系统环境;仅当配置缺省相应字段时生效。
+          env: {
+            ...process.env,
+            ENABLE_DEPRECATED_LEGACY_DNS_ADDRESS_FILTER: 'true',
+            ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true',
+          },
         });
 
         this.process.stdout?.on('data', (data) => {

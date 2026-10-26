@@ -50,6 +50,9 @@ label,
 }
 .page-enter {
   animation: page-enter 0.24s ease-out;
+  /* 动画期间提升合成层:整页容器动画不与流量 canvas 重绘争抢主层;
+     0.24s 动画结束后该提示随元素复用保留,但仅 transform 一项,显存代价可忽略 */
+  will-change: transform;
 }
 
 /* 浮层入场:弹窗表面轻微缩放淡入,遮罩/下拉纯淡入 */
@@ -68,6 +71,47 @@ label,
 }
 .fade-enter {
   animation: page-enter 0.15s ease-out;
+}
+
+/* 弹窗遮罩入场:纯淡入(不位移——全屏遮罩位移会露边) */
+@keyframes overlay-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.overlay-enter {
+  animation: overlay-enter 0.18s ease-out;
+}
+
+/* 弹窗收场:面板缩退+淡出,遮罩纯淡出(0.2s,可感知;useModalExit 卸载延时 200ms 与之匹配) */
+@keyframes pop-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes overlay-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.pop-exit {
+  animation: pop-exit 0.2s ease-in forwards;
+  will-change: opacity, transform;
+}
+.overlay-exit {
+  animation: overlay-exit 0.2s ease-in forwards;
+  will-change: opacity;
 }
 
 /* 内容区卡片/规则行统一悬停:边框提亮 + 阴影加深(不位移)

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {Plus, Trash2, X, RefreshCw, AppWindow} from 'lucide-react';
 import { AppRule, InstalledAppInfo } from '../../types';
@@ -14,6 +15,7 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
   const [isScanning, setIsScanning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [customName, setCustomName] = useState('');
+  const requestClose = () => { setShowAddModal(false); setCustomName(''); setCustomPath(''); };
   const [customPath, setCustomPath] = useState('');
   const [customAction] = useState<'proxy' | 'direct' | 'block'>('proxy');
 
@@ -196,14 +198,14 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
       {/* Add App Modal */}
       {showAddModal && (
         <Portal>
-        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
+        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 选择已检测到的应用程序
               </h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={requestClose}
                 className="text-slate-400 hover:text-slate-600 p-1"
               >
                 <X className="w-4 h-4" />
@@ -269,7 +271,7 @@ export const AppRouting: React.FC<AppRoutingProps> = ({ appRules, onSaveAppRules
               </button>
             </form>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
     </div>

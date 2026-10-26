@@ -26,10 +26,14 @@ import { BackupService } from './db/backup/BackupService';
 import { SubscriptionFetcher } from './net/SubscriptionFetcher';
 import { UniversalSubscriptionParser } from './net/UniversalSubscriptionParser';
 import { TrayManager } from './tray/TrayManager';
-import { TrafficStats, Subscription } from '../types';
+import { TrafficStats, Subscription, VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../types';
 import { LogManager } from './log/LogManager';
 import { existingCorporateVpn, getCorporateVpn } from './vpn/VpnService';
 import { applyCorporateConfig } from './vpn/CorporateConfig';
+import { VpnEngineManager } from './system/vpn/VpnEngineManager';
+import { OpenVpnEngine, derToPem } from './system/vpn/OpenVpnEngine';
+import { OpenConnectEngine } from './system/vpn/OpenConnectEngine';
+import tls from 'tls';
 
 let mainWindow: BrowserWindow | null = null;
 let trafficTimer: NodeJS.Timeout | null = null;
@@ -398,6 +402,7 @@ app.on('before-quit', async (e) => {
     try {
       Database.getInstance().flush();
       await existingCorporateVpn()?.dispose();
+      await VpnEngineManager.getInstance().shutdown();
       await handleCoreStop();
       await SystemProxy.restoreOriginal();
       await LogManager.getInstance().destroy();
@@ -661,7 +666,8 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
     db.getDns(),
     settings,
     undefined,
-    corporateRuntime
+    corporateRuntime,
+    VpnEngineManager.getInstance().getSplitConfig()
   );
 
   LogManager.getInstance().addLog('info', '正在启动 Sing-box 核心代理引擎...', 'app');
@@ -715,6 +721,139 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
   TrayManager.getInstance().updateMenu();
   return started;
 }
+
+// -------------------------------------------------------------
+// VPN 接入(应用内直接登录第三方 VPN 账号)
+// -------------------------------------------------------------
+// 环境判定注入:custody 移交需要"TUN 实际生效"(核心在跑 + 设置开 TUN + 管理员)
+VpnEngineManager.getInstance().setEnvProbe(() => ({
+  coreRunning: SingBoxManager.getInstance().getState() === 'running',
+  tunActive:
+    SingBoxManager.getInstance().getState() === 'running' &&
+    Database.getInstance().getSettings().tunEnabled &&
+    SingBoxManager.getInstance().isAdmin(),
+  isAdmin: SingBoxManager.getInstance().isAdmin(),
+}));
+
+// VPN 状态变化:推送渲染层;网络事实(网卡/内网段/DNS)签名变化且核心在跑时,
+// 防抖重载配置注入/撤除 vpn-corp 数据面(非 userInitiated,不触碰代理开关)
+let vpnNetworkSignature = '';
+let vpnReloadTimer: NodeJS.Timeout | null = null;
+VpnEngineManager.getInstance().on('state', (info: VpnRuntimeInfo) => {
+  mainWindow?.webContents.send('evpn:state', info);
+  const sig =
+    info.state === 'connected'
+      ? [info.adapterName || '', ...[...info.routes].sort(), ...info.dnsServers, ...info.domainSuffixes].join('|')
+      : '';
+  if (sig === vpnNetworkSignature) return;
+  vpnNetworkSignature = sig;
+  if (SingBoxManager.getInstance().getState() !== 'running') return;
+  if (vpnReloadTimer) clearTimeout(vpnReloadTimer);
+  vpnReloadTimer = setTimeout(() => {
+    vpnReloadTimer = null;
+    if (SingBoxManager.getInstance().getState() === 'running') {
+      LogManager.getInstance().addLog(
+        'info',
+        'VPN 网络信息变化,重载核心配置以更新内网分流规则',
+        'app'
+      );
+      handleCoreStart();
+    }
+  }, 800);
+  vpnReloadTimer.unref?.();
+});
+
+function broadcastVpnProfilesChanged(): void {
+  mainWindow?.webContents.send('evpn:profiles', Database.getInstance().getVpnProfiles());
+}
+
+ipcMain.handle('evpn:getProfiles', () => Database.getInstance().getVpnProfiles());
+ipcMain.handle('evpn:saveProfile', (_, profile: EngineVpnProfile) => {
+  const db = Database.getInstance();
+  if (!profile || !profile.id || !profile.server || !profile.name) return false;
+  db.upsertVpnProfile(profile);
+  broadcastVpnProfilesChanged();
+  return true;
+});
+ipcMain.handle('evpn:deleteProfile', async (_, id: string) => {
+  const db = Database.getInstance();
+  const manager = VpnEngineManager.getInstance();
+  if (manager.getState()?.profileId === id && manager.getState()?.state !== 'disconnected') {
+    await manager.disconnect();
+  }
+  const deleted = db.deleteVpnProfile(id);
+  if (deleted) broadcastVpnProfilesChanged();
+  return deleted;
+});
+ipcMain.handle('evpn:connect', (_, id: string, extra?: { mfaCode?: string }) =>
+  VpnEngineManager.getInstance().connect(id, extra)
+);
+ipcMain.handle('evpn:disconnect', () => VpnEngineManager.getInstance().disconnect());
+ipcMain.handle('evpn:getState', () => VpnEngineManager.getInstance().getState());
+ipcMain.handle('evpn:getEngines', () => {
+  const dataDir = Database.getInstance().getDataDir();
+  return {
+    openvpn: {
+      available: OpenVpnEngine.locateBinary() !== null,
+      dir: path.join(dataDir, 'vpn-engines', 'openvpn'),
+    },
+    openconnect: {
+      available: OpenConnectEngine.locateBinary() !== null,
+      dir: path.join(dataDir, 'vpn-engines', 'openconnect'),
+    },
+  };
+});
+ipcMain.handle('system:openPath', (_, p: string) => {
+  if (typeof p !== 'string' || !p) return false;
+  try {
+    fs.mkdirSync(p, { recursive: true });
+  } catch {}
+  shell.openPath(p);
+  return true;
+});
+
+// 自动获取 VPN 网关证书:对 SoftEther 等自签名网关,OpenVPN 端点(UDP 1194)无法
+// 直接 TLS 探测,但原生/管理监听端口(443/992/5555)说的是 TLS——逐个尝试握手,
+// 拿到证书即返回 PEM(与 OpenVPN 端点使用同一服务器证书)
+function fetchServerCert(host: string, ports: number[]): Promise<{ pem?: string; port?: number; error?: string }> {
+  return new Promise((resolve) => {
+    if (!host || !ports.length) {
+      resolve({ error: '缺少主机地址' });
+      return;
+    }
+    const tryPort = (idx: number): void => {
+      if (idx >= ports.length) {
+        resolve({ error: '所有端口均未能完成 TLS 握手(443/992/5555)' });
+        return;
+      }
+      const port = ports[idx];
+      const socket = tls.connect(
+        { host, port, rejectUnauthorized: false, timeout: 5000 },
+        () => {
+          const cert = socket.getPeerCertificate();
+          socket.destroy();
+          if (cert && cert.raw && cert.raw.length > 0) {
+            resolve({ pem: derToPem(cert.raw), port });
+          } else {
+            tryPort(idx + 1);
+          }
+        }
+      );
+      socket.on('error', () => {
+        socket.destroy();
+        tryPort(idx + 1);
+      });
+      socket.on('timeout', () => {
+        socket.destroy();
+        tryPort(idx + 1);
+      });
+    };
+    tryPort(0);
+  });
+}
+ipcMain.handle('evpn:fetchServerCert', (_, host: string, ports?: number[]) =>
+  fetchServerCert(String(host || '').trim(), Array.isArray(ports) && ports.length ? ports : [443, 992, 5555])
+);
 
 // -------------------------------------------------------------
 // IPC Handlers
@@ -868,7 +1007,8 @@ ipcMain.handle('core:validateConfig', () => {
     db.getDns(),
     db.getSettings(),
     undefined,
-    getCorporateVpn().policy.runtime()
+    getCorporateVpn().policy.runtime(),
+    VpnEngineManager.getInstance().getSplitConfig()
   );
   return SingBoxManager.getInstance().validate(config);
 });

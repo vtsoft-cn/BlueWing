@@ -1,4 +1,4 @@
-import type { VpnProfile } from './corporateVpn';
+import type { VpnProfile as CorporateVpnProfile } from './corporateVpn';
 export type ProxyType =
   | 'vless'
   | 'vmess'
@@ -242,7 +242,7 @@ export interface SpeedTestResult {
 }
 
 export interface BackupData {
-  corporateVpn?: VpnProfile[];
+  corporateVpn?: CorporateVpnProfile[];
   schema_version: number;
   app_version: string;
   timestamp: number;
@@ -267,6 +267,136 @@ export interface InstalledAppInfo {
   icon?: string;
   publisher?: string;
   version?: string;
+}
+
+// ---------------------------------------------------------------------------
+// VPN 接入(在应用内直接登录第三方 VPN 账号)
+// ---------------------------------------------------------------------------
+
+/** VPN 账号类型:ikev2/l2tp/sstp 走 Windows 原生 RAS(零依赖);openvpn 走打包的
+ *  openvpn.exe;anyconnect/fortinet/globalprotect/pulse/nc/f5/array 走打包的
+ *  openconnect.exe(Cisco AnyConnect / FortiClient SSL VPN / Palo Alto GlobalProtect /
+ *  Pulse(Ivanti) / Juniper Network Connect / F5 BIG-IP / Array Networks 协议)。
+ * softether 复用服务器自带的兼容端点(L2TP/SSTP/OpenVPN),由 softetherMode 决定实际引擎。
+ * WireGuard 不在此列——它原生作为 sing-box 节点出站,在"节点"页手动添加即可。
+ * EasyConnect/aTrust/UniVPN 为厂商私有协议,无开源实现,不支持应用内登录(UI 提示)。 */
+export type VpnProfileType =
+  | 'ikev2'
+  | 'l2tp'
+  | 'sstp'
+  | 'openvpn'
+  | 'anyconnect'
+  | 'fortinet'
+  | 'globalprotect'
+  | 'pulse'
+  | 'nc'
+  | 'f5'
+  | 'array'
+  | 'softether'
+  | 'wireguard';
+
+/** SoftEther 服务器自带的客户端兼容端点(服务器默认同时开启),决定实际使用的引擎 */
+export type SoftEtherMode = 'l2tp' | 'sstp' | 'openvpn';
+
+export interface VpnProfile {
+  id: string;
+  name: string;
+  type: VpnProfileType;
+  /** 服务器地址(RAS 为主机名/IP;OpenVPN 为 .ovpn 内 remote;openconnect 为完整 URL) */
+  server: string;
+  port?: number;
+  username?: string;
+  /** 仅存在于内存与 IPC 通道;落库时由 Database 用 DPAPI 加密 */
+  password?: string;
+
+  // RAS(ikev2/l2tp/sstp)
+  /** 默认 true:不接管默认路由,只放行服务端下发的内网段 */
+  splitTunnel?: boolean;
+  /** L2TP 预共享密钥 */
+  l2tpPsk?: string;
+  /** RAS 连接特定 DNS 后缀;同时作为内网域名后缀种子注入 DNS 规则 */
+  dnsSuffix?: string;
+
+  // openconnect(anyconnect/fortinet/globalprotect)
+  /** openconnect 表单入口/用户组(部分网关登录页需要) */
+  usergroup?: string;
+  /** openconnect 服务器证书指纹钉扎(--servercert);证书校验失败时日志会给出可填的指纹 */
+  servercert?: string;
+  /** 登录需要第二因子(令牌/短信码);连接时在 UI 输入一次性验证码 */
+  useMfa?: boolean;
+
+  // openvpn
+  /** .ovpn 配置全文(内联证书;remote/auth 等连接级参数可留空由服务端配置覆盖) */
+  configText?: string;
+  /** .ovpn 使用 auth-user-pass 认证(用账号密码字段) */
+  authUserPass?: boolean;
+  /** 手动配置模式(无 configText 时):协议,默认 udp */
+  ovpnProto?: 'udp' | 'tcp';
+  /** 手动配置模式:服务器证书 PEM(含 BEGIN/END 行;可经"自动获取证书"抓取) */
+  ovpnCaText?: string;
+
+  /** 手动补充的内网 CIDR(引擎未上报或需要覆盖时的兜底,与自动上报合并) */
+  extraRoutes?: string[];
+
+  // softether:服务器兼容端点选择(l2tp/sstp/openvpn),默认 l2tp
+  softetherMode?: SoftEtherMode;
+
+  // wireguard(VPN 形态:内网分流,AllowedIPs 语义见 extraRoutes;
+  // 注意与"节点"页的 WireGuard 节点不同——那是全量出口形态)
+  privateKey?: string;
+  peerPublicKey?: string;
+  presharedKey?: string;
+  /** 本机隧道地址,如 10.7.0.2/32 */
+  localAddress?: string;
+  wireguardMtu?: number;
+  /** 企业内网 DNS(可选,查询经 WireGuard 隧道) */
+  corpDns?: string;
+
+  createdAt: number;
+  lastConnected?: number;
+}
+
+export type VpnConnectionState = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error';
+
+/** VPN 连接运行态(单连接模型:同一时刻只连一个) */
+export interface VpnRuntimeInfo {
+  profileId: string;
+  profileName: string;
+  state: VpnConnectionState;
+  /** VPN 虚拟网卡的 Windows 连接名(vpn-corp 出站 bind_interface 的目标) */
+  adapterName?: string;
+  /** 引擎上报/解析出的内网 CIDR(已归一化、已剔除全隧道路由) */
+  routes: string[];
+  /** VPN 侧 DNS 服务器 */
+  dnsServers: string[];
+  /** 内网域名后缀(DNS 规则用) */
+  domainSuffixes: string[];
+  /** VPN 分配的本机地址 */
+  ipv4?: string;
+  /** 状态说明/错误信息 */
+  message?: string;
+  /** 进入当前状态的时间戳 */
+  since: number;
+}
+
+/** ConfigGenerator 注入用:由 VpnEngineManager 从运行态推导 */
+export interface VpnSplitConfig {
+  /** 外部引擎 VPN 的虚拟网卡名(vpn-corp 出站 bind_interface 目标);
+   *  WireGuard 型 VPN 无外部网卡,此字段为空并携带 wireguard 隧道参数 */
+  adapterName?: string;
+  routes: string[];
+  dnsServers: string[];
+  domainSuffixes: string[];
+  /** WireGuard 型 VPN:sing-box 原生 endpoint(无外部进程/网卡,内网流量经此隧道) */
+  wireguard?: {
+    server: string;
+    port: number;
+    privateKey: string;
+    peerPublicKey: string;
+    presharedKey?: string;
+    localAddress: string;
+    mtu?: number;
+  };
 }
 
 export interface BackupCategories {

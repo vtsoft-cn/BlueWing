@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { ModalShell } from '../components/ModalShell';
+import { useModalClose } from '../components/ModalShell';
 import { X, Check } from 'lucide-react';
 import { ProxyNode, ProxyType } from '../../types';
 import { Select } from '../components/Select';
@@ -73,9 +75,11 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
     { id: 'naive', label: 'NaiveProxy' },
   ];
 
+  // 经 ModalShell Context 拿收场关闭;直接调 onClose prop 会跳过动画
+  const requestClose = useModalClose();
   return (
     <Portal>
-    <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -83,7 +87,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
             {node ? '编辑节点配置' : '手动添加代理节点'}
           </h3>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
           >
             <X className="w-4 h-4" />
@@ -353,7 +357,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
           <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="px-4 py-2 rounded-lg font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               取消
@@ -368,7 +372,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
     </Portal>
   );
 };

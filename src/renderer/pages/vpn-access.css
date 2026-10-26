@@ -8,7 +8,8 @@
   --vpn-accent-soft: #eff6ff;
   --vpn-green: #047857;
   color: var(--vpn-text);
-  font-size: 13px;
+  /* 对齐全应用字号体系(其它页面正文以 text-xs=12px 为主) */
+  font-size: 12px;
   line-height: 1.6;
 }
 .dark .vpn-surface {
@@ -44,10 +45,10 @@
   gap: 16px;
 }
 .vpn-page-header h2 {
-  font-size: 23px;
-  font-weight: 650;
-  letter-spacing: -0.5px;
-  line-height: 1.3;
+  /* 对齐全应用标题体系(text-base=16px) */
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 .vpn-page-header p {
   margin-top: 5px;
@@ -57,8 +58,8 @@
 .vpn-heading-icon {
   display: grid;
   place-items: center;
-  width: 45px;
-  height: 45px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--vpn-border);
   border-radius: 14px;
   color: var(--vpn-accent);

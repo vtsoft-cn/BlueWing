@@ -391,6 +391,7 @@ export const App: React.FC = () => {
             {currentTab === 'dns' && <DNS dns={dns} onSaveDns={handleSaveDns} />}
             {currentTab === 'vpn-access' && <VpnAccess />}
 
+
             {currentTab === 'speedtest' && (
               <SpeedTest
                 nodes={nodes}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
 import {HardDrive,
@@ -350,6 +351,7 @@ export const Backup: React.FC<BackupProps> = ({
     }
   };
 
+  const requestClose = () => { setPreviewModalOpen(false); };
   return (
     <div className="space-y-5 pb-8">
       {/* Top Banner Notice */}
@@ -445,7 +447,7 @@ export const Backup: React.FC<BackupProps> = ({
           {/* Button 1: 分享 (Share) */}
           <button
             onClick={handleShare}
-            className="p-4 rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10 hover:border-blue-400 dark:hover:border-blue-700 transition-all text-left flex flex-col justify-between group shadow-sm"
+            className="p-4 rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10 hover:border-blue-400 dark:hover:border-blue-700 transition-colors text-left flex flex-col justify-between group shadow-sm"
           >
             <div className="flex items-center justify-between w-full mb-3">
               <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/25 group-hover:scale-105 transition-transform">
@@ -466,7 +468,7 @@ export const Backup: React.FC<BackupProps> = ({
           </button>
 
           {/* Button 2: 导出到文件 (Export to File) */}
-          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700 transition-all text-left flex flex-col justify-between group shadow-sm">
+          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700 transition-colors text-left flex flex-col justify-between group shadow-sm">
             <div className="flex items-center justify-between w-full mb-3">
               <div className="w-10 h-10 rounded-xl bg-slate-800 dark:bg-slate-700 text-white flex items-center justify-center shadow-md shadow-slate-600/25 group-hover:scale-105 transition-transform">
                 <Download className="w-5 h-5" />
@@ -493,7 +495,7 @@ export const Backup: React.FC<BackupProps> = ({
           </div>
 
           {/* Button 3: 从文件导入 (Import from File) */}
-          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700 transition-all text-left flex flex-col justify-between group shadow-sm">
+          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700 transition-colors text-left flex flex-col justify-between group shadow-sm">
             <div className="flex items-center justify-between w-full mb-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 group-hover:scale-105 transition-transform">
                 <Upload className="w-5 h-5" />
@@ -523,7 +525,7 @@ export const Backup: React.FC<BackupProps> = ({
           </div>
 
           {/* Button 4: 从手机端导入 (Import from Mobile) */}
-          <div className="p-4 rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 to-pink-50/30 dark:from-purple-950/20 dark:to-pink-950/10 hover:border-purple-400 dark:hover:border-purple-700 transition-all text-left flex flex-col justify-between group shadow-sm">
+          <div className="p-4 rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 to-pink-50/30 dark:from-purple-950/20 dark:to-pink-950/10 hover:border-purple-400 dark:hover:border-purple-700 transition-colors text-left flex flex-col justify-between group shadow-sm">
             <div className="flex items-center justify-between w-full mb-3">
               <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/25 group-hover:scale-105 transition-transform">
                 <Smartphone className="w-5 h-5" />
@@ -789,8 +791,8 @@ export const Backup: React.FC<BackupProps> = ({
       {/* 4. Dry-Run Import Preview Modal */}
       {previewModalOpen && previewResult && (
         <Portal>
-        <div className="no-drag fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden pop-enter">
+        <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
               <div className="flex items-center space-x-2.5">
@@ -817,7 +819,7 @@ export const Backup: React.FC<BackupProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => setPreviewModalOpen(false)}
+                onClick={requestClose}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -1021,7 +1023,7 @@ export const Backup: React.FC<BackupProps> = ({
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
-                  onClick={() => setPreviewModalOpen(false)}
+                  onClick={requestClose}
                   disabled={isImporting}
                   className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-medium transition-colors"
                 >
@@ -1048,7 +1050,7 @@ export const Backup: React.FC<BackupProps> = ({
               </div>
             </div>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
     </div>

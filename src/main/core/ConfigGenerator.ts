@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../../types';
+import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings, VpnSplitConfig } from '../../types';
 import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
 import { VpnRuntime } from '../../types/corporateVpn';
 import { applyCorporateConfig } from '../vpn/CorporateConfig';
@@ -17,7 +17,8 @@ export class ConfigGenerator {
     dns: DnsConfig,
     settings: AppSettings,
     forceDisableTun?: boolean,
-    corporateRuntime?: VpnRuntime
+    corporateRuntime?: VpnRuntime,
+    vpn?: VpnSplitConfig | null
   ): Record<string, any> {
     const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
 
@@ -47,6 +48,8 @@ export class ConfigGenerator {
     }
 
     const useTun = settings.tunEnabled && !forceDisableTun;
+    // VPN 共存期间强制关闭 strict_route:其 WFP 过滤会掐断其他 VPN 适配器的流量
+    const strictRoute = vpn && vpn.adapterName ? false : settings.tunStrictRoute || false;
     if (useTun) {
       const tunInbound: any = {
         type: 'tun',
@@ -57,7 +60,7 @@ export class ConfigGenerator {
           : ['172.19.0.1/30'],
         mtu: settings.tunMtu || 9000,
         auto_route: settings.tunAutoRoute !== false,
-        strict_route: settings.tunStrictRoute || false,
+        strict_route: strictRoute,
         endpoint_independent_nat: settings.tunEndpointIndependentNat !== false,
       };
 
@@ -75,6 +78,16 @@ export class ConfigGenerator {
     // System outbounds
     outbounds.push({ type: 'direct', tag: 'direct' });
     outbounds.push({ type: 'block', tag: 'block' });
+    // VPN 内网出站:显式绑定到 VPN 虚拟网卡,覆盖 route.auto_detect_interface 的
+    // "绑物理网卡"默认——内网路由只存在于 VPN 网卡上,绑物理网卡的 direct 连接
+    // 会被路由约束判不可达。经此出站的连接即"经应用转发,再交还 VPN"的数据面。
+    if (vpn && vpn.adapterName) {
+      outbounds.push({
+        type: 'direct',
+        tag: 'vpn-corp',
+        bind_interface: vpn.adapterName,
+      });
+    }
 
     // Node outbounds;WireGuard 自 sing-box 1.11 起走 endpoint 架构,不再是普通出站
     const nodeTags: string[] = [];
@@ -129,9 +142,16 @@ export class ConfigGenerator {
     if (dns.servers && Array.isArray(dns.servers)) {
       for (const s of dns.servers) {
         if (!s || !s.tag || !s.address) continue;
-        if (['remote-dns', 'direct-dns', 'dns-local', 'fakeip-dns'].includes(s.tag)) continue;
+        if (['remote-dns', 'direct-dns', 'dns-local', 'fakeip-dns', 'vpn-dns'].includes(s.tag)) continue;
         dnsServers.push(this.parseDnsServer(s.tag, s.address, s.detour));
       }
+    }
+
+    // VPN 内网 DNS:查询经 vpn-corp 出站乘车企业 DNS(服务器在 VPN 网段内,
+    // 物理/默认路由不可达),供内网域名后缀规则使用
+    const vpnDnsReady = !!((vpn && (vpn.adapterName || vpn.wireguard)) && vpn.dnsServers && vpn.dnsServers.length > 0);
+    if (vpnDnsReady && vpn) {
+      dnsServers.push(this.parseDnsServer('vpn-dns', vpn.dnsServers[0], vpn.wireguard ? 'vpn-wg' : 'vpn-corp'));
     }
 
     if (dns.mode === 'fakeip') {
@@ -149,6 +169,19 @@ export class ConfigGenerator {
     // 必须排在 fakeip 规则之前,否则 fakeip 模式会先接管全部查询导致映射永不生效。
     for (const rule of this.buildHostsDnsRules(dns)) {
       dnsRules.push(rule);
+    }
+
+    // VPN 内网域名走企业 DNS:必须排在 fakeip 接管规则之前——fakeip 的 inbound
+    // 通配会吞掉后续所有规则;内网域名拿到真实 IP 后由 ip_cidr 规则送进 vpn-corp。
+    // 后缀去重 + 去掉起始句点(domain_suffix 语义即后缀匹配)
+    if (vpnDnsReady && vpn) {
+      const suffixes = ConfigGenerator.normalizeDomainSuffixes(vpn.domainSuffixes);
+      if (suffixes.length > 0) {
+        dnsRules.push({
+          domain_suffix: suffixes,
+          server: 'vpn-dns',
+        });
+      }
     }
 
     if (dns.mode === 'fakeip') {
@@ -262,6 +295,70 @@ export class ConfigGenerator {
         action: 'reject',
       },
     ];
+
+    // VPN 共存分流:必须排在 ip_is_private/geoip-private 直连规则之前——
+    // 私网规则会先把 10.x/172.16.x 等内网地址判直连(而 direct 出站绑定物理网卡,
+    // 内网路由不在其上,等于不可达),VPN 规则必须先于它命中。引擎进程自身
+    // (openvpn/openconnect 的隧道流量)固定 direct 出物理网卡,避免被 TUN 回收
+    // 或被代理(企业网关常对代理出口 IP 风控)。
+    // WireGuard 型 VPN 无外部网卡:注入 sing-box 原生 endpoint(vpn-wg),
+    // 内网 CIDR/域名直接路由到该隧道,其余流量照常走代理节点。
+    const vpnActive = !!(vpn && (vpn.adapterName || vpn.wireguard));
+    if (vpnActive && vpn) {
+      const vpnOutboundTag = vpn.wireguard ? 'vpn-wg' : 'vpn-corp';
+      if (!vpn.wireguard) {
+        routeRules.push({
+          process_name: ['openvpn.exe', 'openconnect.exe'],
+          outbound: 'direct',
+        });
+      }
+      const vpnSuffixes = ConfigGenerator.normalizeDomainSuffixes(vpn.domainSuffixes);
+      if (vpnSuffixes.length > 0) {
+        routeRules.push({
+          domain_suffix: vpnSuffixes,
+          outbound: vpnOutboundTag,
+        });
+      }
+      const vpnCidrs = ConfigGenerator.normalizeCidrs(vpn.routes);
+      if (vpnCidrs.length > 0) {
+        routeRules.push({
+          ip_cidr: vpnCidrs,
+          outbound: vpnOutboundTag,
+        });
+      }
+      // WireGuard endpoint 自 sing-box 1.11 起独立于 outbounds,allowed_ips 收敛为
+      // 内网段(路由含义由上面的分流规则承担)
+      if (vpn.wireguard) {
+        const wg = vpn.wireguard;
+        const peer: any = {
+          address: wg.server,
+          port: wg.port,
+          public_key: wg.peerPublicKey,
+          allowed_ips: ConfigGenerator.normalizeCidrs(vpn.routes),
+        };
+        if (wg.presharedKey) peer.pre_shared_key = wg.presharedKey;
+        endpoints.push({
+          type: 'wireguard',
+          tag: 'vpn-wg',
+          address: [wg.localAddress],
+          private_key: wg.privateKey,
+          peers: [peer],
+          mtu: wg.mtu || 1420,
+        });
+      }
+    }
+
+    // Hosts 映射域名固定直连:带域名的连接在规则评估时不会先解析,ip_is_private/
+    // 自定义 IP 规则不生效,兜底会进代理出站——域名被发往远端节点解析,本地映射
+    // (predefined)与"公网无记录的内网域名"随之全部落空。直连出站经规则管道解析,
+    // 映射 IP 才能真正落到连接上(与系统 hosts 的语义一致)。
+    const hostsRuleDomains = ConfigGenerator.validHostsRecords(dns).map((h) => h.domain);
+    if (hostsRuleDomains.length > 0) {
+      routeRules.push({
+        domain: hostsRuleDomains,
+        outbound: 'direct',
+      });
+    }
 
     // LAN & Private IP bypass
     if (settings.systemProxyBypassLan !== false) {
@@ -406,14 +503,24 @@ export class ConfigGenerator {
 
     const finalOutbound = settings.routingMode === 'direct' ? 'direct' : 'proxy';
 
+    // 域名解析器:出站(含系统代理模式 direct 出站)的域名解析入口。
+    // 注意:一旦显式指定 server tag,sing-box 会"直连该服务器"解析,完全绕过
+    // dns.rules——应用内 Hosts 映射与 VPN 内网 DNS 规则(predefined/vpn-dns)
+    // 在系统代理模式下将永不生效(实测:规则查询命中、出站解析 502)。
+    // 因此存在启用中的 Hosts 记录或 VPN 分流时省略该字段,恢复"经规则管道解析"
+    // 的行为(需子进程环境变量 ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER=true,
+    // 由 SingBoxManager 拉起核心时统一注入;本机 1.14.3 实测无该字段+env 时
+    // check 即 FATAL,故两处必须成对存在)。
+    const hostsEnabled = ConfigGenerator.validHostsRecords(dns).length > 0;
     const routeConfig: any = {
-      default_domain_resolver: 'direct-dns',
+      default_domain_resolver: hostsEnabled || vpn ? undefined : 'direct-dns',
       default_http_client: 'default',
       rules: routeRules,
       rule_set: ruleSets,
       final: finalOutbound,
       auto_detect_interface: true,
     };
+    if (routeConfig.default_domain_resolver === undefined) delete routeConfig.default_domain_resolver;
 
     // 6. Root Configuration
     const rootConfig: Record<string, any> = {
@@ -458,8 +565,55 @@ export class ConfigGenerator {
     return rootConfig;
   }
 
-  /** 定位本地规则目录:优先用户数据目录(更新规则按钮写入的最新数据),其次应用内置(随包分发);都找不到返回 null(回退远程规则) */
-  private static locateRulesDir(): string | null {
+  /** 取启用中且域名/IP 均合法的 Hosts 记录(生成 DNS 规则与直连路由规则共用) */
+  public static validHostsRecords(dns: DnsConfig): { domain: string; ip: string }[] {
+    const out: { domain: string; ip: string }[] = [];
+    for (const h of dns.hosts || []) {
+      if (!h || !h.enabled) continue;
+      const domain = String(h.domain || '').trim().toLowerCase().replace(/\.$/, '');
+      const ip = String(h.ip || '').trim().replace(/^\[|\]$/g, '');
+      if (isValidDomain(domain) && isValidIpLiteral(ip)) out.push({ domain, ip });
+    }
+    return out;
+  }
+
+  /** 域名后缀归一化:去空白/起始句点/重复,过滤明显非法项 */
+  public static normalizeDomainSuffixes(list?: string[]): string[] {
+    if (!Array.isArray(list)) return [];
+    const out: string[] = [];
+    for (const raw of list) {
+      const s = String(raw || '')
+        .trim()
+        .toLowerCase()
+        .replace(/^\.+/, '')
+        .replace(/\.$/, '');
+      if (!s || /[^a-z0-9.*-]/.test(s)) continue;
+      if (!out.includes(s)) out.push(s);
+    }
+    return out;
+  }
+
+  /** CIDR 归一化:接受 a.b.c.d/n 或裸 IP(补 /32);过滤广播/组播/非法项 */
+  public static normalizeCidrs(list?: string[]): string[] {
+    if (!Array.isArray(list)) return [];
+    const out: string[] = [];
+    for (const raw of list) {
+      const s = String(raw || '').trim();
+      if (!s) continue;
+      let cidr = s;
+      if (!s.includes('/')) {
+        if (!isValidIpLiteral(s)) continue;
+        cidr = s.includes(':') ? `${s}/128` : `${s}/32`;
+      } else {
+        const [ip, bitsStr] = s.split('/');
+        if (!isValidIpLiteral(ip) || !/^\d{1,3}$/.test(bitsStr)) continue;
+      }
+      if (!out.includes(cidr)) out.push(cidr);
+    }
+    return out;
+  }
+
+  /** 定位本地规则目录:优先用户数据目录(更新规则按钮写入的最新数据),其次应用内置(随包分发);都找不到返回 null(回退远程规则) */  private static locateRulesDir(): string | null {
     const dataRules = process.env.BLUEWING_DATA_DIR
       ? path.join(process.env.BLUEWING_DATA_DIR, 'rules')
       : '';
@@ -486,16 +640,7 @@ export class ConfigGenerator {
   private static buildHostsDnsRules(dns: DnsConfig): any[] {
     // domain(lowercase) -> answer 记录数组;后写入的同 IP 版本覆盖先前的
     const grouped = new Map<string, string[]>();
-    for (const h of dns.hosts || []) {
-      if (!h || !h.enabled) continue;
-      const domain = String(h.domain || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\.$/, '');
-      const ip = String(h.ip || '')
-        .trim()
-        .replace(/^\[|\]$/g, '');
-      if (!domain || !isValidDomain(domain) || !isValidIpLiteral(ip)) continue;
+    for (const { domain, ip } of ConfigGenerator.validHostsRecords(dns)) {
       const type = ip.includes(':') ? 'AAAA' : 'A';
       const rr = `${domain}. 60 IN ${type} ${ip}`;
       const list = grouped.get(domain) || [];

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {Plus,
   RefreshCw,
@@ -25,6 +26,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
   onRefreshNodes,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
+  const requestClose = () => { setIsAdding(false); };
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   // 按钮 disabled 依赖重渲染生效,快速双击仍会并发触发两次更新并弹重复 toast,用 ref 同步挡住
@@ -135,7 +137,10 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {subscriptions.map((sub) => {
             const isUpdating = updatingId === sub.id;
-            return (
+            const requestClose = () => {
+    // 关闭动画经 ModalShell(useModalExit)后执行以下真实关闭
+  };
+  return (
               <div
                 key={sub.id}
                 className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between space-y-4"
@@ -275,14 +280,14 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
       {/* Add / Edit Subscription Modal */}
       {isAdding && (
         <Portal>
-        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {editingSub ? '编辑订阅' : '添加新订阅'}
               </h3>
               <button
-                onClick={() => setIsAdding(false)}
+                onClick={requestClose}
                 className="text-slate-400 hover:text-slate-600 p-1"
               >
                 <X className="w-4 h-4" />
@@ -351,7 +356,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
               <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setIsAdding(false)}
+                  onClick={requestClose}
                   className="px-4 py-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   取消
@@ -365,7 +370,7 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
               </div>
             </form>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
     </div>

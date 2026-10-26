@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { toast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
@@ -105,6 +106,7 @@ export const Nodes: React.FC<NodesProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
+  const requestClose = () => { setShowImportModal(false); setImportText(''); };
   const [isPinging, setIsPinging] = useState(false);
   const [pingingNodeIds, setPingingNodeIds] = useState<Set<string>>(new Set());
   const [copiedNodeId, setCopiedNodeId] = useState<string | null>(null);
@@ -513,7 +515,11 @@ export const Nodes: React.FC<NodesProps> = ({
             const isTimeout = node.ping === -1;
             const region = detectRegion(node.name, node.server);
 
-            return (
+            const requestClose = () => {
+    // 关闭动画经 ModalShell(useModalExit)后执行以下真实关闭
+const requestClose = () => { setShowImportModal(false); setImportText(''); };
+  };
+  return (
               <div
                 key={node.id}
                 onClick={() => onSelectNode(node.id)}
@@ -730,8 +736,8 @@ export const Nodes: React.FC<NodesProps> = ({
       {/* Import Links Modal */}
       {showImportModal && (
         <Portal>
-        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
               批量导入节点链接
             </h3>
@@ -747,7 +753,7 @@ export const Nodes: React.FC<NodesProps> = ({
             />
             <div className="flex items-center justify-end space-x-3 pt-2">
               <button
-                onClick={() => setShowImportModal(false)}
+                onClick={requestClose}
                 className="px-4 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 取消
@@ -760,7 +766,7 @@ export const Nodes: React.FC<NodesProps> = ({
               </button>
             </div>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
 

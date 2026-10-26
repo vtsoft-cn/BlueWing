@@ -384,7 +384,7 @@ describe('ConfigGenerator', () => {
 
     const singBoxExe = path.resolve(__dirname, '../../bin/sing-box.exe');
     try {
-      const { stdout, stderr } = await execFileAsync(singBoxExe, ['check', '-c', tempConfigPath]);
+      const { stdout, stderr } = await execFileAsync(singBoxExe, ['check', '-c', tempConfigPath], { env: { ...process.env, ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true' } });
       assert.ok(true, 'sing-box check succeeded without error');
     } finally {
       if (fs.existsSync(tempConfigPath)) {
@@ -446,7 +446,7 @@ describe('ConfigGenerator', () => {
 
     const singBoxExe = path.resolve(__dirname, '../../bin/sing-box.exe');
     try {
-      await execFileAsync(singBoxExe, ['check', '-c', tempConfigPath]);
+      await execFileAsync(singBoxExe, ['check', '-c', tempConfigPath], { env: { ...process.env, ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true' } });
       assert.ok(true, 'sing-box check succeeded for hosts config');
     } finally {
       if (fs.existsSync(tempConfigPath)) {

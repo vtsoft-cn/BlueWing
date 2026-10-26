@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, ArrowDown, ArrowUpToLine} from 'lucide-react';
 import { RouteRule, AppSettings, ProxyNode } from '../../types';
@@ -21,6 +22,11 @@ export const Routing: React.FC<RoutingProps> = ({
   nodes,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
+  // 关闭动画经 ModalShell(useModalExit)后执行真实关闭
+  const requestClose = () => {
+    setIsAdding(false);
+    setEditingRule(null);
+  };
   const [editingRule, setEditingRule] = useState<RouteRule | null>(null);
   const [isUpdatingRuleSets, setIsUpdatingRuleSets] = useState(false);
   const [formData, setFormData] = useState<Partial<RouteRule>>({
@@ -244,7 +250,7 @@ export const Routing: React.FC<RoutingProps> = ({
             const isBlock = rule.outbound === 'block';
             const isDefault = isDefaultRule(rule.id);
 
-            return (
+  return (
               <div
                 key={rule.id}
                 className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between gap-3"
@@ -349,17 +355,14 @@ export const Routing: React.FC<RoutingProps> = ({
       {/* Add Rule Modal */}
       {isAdding && (
         <Portal>
-        <div className="no-drag fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {editingRule ? '编辑分流规则' : '添加自定义分流规则'}
               </h3>
               <button
-                onClick={() => {
-                  setIsAdding(false);
-                  setEditingRule(null);
-                }}
+                onClick={requestClose}
                 className="text-slate-400 hover:text-slate-600 p-1"
               >
                 <X className="w-4 h-4" />
@@ -444,9 +447,10 @@ export const Routing: React.FC<RoutingProps> = ({
               </div>
             </form>
           </div>
-        </div>
+    </ModalShell>
         </Portal>
       )}
     </div>
   );
 };
+
