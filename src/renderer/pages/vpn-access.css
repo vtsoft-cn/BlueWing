@@ -71,14 +71,15 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: 34px;
   border: 1px solid var(--vpn-border);
   background: var(--vpn-bg);
   color: var(--vpn-text);
-  border-radius: 10px;
-  padding: 9px 15px;
+  border-radius: 8px;
+  padding: 8px 16px;
   font-size: 12px;
-  font-weight: 550;
+  line-height: 16px;
+  font-weight: 500;
   white-space: nowrap;
   transition:
     background-color 0.15s,
@@ -99,7 +100,7 @@
   border-color: #1d4ed8;
 }
 .vpn-button.compact {
-  min-height: 36px;
+  min-height: 30px;
   padding: 6px 12px;
 }
 .vpn-button.danger {
@@ -117,11 +118,11 @@
   color: #fca5a5;
 }
 .vpn-icon-button {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--vpn-muted);
   flex-shrink: 0;
 }
@@ -207,9 +208,9 @@
   align-items: center;
   gap: 8px;
   border: 1px solid var(--vpn-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--vpn-bg);
-  padding: 9px 11px;
+  padding: 8px 11px;
   color: var(--vpn-muted);
   margin-bottom: 12px;
 }
@@ -218,6 +219,7 @@
   width: 100%;
   background: transparent;
   font-size: 12px;
+  line-height: 16px;
   outline: none;
   color: var(--vpn-text);
 }
@@ -528,13 +530,15 @@
 .vpn-input,
 .vpn-password-input {
   border: 1px solid var(--vpn-border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--vpn-bg);
   width: 100%;
   color: var(--vpn-text);
-  min-height: 42px;
-  padding: 10px 12px;
-  font-size: 13px;
+  /* 对齐全应用控件尺寸:text-xs 行高 16px + py-2 → 34px(与其它页面输入框一致) */
+  min-height: 34px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 16px;
   outline: none;
 }
 .vpn-input::placeholder,
@@ -609,8 +613,8 @@ textarea.vpn-input {
   gap: 4px;
 }
 .vpn-password-input button {
-  width: 42px;
-  height: 40px;
+  width: 36px;
+  height: 32px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -1066,7 +1070,7 @@ textarea.vpn-input {
   position: relative;
 }
 .vpn-editor-password .vpn-input {
-  padding-right: 44px;
+  padding-right: 40px;
 }
 .vpn-editor-password .vpn-icon-button {
   position: absolute;
