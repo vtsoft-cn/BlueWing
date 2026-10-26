@@ -13,8 +13,6 @@ interface ModalShellProps {
   children: React.ReactNode;
   /** 透传到蒙版的额外类(vpn-modal-backdrop 等定制皮肤) */
   overlayClassName?: string;
-  /** 点击蒙版空白处是否关闭(默认 true) */
-  closeOnBackdrop?: boolean;
   /** 确认框等需要在拖动后忽略点击关闭的场景:拖动观察器由外部处理时置 false */
   z?: number;
 }
@@ -42,13 +40,13 @@ export const ModalCloseX: React.FC<{
 /**
  * 弹窗壳:统一入场(overlay-enter/pop-enter)与收场(经 useModalExit 挂
  * overlay-exit/pop-exit 后延时卸载)动画,并内置蒙版拖动窗口(与页头同一 IPC 机制)。
+ * 蒙版【禁止点击关闭】——关闭只能走 X/取消/Esc 等显式路径(经 requestClose 才有收场动画)。
  * 面板请给直接子元素加 pop-enter(收场时由本壳切换为 pop-exit)。
  */
 export const ModalShell: React.FC<ModalShellProps> = ({
   onClose,
   children,
   overlayClassName = 'bg-black/60',
-  closeOnBackdrop = true,
   z = 200,
 }) => {
   const { exiting, requestClose } = useModalExit(onClose);
@@ -69,20 +67,6 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       onPointerUp={() => window.electronAPI?.window.endDrag()}
       onPointerCancel={() => window.electronAPI?.window.endDrag()}
       onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
-      onClick={(e) => {
-        if (!closeOnBackdrop || e.target !== e.currentTarget) return;
-        // 蒙版拖动窗口后松手不当作点击关闭
-        if ((e.currentTarget as HTMLElement).dataset.dragged === '1') {
-          (e.currentTarget as HTMLElement).dataset.dragged = '';
-          return;
-        }
-        requestClose();
-      }}
-      onPointerMove={(e) => {
-        if (e.buttons & 1 && e.target === e.currentTarget) {
-          (e.currentTarget as HTMLElement).dataset.dragged = '1';
-        }
-      }}
     >
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return child;

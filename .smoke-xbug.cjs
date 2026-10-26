@@ -78,19 +78,18 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
   })()`);
   console.log('X 坐标与 elementFromPoint:', JSON.stringify(rect));
   if (rect) {
+    // 策略:蒙版点击禁止关闭 → 点击蒙版后弹窗必须仍在
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 30, y: 400, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 30, y: 400, button: 'left', clickCount: 1 });
+    await sleep(500);
+    const afterMask = await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('手动添加代理节点'))`);
+    console.log('坐标点击蒙版后弹窗仍在(策略要求 true):', afterMask);
+    // 坐标级真实点击 X → 必须关闭
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
     await sleep(500);
-    const afterRealClick = await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('手动添加代理节点'))`);
-    console.log('坐标点击 X 后弹窗仍在:', afterRealClick);
-    if (afterRealClick) {
-      // 蒙版点击对照
-      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 30, y: 400, button: 'left', clickCount: 1 });
-      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 30, y: 400, button: 'left', clickCount: 1 });
-      await sleep(500);
-      const afterMask = await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('手动添加代理节点'))`);
-      console.log('坐标点击蒙版后弹窗仍在:', afterMask);
-    }
+    const afterX = await ev(`!![...document.querySelectorAll('h3')].find(h=>h.textContent.includes('手动添加代理节点'))`);
+    console.log('坐标点击 X 后弹窗仍在(应 false):', afterX);
   }
 
   // 引擎账号编辑弹窗(VpnProfileEditorModal)同样验证 X

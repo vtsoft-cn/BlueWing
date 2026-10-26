@@ -27,6 +27,7 @@ import { vpnProviderList, vpnProviders } from '../vpn/providers';
 import { Portal } from './Portal';
 import { Select } from './Select';
 import { toast } from './Toast';
+import { useModalExit } from '../hooks/useModalExit';
 
 const lines = (value: string) =>
   value
@@ -106,11 +107,15 @@ export function VpnProfileEditor({
     profile.gateway.port === form.gateway.port;
   const hasSavedPassword = passwordSaved && savedGateway && form.rememberPassword &&
     profile.username === form.username && profile.authMethod === form.authMethod && profile.loginDomain === form.loginDomain;
+  // 收场动画:无未保存修改直接动画关闭;有修改先就地确认(编辑器保持可见,不播动画)
+  const { exiting, requestClose: animatedClose } = useModalExit(onClose);
   const close = () => {
-    if (!busy) {
-      if (dirty && !readOnly) setConfirmation('discard');
-      else onClose();
+    if (busy) return;
+    if (dirty && !readOnly) {
+      setConfirmation('discard');
+      return;
     }
+    animatedClose();
   };
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -244,14 +249,21 @@ export function VpnProfileEditor({
   return (
     <Portal>
       <div
-        className="vpn-modal-backdrop no-drag"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) close();
+        className={`vpn-modal-backdrop no-drag ${exiting ? 'overlay-exit' : 'overlay-enter'}`}
+        onPointerDown={(e) => {
+          if (e.button !== 0 || e.target !== e.currentTarget) return;
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {}
+          window.electronAPI?.window.beginDrag();
         }}
+        onPointerUp={() => window.electronAPI?.window.endDrag()}
+        onPointerCancel={() => window.electronAPI?.window.endDrag()}
+        onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
       >
         <div
           ref={root}
-          className="vpn-surface vpn-editor"
+          className={`vpn-surface vpn-editor ${exiting ? 'pop-exit' : 'pop-enter'}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="vpn-editor-title"
@@ -841,12 +853,13 @@ export function VpnProfileEditor({
                       disabled={!!busy}
                       onClick={() =>
                         confirmation === 'discard'
-                          ? onClose()
+                          ? animatedClose()
                           : run('delete', async () => {
                               await window.electronAPI.corporateVpn.remove(
                                 profile.id,
                               );
                               await onRemoved();
+                              animatedClose();
                             })
                       }
                     >

@@ -46,6 +46,7 @@ import {
 } from '../components/VpnProfileEditor';
 import { Portal } from '../components/Portal';
 import { ModalCloseX } from '../components/ModalShell';
+import { useModalExit } from '../hooks/useModalExit';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 import './vpn-access.css';
@@ -137,6 +138,10 @@ export const VpnAccess: React.FC<{
   const [actionError, setActionError] = useState('');
   const [detailTab, setDetailTab] = useState<'resources' | 'help'>('resources');
   const [addPickerOpen, setAddPickerOpen] = useState(false);
+  // 类型弹层收场动画
+  const { exiting: pickerExiting, requestClose: closePicker } = useModalExit(
+    () => setAddPickerOpen(false),
+  );
   // ---- 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…,与原生协议并列在同一列表) ----
   const [engineProfiles, setEngineProfiles] = useState<EngineVpnProfile[]>([]);
   const [engineRuntime, setEngineRuntime] = useState<VpnRuntimeInfo | null>(null);
@@ -1154,11 +1159,23 @@ export const VpnAccess: React.FC<{
       )}
       {addPickerOpen && (
         <Portal>
-          <div className="vpn-modal-backdrop no-drag" onClick={(e) => { if (e.target === e.currentTarget) setAddPickerOpen(false); }}>
-            <div className="vpn-surface" role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
+          <div
+            className={`vpn-modal-backdrop no-drag ${pickerExiting ? 'overlay-exit' : 'overlay-enter'}`}
+            onPointerDown={(e) => {
+              if (e.button !== 0 || e.target !== e.currentTarget) return;
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {}
+              window.electronAPI?.window.beginDrag();
+            }}
+            onPointerUp={() => window.electronAPI?.window.endDrag()}
+            onPointerCancel={() => window.electronAPI?.window.endDrag()}
+            onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
+          >
+            <div className={`vpn-surface ${pickerExiting ? 'pop-exit' : 'pop-enter'}`} role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <strong style={{ fontSize: 14 }}>选择接入类型</strong>
-                <ModalCloseX onClick={() => setAddPickerOpen(false)} />
+                <ModalCloseX onClick={closePicker} />
               </div>
               <div className="vpn-add-type-list">
                 {vpnProviderList.map((provider) => (
@@ -1226,6 +1243,26 @@ export const VpnAccessStatus: React.FC<{
   const { state } = snapshot;
   const [challengeOpen, setChallengeOpen] = useState(true);
   const challengeRoot = useRef<HTMLDivElement>(null);
+  // 挑战弹窗收场动画:后端挑战消失时保留最后内容 200ms 播 overlay-exit/pop-exit
+  const [challengeView, setChallengeView] = useState(state.challenge);
+  const [challengeExiting, setChallengeExiting] = useState(false);
+  const challengeSeenRef = useRef(false);
+  useEffect(() => {
+    if (state.challenge) {
+      challengeSeenRef.current = true;
+      setChallengeView(state.challenge);
+      setChallengeExiting(false);
+      return;
+    }
+    if (!challengeSeenRef.current) return;
+    challengeSeenRef.current = false;
+    setChallengeExiting(true);
+    const t = setTimeout(() => {
+      setChallengeView(undefined);
+      setChallengeExiting(false);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [state.challenge]);
   useEffect(() => {
     setChallengeOpen(true);
   }, [state.challenge?.profileId, state.challenge?.generation, state.challenge?.id]);
@@ -1271,11 +1308,24 @@ export const VpnAccessStatus: React.FC<{
           <ArrowRight size={13} />
         </button>
       )}
-      {state.challenge && (
+      {challengeView && (
         <Portal>
-          <div className="vpn-modal-backdrop vpn-challenge-backdrop no-drag" style={{ display: challengeOpen ? undefined : 'none' }}>
+          <div
+            className={`vpn-modal-backdrop vpn-challenge-backdrop no-drag ${challengeExiting ? 'overlay-exit' : 'overlay-enter'}`}
+            style={{ display: challengeOpen || challengeExiting ? undefined : 'none' }}
+            onPointerDown={(e) => {
+              if (e.button !== 0 || e.target !== e.currentTarget) return;
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {}
+              window.electronAPI?.window.beginDrag();
+            }}
+            onPointerUp={() => window.electronAPI?.window.endDrag()}
+            onPointerCancel={() => window.electronAPI?.window.endDrag()}
+            onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
+          >
             <div
-              className="vpn-surface vpn-auth-dialog"
+              className={`vpn-surface vpn-auth-dialog ${challengeExiting ? 'pop-exit' : 'pop-enter'}`}
               ref={challengeRoot}
               role="dialog"
               aria-modal="true"
@@ -1287,12 +1337,12 @@ export const VpnAccessStatus: React.FC<{
                 <button type="button" className="vpn-icon-button" aria-label="收起身份验证" title="稍后继续填写" onClick={() => setChallengeOpen(false)}><X size={17} /></button>
               </div>
               <ChallengeForm
-                key={`${state.challenge.profileId}:${state.challenge.generation}:${state.challenge.id}`}
-                challenge={state.challenge}
+                key={`${challengeView.profileId}:${challengeView.generation}:${challengeView.id}`}
+                challenge={challengeView}
                 onDismiss={() => setChallengeOpen(false)}
                 onSubmit={(value) =>
                   window.electronAPI.corporateVpn
-                    .respond(state.challenge!.id, state.challenge!.generation, value)
+                    .respond(challengeView.id, challengeView.generation, value)
                 }
               />
             </div>
