@@ -719,6 +719,7 @@ export const VpnAccess: React.FC<{
                           >
                             <input
                               type="checkbox"
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-0"
                               aria-label="加密记住密码"
                               checked={selected.profile.rememberPassword}
                               disabled={busy || !snapshot.encryptionAvailable}

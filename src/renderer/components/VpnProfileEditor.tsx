@@ -25,6 +25,7 @@ import {
 } from '../../types/corporateVpn';
 import { vpnProviderList, vpnProviders } from '../vpn/providers';
 import { Portal } from './Portal';
+import { Select } from './Select';
 import { toast } from './Toast';
 
 const lines = (value: string) =>
@@ -480,34 +481,26 @@ export function VpnProfileEditor({
                       {!!methods.length && (
                         <label className="vpn-field">
                           <span>网关认证方式</span>
-                          <select
-                            className="vpn-input"
-                            aria-label="网关认证方式"
+                          <Select
+                            className="w-full"
+                            ariaLabel="网关认证方式"
                             value={form.loginDomain + '|' + form.authMethod}
-                            onChange={(e) => {
-                              const [loginDomain, authMethod] =
-                                e.target.value.split('|');
+                            onChange={(v) => {
+                              const [loginDomain, authMethod] = v.split('|');
                               setForm({ ...form, loginDomain, authMethod });
                             }}
-                          >
-                            <option
-                              value={form.loginDomain + '|' + form.authMethod}
-                            >
-                              当前：{form.loginDomain || '未指定登录域'}
-                            </option>
-                            {methods.map((method, i) => (
-                              <option
-                                key={i}
-                                disabled={!method.supported}
-                                value={
-                                  method.loginDomain + '|' + method.authType
-                                }
-                              >
-                                {method.authName} · {method.loginDomain}
-                                {!method.supported && '（暂不支持）'}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              {
+                                value: form.loginDomain + '|' + form.authMethod,
+                                label: `当前：${form.loginDomain || '未指定登录域'}`,
+                              },
+                              ...methods.map((method) => ({
+                                value: method.loginDomain + '|' + method.authType,
+                                label: `${method.authName} · ${method.loginDomain}${method.supported ? '' : '（暂不支持）'}`,
+                                disabled: !method.supported,
+                              })),
+                            ]}
+                          />
                         </label>
                       )}
                       <div className="vpn-two-columns">
@@ -525,19 +518,16 @@ export function VpnProfileEditor({
                         </label>
                         <label className="vpn-field">
                           <span>认证方式</span>
-                          <select
-                            className="vpn-input"
-                            aria-label="认证方式"
+                          <Select
+                            className="w-full"
+                            ariaLabel="认证方式"
                             value={form.authMethod}
-                            onChange={(e) =>
-                              setForm({ ...form, authMethod: e.target.value })
-                            }
-                          >
-                            <option value="auth/psw">账号密码</option>
-                            <option value="auth/smsCheckCode">
-                              短信验证码
-                            </option>
-                          </select>
+                            onChange={(v) => setForm({ ...form, authMethod: v })}
+                            options={[
+                              { value: 'auth/psw', label: '账号密码' },
+                              { value: 'auth/smsCheckCode', label: '短信验证码' },
+                            ]}
+                          />
                         </label>
                       </div>
                     </div>
@@ -576,6 +566,7 @@ export function VpnProfileEditor({
                     <label>
                       <input
                         type="checkbox"
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-0"
                         checked={form.rememberPassword}
                         disabled={!encryptionAvailable}
                         onChange={(e) => {
@@ -592,6 +583,7 @@ export function VpnProfileEditor({
                       <label>
                         <input
                           type="checkbox"
+                          className="w-4 h-4 rounded text-blue-600 focus:ring-0"
                           checked={form.rememberSession}
                           disabled={!encryptionAvailable}
                           onChange={(e) =>
@@ -699,25 +691,24 @@ export function VpnProfileEditor({
                   </div>
                   <label className="vpn-field">
                     <span>证书处理方式</span>
-                    <select
-                      className="vpn-input"
-                      aria-label="证书处理方式"
+                    <Select
+                      className="w-full"
+                      ariaLabel="证书处理方式"
                       value={form.tls.trustMode || 'auto'}
-                      onChange={(event) =>
+                      onChange={(v) =>
                         setForm({
                           ...form,
                           tls: {
                             ...form.tls,
-                            trustMode: event.target.value as 'auto' | 'strict',
+                            trustMode: v as 'auto' | 'strict',
                           },
                         })
                       }
-                    >
-                      <option value="auto">自动处理（首次记住网关证书）</option>
-                      <option value="strict">
-                        严格校验（系统 CA 或已固定指纹）
-                      </option>
-                    </select>
+                      options={[
+                        { value: 'auto', label: '自动处理（首次记住网关证书）' },
+                        { value: 'strict', label: '严格校验（系统 CA 或已固定指纹）' },
+                      ]}
+                    />
                     <small>
                       优先使用系统信任链；首次遇到未受信任证书时自动绑定指纹。已记录的指纹变化时会停止连接，自定义
                       CA 按配置校验。

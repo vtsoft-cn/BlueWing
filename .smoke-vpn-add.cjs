@@ -121,13 +121,33 @@ async function main() {
     return evalJs(`textExists('网关地址') || textExists('认证方式') || textExists('保存')`);
   });
 
+  // 7. 编辑器内自定义下拉:切到高级选项,点开「证书处理方式」,断言 Portal 面板
+  await step('证书处理方式为自定义下拉', async () => {
+    const shot1 = await send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync(path.join(process.env.TEMP, 'bw-smoke-editor.png'), Buffer.from(shot1.data, 'base64'));
+    await evalJs(`document.getElementById('vpn-tab-advanced')?.click()`);
+    await evalJs(`__sleep(400)`);
+    const opened = await evalJs(`(() => { const b = document.querySelector('button[aria-label="证书处理方式"]'); if (!b) return false; b.click(); return true; })()`);
+    await evalJs(`__sleep(400)`);
+    const expanded = await evalJs(`document.querySelector('button[aria-label="证书处理方式"]')?.getAttribute('aria-expanded') === 'true'`);
+    const panelItems = await evalJs(`[...document.querySelectorAll('button')].filter((b) => b.textContent.includes('严格校验（系统 CA 或已固定指纹）')).length`);
+    const shot2 = await send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync(path.join(process.env.TEMP, 'bw-smoke-editor-select.png'), Buffer.from(shot2.data, 'base64'));
+    return opened && expanded && panelItems >= 1;
+  });
+
   console.log('=== SMOKE RESULTS ===');
   for (const [st, name, extra] of results) console.log(st, name, extra);
   console.log('ALL PASS');
 }
 
 main()
-  .catch((e) => { console.error('SMOKE ERROR:', e.message); process.exitCode = 1; })
+  .catch((e) => {
+    console.log('=== SMOKE RESULTS (partial) ===');
+    for (const [st, name, extra] of results) console.log(st, name, extra);
+    console.error('SMOKE ERROR:', e.message);
+    process.exitCode = 1;
+  })
   .finally(() => {
     try { execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' }); } catch {}
     setTimeout(() => process.exit(process.exitCode || 0), 800);
