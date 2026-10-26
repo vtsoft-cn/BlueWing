@@ -48,7 +48,7 @@ export const ConfirmDialogHost: React.FC = () => {
 
   return (
     <div
-      className="no-drag fixed inset-0 z-[210] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overlay-enter"
+      className="no-drag fixed inset-0 z-[210] bg-black/60 flex items-center justify-center p-4 overlay-enter"
       onClick={() => {
         // 蒙版拖动窗口后松手不算"点击关闭"
         if (maskDraggedRef.current) {

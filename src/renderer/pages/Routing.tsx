@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, ArrowDown, ArrowUpToLine} from 'lucide-react';
 import { RouteRule, AppSettings, ProxyNode } from '../../types';
@@ -355,18 +355,13 @@ export const Routing: React.FC<RoutingProps> = ({
       {/* Add Rule Modal */}
       {isAdding && (
         <Portal>
-        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+        <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={requestClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {editingRule ? '编辑分流规则' : '添加自定义分流规则'}
               </h3>
-              <button
-                onClick={requestClose}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <ModalCloseX onClick={requestClose} />
             </div>
 
             <form onSubmit={handleSaveRule} className="space-y-3 text-xs">

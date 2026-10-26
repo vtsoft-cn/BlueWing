@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Select } from '../components/Select';
@@ -15,7 +15,6 @@ import {
   Copy,
   RefreshCw,
   AlertTriangle,
-  X,
   Sparkles,
 } from 'lucide-react';
 import { AppSettings } from '../../types';
@@ -585,7 +584,7 @@ export const Settings: React.FC<SettingsProps> = ({
       {/* Inspect Live Config Modal */}
       {showConfigModal && (
         <Portal>
-        <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
+        <ModalShell overlayClassName="bg-black/50" onClose={requestClose}>
       <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -603,13 +602,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   {copiedConfig ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedConfig ? '已复制' : '复制 JSON'}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={requestClose}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <ModalCloseX onClick={requestClose} />
               </div>
             </div>
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 import { useModalExit } from '../hooks/useModalExit';
 import { createContext, useContext } from 'react';
 
@@ -19,6 +20,26 @@ interface ModalShellProps {
 }
 
 /**
+ * 弹窗头部关闭钮:32×32 图标钮,样式对齐 VPN 接入编辑器的 vpn-icon-button
+ * (各页面弹窗统一用这个,不要再写各自的裸 X)。
+ */
+export const ModalCloseX: React.FC<{
+  onClick: () => void;
+  label?: string;
+  autoFocus?: boolean;
+}> = ({ onClick, label = '关闭', autoFocus }) => (
+  <button
+    type="button"
+    autoFocus={autoFocus}
+    aria-label={label}
+    onClick={onClick}
+    className="w-8 h-8 shrink-0 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800 dark:hover:text-blue-400 transition-colors"
+  >
+    <X size={18} />
+  </button>
+);
+
+/**
  * 弹窗壳:统一入场(overlay-enter/pop-enter)与收场(经 useModalExit 挂
  * overlay-exit/pop-exit 后延时卸载)动画,并内置蒙版拖动窗口(与页头同一 IPC 机制)。
  * 面板请给直接子元素加 pop-enter(收场时由本壳切换为 pop-exit)。
@@ -26,7 +47,7 @@ interface ModalShellProps {
 export const ModalShell: React.FC<ModalShellProps> = ({
   onClose,
   children,
-  overlayClassName = 'bg-black/60 backdrop-blur-sm',
+  overlayClassName = 'bg-black/60',
   closeOnBackdrop = true,
   z = 200,
 }) => {

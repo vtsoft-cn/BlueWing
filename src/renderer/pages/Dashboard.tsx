@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {
   Power,
@@ -402,7 +402,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Node Selector Drawer Modal */}
       {showNodeSelector && (
         <Portal>
-        <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
+        <ModalShell overlayClassName="bg-black/50" onClose={requestClose}>
           <div role="dialog" aria-modal="true" aria-label="选择网络出口" className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[80vh] flex flex-col" onKeyDown={e => {
             if (e.key !== 'Tab') return;
             const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
@@ -415,13 +415,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <Server className="w-4 h-4 text-blue-500" />
                 <span>选择网络出口</span>
               </h3>
-              <button
-                autoFocus
-                onClick={requestClose}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-2 py-1"
-              >
-                关闭
-              </button>
+              <ModalCloseX onClick={requestClose} autoFocus />
             </div>
 
             <div className="overflow-y-auto space-y-2 flex-1 pr-1">

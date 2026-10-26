@@ -45,7 +45,7 @@ import {
   VpnProfileEditor,
 } from '../components/VpnProfileEditor';
 import { Portal } from '../components/Portal';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX } from '../components/ModalShell';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 import './vpn-access.css';
@@ -1158,7 +1158,7 @@ export const VpnAccess: React.FC<{
             <div className="vpn-surface" role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <strong style={{ fontSize: 14 }}>选择接入类型</strong>
-                <button className="vpn-button compact" onClick={() => setAddPickerOpen(false)}>关闭</button>
+                <ModalCloseX onClick={() => setAddPickerOpen(false)} />
               </div>
               <div className="vpn-add-type-list">
                 {vpnProviderList.map((provider) => (

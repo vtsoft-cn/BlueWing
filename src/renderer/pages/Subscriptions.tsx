@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import {Plus,
   RefreshCw,
@@ -280,18 +280,13 @@ export const Subscriptions: React.FC<SubscriptionsProps> = ({
       {/* Add / Edit Subscription Modal */}
       {isAdding && (
         <Portal>
-        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+        <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={requestClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {editingSub ? '编辑订阅' : '添加新订阅'}
               </h3>
-              <button
-                onClick={requestClose}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <ModalCloseX onClick={requestClose} />
             </div>
 
             <form onSubmit={handleSaveSub} className="space-y-3 text-xs">

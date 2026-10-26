@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { toast } from '../components/Toast';
 import {
-  X,
   Play,
   Square,
   Zap,
@@ -37,7 +36,7 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
   onClose,
 }) => (
   <Portal>
-    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
+    <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={onClose}>
       <SingleNodeSpeedPanel
         node={node}
         isActive={isActive}
@@ -260,12 +259,7 @@ const SingleNodeSpeedPanel: React.FC<SingleNodeSpeedModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={requestClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <ModalCloseX onClick={requestClose} />
         </div>
 
         {/* Node Connection Details Bar */}

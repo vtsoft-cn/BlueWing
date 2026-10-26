@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
 import { confirmDialog } from '../components/ConfirmDialog';
 import {HardDrive,
@@ -791,7 +791,7 @@ export const Backup: React.FC<BackupProps> = ({
       {/* 4. Dry-Run Import Preview Modal */}
       {previewModalOpen && previewResult && (
         <Portal>
-        <ModalShell overlayClassName="bg-black/50 backdrop-blur-sm" onClose={requestClose}>
+        <ModalShell overlayClassName="bg-black/50" onClose={requestClose}>
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
@@ -818,12 +818,7 @@ export const Backup: React.FC<BackupProps> = ({
                   </div>
                 </div>
               </div>
-              <button
-                onClick={requestClose}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <ModalCloseX onClick={requestClose} />
             </div>
 
             {/* Modal Body */}

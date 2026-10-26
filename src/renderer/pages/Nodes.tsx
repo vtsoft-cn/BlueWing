@@ -744,7 +744,7 @@ const requestClose = () => { setShowImportModal(false); setImportText(''); };
       {/* Import Links Modal */}
       {showImportModal && (
         <Portal>
-        <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={requestClose}>
+        <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={requestClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
               批量导入节点链接

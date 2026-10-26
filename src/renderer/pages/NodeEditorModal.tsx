@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
 import { X, Check } from 'lucide-react';
 import { ProxyNode, ProxyType } from '../../types';
@@ -14,7 +14,7 @@ interface NodeEditorModalProps {
 
 export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose }) => (
   <Portal>
-    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
+    <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={onClose}>
       <NodeEditorPanel node={node} onSave={onSave} onClose={onClose} />
     </ModalShell>
   </Portal>
@@ -94,12 +94,7 @@ const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose
           <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
             {node ? '编辑节点配置' : '手动添加代理节点'}
           </h3>
-          <button
-            onClick={requestClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <ModalCloseX onClick={requestClose} />
         </div>
 
         {/* Form Body */}

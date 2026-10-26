@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ModalShell } from '../components/ModalShell';
+import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
 import { X, Check } from 'lucide-react';
 import { VpnProfile, VpnProfileType } from '../../types';
@@ -50,7 +50,7 @@ const inputCls =
 
 export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => (
   <Portal>
-    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
+    <ModalShell overlayClassName="bg-black/60 z-[200]" onClose={onClose}>
       <VpnProfileEditorPanel profile={profile} engines={engines} onSave={onSave} onClose={onClose} />
     </ModalShell>
   </Portal>
@@ -174,12 +174,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, 
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
               {profile?.id ? '编辑 VPN 账号' : '添加 VPN 账号'}
             </h3>
-            <button
-              onClick={requestClose}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <ModalCloseX onClick={requestClose} />
           </div>
 
           {/* Form Body */}
