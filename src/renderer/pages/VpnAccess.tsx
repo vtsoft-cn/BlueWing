@@ -235,15 +235,19 @@ export const VpnAccess: React.FC<{
     selected && !selected.engine && state.profileId === selected.id
       ? state.state
       : 'idle';
+  // 列表与空状态按「corporate + 引擎」总数判定,只加引擎类档案也要出现在页面上
+  const totalCount = snapshot.profiles.length + engineProfiles.length;
   useEffect(() => {
-    if (!snapshot.profiles.some((profile) => profile.id === selectedId))
-      setSelectedId(
-        snapshot.profiles.find((profile) => profile.id === state.profileId)
-          ?.id ||
-          snapshot.profiles[0]?.id ||
-          '',
-      );
-  }, [snapshot.profiles, selectedId, state.profileId]);
+    // 选中守卫基于统一列表(含引擎项),否则点选引擎项会被弹回 corporate 项
+    if (profiles.some((profile) => profile.id === selectedId)) return;
+    setSelectedId(
+      profiles.find(
+        (profile) => !profile.engine && profile.id === state.profileId,
+      )?.id ||
+        profiles[0]?.id ||
+        '',
+    );
+  }, [profiles, selectedId, state.profileId]);
   useEffect(() => {
     setPassword('');
     setReveal(false);
@@ -330,7 +334,7 @@ export const VpnAccess: React.FC<{
             <p>指定资源通过 VPN 访问；无需代理节点，也可保持普通公网直连。</p>
           </div>
         </div>
-        {!!snapshot.profiles.length && (
+        {!!totalCount && (
           <button
             className="vpn-button"
             disabled={active || busy}
@@ -403,7 +407,7 @@ export const VpnAccess: React.FC<{
           />
           <h3>正在加载接入配置</h3>
         </div>
-      ) : snapshot.profiles.length === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="vpn-empty-state">
           <div className="vpn-empty-art">
             <Network size={35} />
@@ -439,7 +443,7 @@ export const VpnAccess: React.FC<{
             <div className="vpn-list-heading">
               <h3>接入配置</h3>
               <span>
-                {snapshot.profiles.length.toString().padStart(2, '0')}
+                {totalCount.toString().padStart(2, '0')}
               </span>
             </div>
             <label className="vpn-search">
