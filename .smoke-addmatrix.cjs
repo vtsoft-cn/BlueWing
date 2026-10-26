@@ -59,6 +59,12 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
   })());
   await ev(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='关闭'&&b.offsetParent!==null); b?.click(); })()`);
   await sleep(500);
+  // 回归:关闭一次后再点添加接入,弹层必须可见(曾因 useModalExit 状态残留呈收场隐身态)
+  await clickAdd(); await sleep(500);
+  const reopen = await ev(`(() => { const bd=[...document.querySelectorAll('.vpn-modal-backdrop')].find(b=>b.textContent.includes('选择接入类型')); if(!bd) return 'absent'; return JSON.stringify({ vis: bd.getClientRects().length > 0, opacity: getComputedStyle(bd).opacity, cls: bd.className.includes('overlay-enter') ? 'enter' : bd.className.includes('overlay-exit') ? 'exit' : '?' }); })()`);
+  console.log('关闭后再开 →', reopen);
+  await ev(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='关闭'&&b.offsetParent!==null); b?.click(); })()`);
+  await sleep(500);
   const shot1 = await send('Page.captureScreenshot', { format: 'png' });
   require('fs').writeFileSync(path.join(process.env.TEMP, 'bw-addmatrix-empty.png'), Buffer.from(shot1.data, 'base64'));
   const shot2 = await send('Page.captureScreenshot', { format: 'png' });

@@ -31,13 +31,14 @@ import {
 import {
   VpnChallenge,
   VpnProfile,
+  VpnProtocol,
   VpnState,
   VpnTarget,
 } from '../../types/corporateVpn';
 import { AppSettings } from '../../types';
 import { captchaAnswer } from '../../utils/vpnChallenge';
 import { useVpnSnapshot } from '../vpn/useVpnSnapshot';
-import { VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../../types';
+import { VpnProfile as EngineVpnProfile, VpnProfileType, VpnRuntimeInfo } from '../../types';
 import { VpnProfileEditorModal, TYPE_GROUPS } from './VpnProfileEditorModal';
 import { vpnProviderList, vpnProviders } from '../vpn/providers';
 import {
@@ -138,18 +139,6 @@ export const VpnAccess: React.FC<{
   const [actionError, setActionError] = useState('');
   const [detailTab, setDetailTab] = useState<'resources' | 'help'>('resources');
   const [addPickerOpen, setAddPickerOpen] = useState(false);
-  // 类型弹层收场动画
-  const { exiting: pickerExiting, requestClose: closePicker } = useModalExit(
-    () => setAddPickerOpen(false),
-  );
-  const pickerDrag = useMaskDrag();
-  // 防双击穿透:弹层刚打开的瞬间,物理第二击可能落在与之位置重叠的类型行上,
-  // 直接触发编辑器(视觉上=类型选择被跳过)。打开后 350ms 内忽略行点击。
-  const pickerOpenedAtRef = useRef(0);
-  useEffect(() => {
-    if (addPickerOpen) pickerOpenedAtRef.current = Date.now();
-  }, [addPickerOpen]);
-  const pickerClickGuard = () => Date.now() - pickerOpenedAtRef.current < 350;
   // ---- 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…,与原生协议并列在同一列表) ----
   const [engineProfiles, setEngineProfiles] = useState<EngineVpnProfile[]>([]);
   const [engineRuntime, setEngineRuntime] = useState<VpnRuntimeInfo | null>(null);
@@ -1167,51 +1156,22 @@ export const VpnAccess: React.FC<{
       )}
       {addPickerOpen && (
         <Portal>
-          <div
-            {...pickerDrag}
-            className={`vpn-modal-backdrop no-drag ${modalOverlayClass(pickerExiting)}`}
-          >
-            <div className={`vpn-surface ${modalPopClass(pickerExiting)}`} role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <strong style={{ fontSize: 14 }}>选择接入类型</strong>
-                <ModalCloseX onClick={closePicker} />
-              </div>
-              <div className="vpn-add-type-list">
-                {vpnProviderList.map((provider) => (
-                  <button
-                    key={provider.id}
-                    className="vpn-button"
-                    style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
-                    onClick={() => { if (pickerClickGuard()) return; setAddPickerOpen(false); openEditor({ ...newVpnProfile(), protocol: provider.id }); }}
-                  >
-                    <strong>{provider.name}</strong>
-                    <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{provider.description}</div>
-                  </button>
-                ))}
-                <div className="vpn-add-type-divider" />
-                {TYPE_GROUPS.map((t) => (
-                  <button
-                    key={t.id}
-                    className="vpn-button"
-                    style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
-                    onClick={() => {
-                      if (pickerClickGuard()) return;
-                      setAddPickerOpen(false);
-                      // 空白引擎档案带类型直开编辑器(管理在主列表:连接/编辑/删除)
-                      setEngineEditorFor({
-                        id: '', name: '', server: '', username: '', password: '',
-                        type: t.id, splitTunnel: true, useMfa: false, authUserPass: false,
-                        configText: '', extraRoutes: [], createdAt: Date.now(),
-                      });
-                    }}
-                  >
-                    <strong>{t.label}</strong>
-                    <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{t.hint}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <AddTypePicker
+            onClose={() => setAddPickerOpen(false)}
+            onPickCorporate={(protocol) => {
+              setAddPickerOpen(false);
+              openEditor({ ...newVpnProfile(), protocol });
+            }}
+            onPickEngine={(type) => {
+              setAddPickerOpen(false);
+              // 空白引擎档案带类型直开编辑器(管理在主列表:连接/编辑/删除)
+              setEngineEditorFor({
+                id: '', name: '', server: '', username: '', password: '',
+                type, splitTunnel: true, useMfa: false, authUserPass: false,
+                configText: '', extraRoutes: [], createdAt: Date.now(),
+              });
+            }}
+          />
         </Portal>
       )}
       {engineEditorFor !== undefined && (
@@ -1231,6 +1191,60 @@ export const VpnAccess: React.FC<{
           onClose={() => setEngineEditorFor(undefined)}
         />
       )}
+    </div>
+  );
+};
+
+/** 类型选择弹层:独立组件——useModalExit 的开/关状态随挂载/卸载自然复位。
+ *  若放在常驻页面组件体内,关闭一次后 exiting/closingRef 残留,再次打开会
+ *  以收场隐身终态渲染(弹层在 DOM 里但不可见)。 */
+const AddTypePicker: React.FC<{
+  onClose: () => void;
+  onPickCorporate: (protocol: VpnProtocol) => void;
+  onPickEngine: (type: VpnProfileType) => void;
+}> = ({ onClose, onPickCorporate, onPickEngine }) => {
+  const { exiting, requestClose } = useModalExit(onClose);
+  const maskDrag = useMaskDrag();
+  // 防双击穿透:刚打开 350ms 内忽略类型行点击(第二击可能落在位置重叠的行上)
+  const openedAtRef = useRef(0);
+  if (openedAtRef.current === 0) openedAtRef.current = Date.now();
+  const clickGuard = () => Date.now() - openedAtRef.current < 350;
+  return (
+    <div
+      {...maskDrag}
+      className={`vpn-modal-backdrop no-drag ${modalOverlayClass(exiting)}`}
+    >
+      <div className={`vpn-surface ${modalPopClass(exiting)}`} role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <strong style={{ fontSize: 14 }}>选择接入类型</strong>
+          <ModalCloseX onClick={requestClose} />
+        </div>
+        <div className="vpn-add-type-list">
+          {vpnProviderList.map((provider) => (
+            <button
+              key={provider.id}
+              className="vpn-button"
+              style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+              onClick={() => { if (clickGuard()) return; onPickCorporate(provider.id); }}
+            >
+              <strong>{provider.name}</strong>
+              <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{provider.description}</div>
+            </button>
+          ))}
+          <div className="vpn-add-type-divider" />
+          {TYPE_GROUPS.map((t) => (
+            <button
+              key={t.id}
+              className="vpn-button"
+              style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+              onClick={() => { if (clickGuard()) return; onPickEngine(t.id); }}
+            >
+              <strong>{t.label}</strong>
+              <div style={{ fontSize: 11, color: 'var(--vpn-muted)' }}>{t.hint}</div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
