@@ -12,7 +12,17 @@ interface NodeEditorModalProps {
   onClose: () => void;
 }
 
-export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose }) => {
+export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose }) => (
+  <Portal>
+    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
+      <NodeEditorPanel node={node} onSave={onSave} onClose={onClose} />
+    </ModalShell>
+  </Portal>
+);
+
+// 面板必须是 ModalShell 的真实子组件:useModalClose 的 Context 只提供给 children,
+// 在外层组件里调用拿到的是默认空函数(X/取消点了没反应的根因)
+const NodeEditorPanel: React.FC<NodeEditorModalProps> = ({ node, onSave, onClose }) => {
   const [formData, setFormData] = useState<Partial<ProxyNode>>({
     type: 'vless',
     name: '',
@@ -78,8 +88,6 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
   // 经 ModalShell Context 拿收场关闭;直接调 onClose prop 会跳过动画
   const requestClose = useModalClose();
   return (
-    <Portal>
-    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -372,7 +380,5 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ node, onSave, 
           </div>
         </form>
       </div>
-    </ModalShell>
-    </Portal>
   );
 };

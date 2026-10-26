@@ -35,6 +35,27 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
   onSelectNode,
   onSaveNodePing,
   onClose,
+}) => (
+  <Portal>
+    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
+      <SingleNodeSpeedPanel
+        node={node}
+        isActive={isActive}
+        onSelectNode={onSelectNode}
+        onSaveNodePing={onSaveNodePing}
+        onClose={onClose}
+      />
+    </ModalShell>
+  </Portal>
+);
+
+// 面板必须是 ModalShell 的真实子组件:useModalClose 的 Context 只提供给 children
+const SingleNodeSpeedPanel: React.FC<SingleNodeSpeedModalProps> = ({
+  node,
+  isActive,
+  onSelectNode,
+  onSaveNodePing,
+  onClose,
 }) => {
   const [tcpPing, setTcpPing] = useState<number | null>(node.ping !== undefined ? node.ping : null);
   const [httpLatency, setHttpLatency] = useState<number | null>(null);
@@ -218,8 +239,6 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
   // 经 ModalShell Context 拿收场关闭;直接调 onClose prop 会跳过动画
   const requestClose = useModalClose();
   return (
-    <Portal>
-    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 border border-slate-200/90 dark:border-slate-800/90 shadow-2xl space-y-5 text-slate-900 dark:text-slate-100">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
@@ -529,7 +548,5 @@ export const SingleNodeSpeedModal: React.FC<SingleNodeSpeedModalProps> = ({
           </div>
         </div>
       </div>
-    </ModalShell>
-    </Portal>
   );
 };

@@ -48,7 +48,16 @@ const SOFTETHER_MODE_HINTS: Record<string, string> = {
 const inputCls =
   'w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500';
 
-export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => {
+export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => (
+  <Portal>
+    <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
+      <VpnProfileEditorPanel profile={profile} engines={engines} onSave={onSave} onClose={onClose} />
+    </ModalShell>
+  </Portal>
+);
+
+// 面板必须是 ModalShell 的真实子组件:useModalClose 的 Context 只提供给 children
+const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps> = ({ profile, engines, onSave, onClose }) => {
   const [formData, setFormData] = useState<Partial<VpnProfile>>({
     type: 'ikev2',
     name: '',
@@ -159,8 +168,6 @@ export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ pr
   // 经 ModalShell Context 拿收场关闭;直接调 onClose prop 会跳过动画
   const requestClose = useModalClose();
   return (
-    <Portal>
-      <ModalShell overlayClassName="bg-black/60 backdrop-blur-sm z-[200]" onClose={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh]">
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
@@ -599,7 +606,5 @@ export const VpnProfileEditorModal: React.FC<VpnProfileEditorModalProps> = ({ pr
             </div>
           </form>
         </div>
-    </ModalShell>
-    </Portal>
   );
 };
