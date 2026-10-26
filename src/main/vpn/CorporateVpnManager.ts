@@ -37,6 +37,7 @@ function signature(runtime: VpnRuntime): string {
       dns: r.profile.dnsPort,
       trafficMode: r.profile.trafficMode || 'split',
       customRouting: r.profile.customRouting,
+      autoDiscoverPrivate: r.profile.autoDiscoverPrivate !== false,
     })),
   );
 }
@@ -98,6 +99,7 @@ export class CorporateVpnManager extends EventEmitter {
       },
       encryptionAvailable: this.vault.available(),
       diagnostics: Object.fromEntries(this.profiles.list().map(p => [p.id, this.diagnostics.info(p)])),
+      discoveredTargets: Object.fromEntries(this.profiles.list().map(p => [p.id, this.policy.discovery.targets(p)])),
       passwordSaved: Object.fromEntries(
         this.profiles
           .list()
@@ -161,6 +163,7 @@ export class CorporateVpnManager extends EventEmitter {
         throw new Error('请先断开VPN 接入');
       // Cached target guards remain until an explicit full policy application.
       this.profiles.remove(id);
+      this.policy.discovery.clear(id);
       this.vault.remove(`${id}:`);
       this.policy.prepare(this.profiles.list());
       this.emit('state', this.snapshot().state);
@@ -534,6 +537,16 @@ export class CorporateVpnManager extends EventEmitter {
       return;
     if (e.type === 'diagnostic') {
       if (e.data && typeof e.data === 'object') this.diagnostics.trace(e.profileId!, e.data);
+    } else if (e.type === 'privateRouteObserved') {
+      if (!['connected', 'applying_policy'].includes(this.state.state)) return;
+      try {
+        if (this.policy.learn(e.profileId!, e.data, this.profiles.list())) {
+          this.diagnostics.write(e.profileId!, { event: 'private-route-observed', address: e.data.address, port: e.data.port, outlet: e.data.outlet });
+          this.change({});
+        }
+      } catch (error) {
+        this.diagnostics.write(e.profileId!, { event: 'private-route-cache-error', message: error instanceof Error ? error.message : String(error) });
+      }
     } else if (e.type === 'challenge') {
       const d = e.data;
       if (!['starting', 'authenticating', 'waiting_user'].includes(this.state.state)) return;
@@ -624,6 +637,13 @@ export class CorporateVpnManager extends EventEmitter {
     this.profiles.get(id);
     this.diagnostics.clear(id);
     this.emit('state', this.snapshot().state);
+  }
+  async clearDiscoveredTargets(id: string): Promise<void> {
+    return this.exclusive(() => {
+      if (!['idle', 'failed'].includes(this.state.state)) throw new Error('请先断开 VPN 再清空自动识别记录');
+      this.policy.clearDiscovered(this.profiles.get(id), this.profiles.list());
+      this.change({});
+    });
   }
   private async verifyPolicy(
     host: string,

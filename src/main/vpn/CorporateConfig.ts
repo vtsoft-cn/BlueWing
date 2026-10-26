@@ -37,7 +37,7 @@ export function applyCorporateConfig(
   );
   if (!runtime?.profiles.length) return;
   const managedRules: any[] = [],
-    dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [];
+    dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [], discoveryRules: any[] = [], discoveryGuards: any[] = [];
   const publicProxy = config.outbounds.find((o: any) => o.tag === 'proxy');
   const proxyEnabled = publicProxy?.type === 'selector'
     ? publicProxy.outbounds?.some((tag: string) => tag !== 'direct') && publicProxy.default !== 'direct'
@@ -60,6 +60,7 @@ export function applyCorporateConfig(
       ['dns', r.dnsPath],
       ...(r.internetPath ? [['internet', r.internetPath]] : []),
       ...(r.internetDnsPath ? [['internet-dns', r.internetDnsPath]] : []),
+      ...(r.discoveredGuardPath ? [['discovered-guard', r.discoveredGuardPath]] : []),
     ])
       config.route.rule_set.push({
         type: 'local',
@@ -103,6 +104,12 @@ export function applyCorporateConfig(
       // Keep the app's local endpoints reachable; explicit company rules still
       // precede this layer. Private/company overlaps are decided by those rules.
       internetRules.push({ ...active({ ip_cidr: ['127.0.0.0/8', '::1/128'] }), outbound: 'direct' });
+      if ((r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false) {
+        const condition = active({ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'] });
+        discoveryRules.push({ ...condition, rules: [...condition.rules, { network: ['tcp'] }], outbound: `corp-out-${id}` });
+      }
+      if (r.discoveredGuardPath)
+        discoveryGuards.push({ rule_set: [`corp-discovered-guard-${id}`], action: 'reject' });
       route(policy.lan, { ip_is_private: true });
       route(policy.domestic, cn);
       route(policy.foreign, undefined, true);
@@ -161,6 +168,8 @@ export function applyCorporateConfig(
     { process_name: [runtime.coreProcessName], outbound: 'direct' },
     ...managedRules,
     ...ordinary,
+    ...discoveryRules,
+    ...discoveryGuards,
     ...internetRules,
     ...privateRules,
     ...domestic,

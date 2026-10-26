@@ -142,6 +142,7 @@ export const VpnAccess: React.FC<{
   const [actionError, setActionError] = useState('');
   const [detailTab, setDetailTab] = useState<'resources' | 'help'>('resources');
   const [expanded, setExpanded] = useState(false);
+  const detailRef = useRef<HTMLDivElement>(null);
   const state = snapshot.state;
   const active = !['idle', 'failed'].includes(state.state);
   const selected = snapshot.profiles.find(
@@ -166,6 +167,7 @@ export const VpnAccess: React.FC<{
     setReveal(false);
     setActionError('');
     setExpanded(false);
+    detailRef.current?.scrollTo(0, 0);
   }, [selectedId]);
   const run = async (job: () => Promise<void>) => {
     setBusy(true);
@@ -183,6 +185,7 @@ export const VpnAccess: React.FC<{
   const resourceRows: Array<{ target: VpnTarget; source: string }> = selected
     ? [
         ...selected.targets.map((target) => ({ target, source: '用户自定义' })),
+        ...(snapshot.discoveredTargets?.[selected.id] || []).map(target => ({ target, source: '自动识别' })),
         ...Object.entries(selected.hosts).map(([domain, ips]) => ({
           target: { domains: [domain], cidrs: ips, network: 'tcp' as const },
           source: '用户固定解析',
@@ -349,7 +352,7 @@ export const VpnAccess: React.FC<{
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <div className="vpn-profile-items">
+            <div className="vpn-profile-items" role="region" aria-label="VPN 接入列表" tabIndex={0}>
               {profiles.map((profile) => (
                 <button
                   key={profile.id}
@@ -402,7 +405,7 @@ export const VpnAccess: React.FC<{
             </p>
           </aside>
           {selected && (
-            <div className="vpn-detail-column">
+            <div className="vpn-detail-column" ref={detailRef} role="region" aria-label="接入详情" tabIndex={0}>
               <section className="vpn-connection-card" aria-label="连接面板">
                 <header className="vpn-connection-header">
                   <div className="vpn-connection-identity">
@@ -716,11 +719,21 @@ export const VpnAccess: React.FC<{
                   })}
                 </div>
                 <div className="vpn-discovery-note"><ShieldCheck size={15} /><p>
-                  {selected.protocol === 'softether' ? 'SoftEther 自动发现部分网络，公司其他资源可手动补充。'
+                  {(selected.trafficMode || 'split') === 'split' && selected.autoDiscoverPrivate !== false
+                    ? '自动识别已开启：未知私网目标本机优先，不可达时尝试此 VPN。公网公司地址与特殊域名可手动补充。'
+                    : selected.protocol === 'softether' ? 'SoftEther 自动发现部分网络，公司其他资源可手动补充。'
                     : resources?.targets.length ? `已读取 ${resources.targets.length} 条网关资源；手动补充规则优先。`
                     : '连接后自动读取公司资源；只知道业务网址或服务器 IP，也可以手动添加。'}
                   {publicProxy.enabled ? ' 国外网站保持公网代理出口。' : ' 开启公网代理后，国外网站可走代理。'}
                 </p></div>
+                {!!snapshot.discoveredTargets?.[selected.id]?.length && (
+                  <div className="vpn-learned-summary">
+                    <span>此接入已自动识别 {snapshot.discoveredTargets[selected.id].length} 个 TCP 目标；新会话会重新验证路径。</span>
+                    <button className="vpn-button compact" disabled={active || busy}
+                      title={active ? '断开 VPN 后可清空自动识别记录' : '清空此接入的自动识别记录，保留手动规则'}
+                      onClick={() => run(async () => { await window.electronAPI.corporateVpn.clearDiscoveredTargets(selected.id); await refresh(); })}>清空识别记录</button>
+                  </div>
+                )}
               </section>
               <section className="vpn-proxy-card" aria-label="应用代理">
                 <div className="vpn-proxy-heading">

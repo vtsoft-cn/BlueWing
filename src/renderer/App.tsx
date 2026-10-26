@@ -352,8 +352,8 @@ export const App: React.FC = () => {
           <VpnAccessStatus showSummary={currentTab !== 'vpn-access'} onOpen={() => setCurrentTab('vpn-access')} />
 
           {/* Main Content Area(key 随页签变化,触发入场动画;no-drag 保证滚动条可交互) */}
-          <main className="flex-1 overflow-y-auto p-6 no-drag">
-          <div key={currentTab} className="max-w-5xl mx-auto page-enter">
+          <main className={`flex-1 min-h-0 p-6 no-drag ${currentTab === 'vpn-access' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div key={currentTab} className={`max-w-5xl mx-auto page-enter ${currentTab === 'vpn-access' ? 'h-full min-h-0' : ''}`}>
             {currentTab === 'dashboard' && (
               <Dashboard
                 coreState={coreState}

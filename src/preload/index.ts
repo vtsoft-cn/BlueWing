@@ -17,6 +17,7 @@ export const api = {
     apply: () => ipcRenderer.invoke('vpn:apply'),
     openDiagnostics: (id: string) => ipcRenderer.invoke('vpn:openDiagnostics', id),
     clearDiagnostics: (id: string) => ipcRenderer.invoke('vpn:clearDiagnostics', id),
+    clearDiscoveredTargets: (id: string) => ipcRenderer.invoke('vpn:clearDiscoveredTargets', id),
     onState: (callback: (state: VpnState) => void) => {
       const handler = (_: unknown, state: VpnState) => callback(state);
       ipcRenderer.on('vpn:state', handler);

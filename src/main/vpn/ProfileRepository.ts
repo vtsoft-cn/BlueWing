@@ -128,6 +128,8 @@ export function validateProfile(input: unknown): VpnProfile {
   })) : [];
   if (p.trafficMode !== undefined && !['split', 'vpn', 'custom'].includes(p.trafficMode))
     throw new Error('不支持的 VPN 分流模式');
+  if (p.autoDiscoverPrivate !== undefined && typeof p.autoDiscoverPrivate !== 'boolean')
+    throw new Error('自动识别内网设置不正确');
   const customRouting = p.customRouting || { domestic: 'direct', foreign: 'proxy', lan: 'direct' };
   if (![customRouting.domestic, customRouting.foreign, customRouting.lan].every(v => ['direct', 'proxy', 'vpn'].includes(v)))
     throw new Error('自定义分流出口不正确');
@@ -149,6 +151,7 @@ export function validateProfile(input: unknown): VpnProfile {
     authChoices,
     diagnosticMode: p.diagnosticMode || 'off',
     trafficMode: p.trafficMode || 'split',
+    autoDiscoverPrivate: p.autoDiscoverPrivate !== false,
     customRouting: { domestic: customRouting.domestic, foreign: customRouting.foreign, lan: customRouting.lan },
     rememberPassword: p.rememberPassword === true,
     rememberSession: p.rememberSession === true,

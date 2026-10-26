@@ -23,6 +23,7 @@ type endpoint struct {
 	listener net.Listener
 	dns      *dns.Server
 	sem      chan struct{}
+	local    localConnections
 }
 
 func (c *controller) configure(configs []endpointConfig) error {
@@ -69,6 +70,7 @@ func (c *controller) configure(configs []endpointConfig) error {
 }
 func (c *controller) closeEndpoints() {
 	for _, ep := range c.endpoints {
+		ep.local.close()
 		_ = ep.listener.Close()
 		_ = ep.dns.Shutdown()
 	}
@@ -181,7 +183,8 @@ func (c *controller) serveSOCKS(ep *endpoint, conn net.Conn) {
 		_, _ = io.WriteString(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "+strconv.Itoa(len(probe))+"\r\nConnection: close\r\n\r\n"+probe)
 		return
 	}
-	if !s.allowed(host, port, "tcp") {
+	automatic, allowed := s.classifyTCP(host, port)
+	if !allowed {
 		reject()
 		return
 	}
@@ -190,7 +193,11 @@ func (c *controller) serveSOCKS(ep *endpoint, conn net.Conn) {
 	ip := net.ParseIP(host)
 	name := normalizeHost(host)
 	if ip == nil {
-		ip, e = s.lookup(ctx, name)
+		if automatic {
+			ip, e = s.resolvePrivate(ctx, name)
+		} else {
+			ip, e = s.lookup(ctx, name)
+		}
 		if e != nil {
 			reject()
 			return
@@ -207,6 +214,15 @@ func (c *controller) serveSOCKS(ep *endpoint, conn net.Conn) {
 		reject()
 		return
 	}
+	// A previously unknown hostname can resolve into a known company resource.
+	// Reapply its authorization and force the VPN path before trying local TCP.
+	if automatic {
+		automatic, allowed = s.classifyTCP(ip.String(), port)
+		if !allowed {
+			reject()
+			return
+		}
+	}
 	ctx = context.WithValue(ctx, resolve.ContextKeyResolveHost, name)
 	for domain, rs := range s.domainResources {
 		if domainMatch(name, domain) {
@@ -216,22 +232,41 @@ func (c *controller) serveSOCKS(ep *endpoint, conn net.Conn) {
 			}
 		}
 	}
-	remote, e := s.stack.DialTCP(ctx, &net.TCPAddr{IP: ip, Port: port})
+	var remote net.Conn
+	outlet := "vpn"
+	if automatic {
+		remote, outlet, e = s.privateRoutes.dial(ctx, net.JoinHostPort(ip.String(), strconv.Itoa(port)))
+	} else {
+		remote, e = s.stack.DialTCP(ctx, &net.TCPAddr{IP: ip, Port: port})
+	}
 	if e != nil {
 		reject()
 		return
 	}
 	defer remote.Close()
-	s.connsMu.Lock()
-	if s.ctx.Err() != nil {
-		s.connsMu.Unlock()
-		reject()
-		return
+	if automatic {
+		c.emit(event{Type: "privateRouteObserved", Generation: s.gen, ProfileID: s.p.ID,
+			Data: map[string]any{"address": ip.String(), "port": port, "network": "tcp", "outlet": outlet}})
 	}
-	s.conns[conn] = struct{}{}
-	s.conns[remote] = struct{}{}
-	s.connsMu.Unlock()
-	defer func() { s.connsMu.Lock(); delete(s.conns, conn); delete(s.conns, remote); s.connsMu.Unlock() }()
+	if outlet == "direct" {
+		cleanup, ok := ep.local.track(conn, remote)
+		if !ok {
+			reject()
+			return
+		}
+		defer cleanup()
+	} else {
+		s.connsMu.Lock()
+		if s.ctx.Err() != nil {
+			s.connsMu.Unlock()
+			reject()
+			return
+		}
+		s.conns[conn] = struct{}{}
+		s.conns[remote] = struct{}{}
+		s.connsMu.Unlock()
+		defer func() { s.connsMu.Lock(); delete(s.conns, conn); delete(s.conns, remote); s.connsMu.Unlock() }()
+	}
 	_, _ = conn.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0})
 	_ = conn.SetDeadline(time.Time{})
 	done := make(chan struct{})

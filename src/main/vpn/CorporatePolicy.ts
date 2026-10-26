@@ -9,6 +9,7 @@ import {
   VpnTarget,
 } from '../../types/corporateVpn';
 import { atomicJSON, validateResources, targets } from './ProfileRepository';
+import { PrivateRouteDiscovery } from './PrivateRouteDiscovery';
 
 export function sourceRules(
   targets: VpnTarget[],
@@ -34,6 +35,7 @@ export function sourceRules(
   return { version: 3, rules };
 }
 export class CorporatePolicy {
+  readonly discovery: PrivateRouteDiscovery;
   private credentials = new Map<string, { user: string; password: string }>();
   private resources = new Map<string, VpnResources>();
   private protectedTargets = new Map<string, VpnTarget[]>();
@@ -44,6 +46,7 @@ export class CorporatePolicy {
     coreProcessName: 'bluewing-vpn-core.exe',
   };
   constructor(readonly dir: string) {
+    this.discovery = new PrivateRouteDiscovery(dir);
     const known = path.join(dir, 'vpn-runtime', 'known-targets.json');
     if (fs.existsSync(known)) {
       for (const [id, value] of Object.entries(
@@ -65,6 +68,16 @@ export class CorporatePolicy {
   }
   getResources(id: string): VpnResources | undefined {
     return structuredClone(this.resources.get(id));
+  }
+  learn(id: string, data: any, profiles: VpnProfile[]): boolean {
+    const profile = profiles.find(p => p.id === id);
+    if (this.activeId !== id || !profile || data?.network !== 'tcp' || !this.discovery.observe(profile, data.address, data.port, data.outlet)) return false;
+    this.prepare(profiles);
+    return true;
+  }
+  clearDiscovered(profile: VpnProfile, profiles: VpnProfile[]): void {
+    this.discovery.clear(profile.id);
+    this.prepare(profiles);
   }
   setProbe(id: string, nonce: string, profiles: VpnProfile[]): void {
     this.activeId = id;
@@ -137,7 +150,11 @@ export class CorporatePolicy {
         guardPath = path.join(folder, 'guard.json'),
         dnsPath = path.join(folder, 'dns.json'),
         internetPath = path.join(folder, 'internet-active.json'),
-        internetDnsPath = path.join(folder, 'internet-dns-active.json');
+        internetDnsPath = path.join(folder, 'internet-dns-active.json'),
+        discoveredGuardPath = path.join(folder, 'discovered-guard.json');
+      this.publish(discoveredGuardPath, sourceRules(
+        profile.autoDiscoverPrivate !== false && (profile.trafficMode || 'split') === 'split'
+          ? this.discovery.targets(profile) : []));
       this.publish(internetDnsPath, { version: 3, rules:
         this.activeId === profile.id ? [{ domain_regex: ['.*'] }] : [] });
       this.publish(internetPath, { version: 3, rules:
@@ -189,6 +206,7 @@ export class CorporatePolicy {
         dnsPath,
         internetPath,
         internetDnsPath,
+        discoveredGuardPath,
       });
     }
     atomicJSON(

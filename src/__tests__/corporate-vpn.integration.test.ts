@@ -64,7 +64,7 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
   const vpnPort = await serve('VPN', true), publicPort = await serve('PUBLIC');
   // Both mock SOCKS outlets use password authentication; no real site is contacted.
   const repo = new ProfileRepository(dir);
-  const p = repo.save({ id: 'cn', name: 'Company only', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: '', trafficMode: policyCase.mode, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['192.0.2.10/32'] }], hosts: {}, bindInterface: '' });
+  const p = repo.save({ id: 'cn', name: 'Company only', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: '', trafficMode: policyCase.mode, autoDiscoverPrivate: false, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['192.0.2.10/32'] }], hosts: {}, bindInterface: '' });
   const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')); stored.profiles[0].socksPort = vpnPort; stored.profiles[0].dnsPort = await freePort(); fs.writeFileSync(path.join(dir, 'vpn-profiles.json'), JSON.stringify(stored)); repo.reload();
   const policy = new CorporatePolicy(dir); policy.prepare(repo.list()); const runtime = policy.runtime();
   const direct = await serve('DIRECT');
@@ -96,6 +96,68 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
   try { assert.notEqual((await request(port, 'http://192.0.2.10/')).body, 'DIRECT'); } catch (error) { if (error instanceof assert.AssertionError) throw error; }
   });
 });
+test('Automatic private dispatch leaves public outlets alone and protects only a learned TCP port offline', { timeout: 30000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-auto-private-'));
+  const sockets = new Set<net.Socket>(), servers: net.Server[] = [];
+  let child: ReturnType<typeof spawn> | undefined;
+  t.after(async () => {
+    if (child) { const closed = new Promise(r => child!.exitCode !== null ? r(null) : child!.once('exit', r)); child.kill(); await closed; }
+    for (const socket of sockets) socket.destroy(); for (const server of servers) server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const attempted: string[] = [];
+  const serve = async (body: string, automatic = false) => {
+    const server = net.createServer(socket => {
+      sockets.add(socket); socket.once('close', () => sockets.delete(socket));
+      let stage = 0, data = Buffer.alloc(0);
+      socket.on('data', chunk => {
+        data = Buffer.concat([data, chunk]);
+        if (stage === 0 && data.length >= 2 + data[1]) { data = data.subarray(2 + data[1]); socket.write(Buffer.from([5, 2])); stage = 1; }
+        if (stage === 1 && data.length >= 3 + data[1]) {
+          const n = 3 + data[1] + data[2 + data[1]]; if (data.length < n) return;
+          data = data.subarray(n); socket.write(Buffer.from([1, 0])); stage = 2;
+        }
+        if (stage === 2 && data.length >= 5) {
+          const n = data[3] === 1 ? 10 : data[3] === 4 ? 22 : 7 + data[4]; if (data.length < n) return;
+          const host = data[3] === 1 ? [...data.subarray(4, 8)].join('.') : data.subarray(5, 5 + data[4]).toString();
+          if (automatic) attempted.push(host + ':' + data.readUInt16BE(n - 2));
+          data = data.subarray(n); socket.write(Buffer.from([5, 0, 0, 1, 127, 0, 0, 1, 0, 1])); stage = 3;
+        }
+        if (stage === 3 && data.includes(Buffer.from('\r\n\r\n'))) { socket.end(`HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n${body}`); stage = 4; }
+      });
+    }); servers.push(server); return listen(server);
+  };
+  const autoPort = await serve('AUTO', true), localPort = await serve('LOCAL'), publicPort = await serve('PUBLIC');
+  const repo = new ProfileRepository(dir), p = repo.save({ id: 'auto-private', name: 'Auto', protocol: 'softether', gateway: { host: 'vpn.example.com', port: 5555 }, username: 'fixture', loginDomain: 'VPN', authMethod: 'auth/psw', targets: [], hosts: {}, tls: {}, bindInterface: '' });
+  const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')); stored.profiles[0].socksPort = autoPort; stored.profiles[0].dnsPort = await freePort(); fs.writeFileSync(path.join(dir, 'vpn-profiles.json'), JSON.stringify(stored)); repo.reload();
+  const policy = new CorporatePolicy(dir); policy.prepare(repo.list());
+  const config = ConfigGenerator.generate('public', [{ id: 'public', name: 'Public', type: 'socks', server: '127.0.0.1', port: publicPort, username: 'fixture', password: 'fixture', groupId: 'fixture' }], [], [],
+    { mode: 'standard', remoteDns: '223.5.5.5', directDns: '223.5.5.5', servers: [] } as DnsConfig,
+    { mixedPort: await freePort(), tunEnabled: false, routingMode: 'rule', clashApiEnabled: false, logLevel: 'warn' } as AppSettings, undefined, policy.runtime());
+  config.experimental.cache_file.path = path.join(dir, 'cache.db').replace(/\\/g, '/');
+  config.outbounds[config.outbounds.findIndex((o: any) => o.tag === 'direct')] = { tag: 'direct', type: 'socks', server: '127.0.0.1', server_port: localPort, username: 'fixture', password: 'fixture', version: '5' };
+  config.inbounds.find((i: any) => i.tag === 'speedtest-in').listen_port = await freePort();
+  const file = path.join(dir, 'config.json'), binary = path.resolve('bin/sing-box.exe'); fs.writeFileSync(file, JSON.stringify(config));
+  execFileSync(binary, ['check', '-c', file], { windowsHide: true });
+  child = spawn(binary, ['run', '-c', file], { windowsHide: true }); let log = ''; child.stderr?.on('data', b => log += b);
+  const port = config.inbounds.find((i: any) => i.tag === 'mixed-in').listen_port;
+  let ready = false; for (let i = 0; i < 40; i++) { try { if ((await request(port, 'http://192.168.77.12:22/')).body === 'LOCAL') { ready = true; break; } } catch {} await sleep(100); } assert.ok(ready, log);
+  policy.setProbe(p.id, 'active', repo.list());
+  let active = false; for (let i = 0; i < 30; i++) { if ((await request(port, 'http://192.168.77.12:22/')).body === 'AUTO') { active = true; break; } await sleep(100); } assert.ok(active, log);
+  assert.equal((await request(port, 'http://223.5.5.5/')).body, 'LOCAL');
+  assert.equal((await request(port, 'http://1.1.1.1/')).body, 'PUBLIC');
+  assert.ok(attempted.every(value => value === '192.168.77.12:22'), 'Public destinations entered discovery');
+  policy.learn(p.id, { address: '192.168.77.12', port: 22, network: 'tcp', outlet: 'vpn' }, repo.list());
+  policy.deactivate(repo.list());
+  let protectedPort = false;
+  for (let i = 0; i < 30; i++) { try { protectedPort = !['AUTO', 'LOCAL'].includes((await request(port, 'http://192.168.77.12:22/')).body); } catch { protectedPort = true; } if (protectedPort) break; await sleep(100); }
+  assert.ok(protectedPort, log);
+  try { assert.notEqual((await request(port, 'http://192.168.77.12:22/')).body, 'LOCAL'); } catch (e) { if (e instanceof assert.AssertionError) throw e; }
+  assert.equal((await request(port, 'http://192.168.77.12:80/')).body, 'LOCAL', 'learned port expanded into whole-host ownership');
+  policy.clearDiscovered(repo.get(p.id), repo.list());
+  let cleared = false; for (let i = 0; i < 30; i++) { try { if ((await request(port, 'http://192.168.77.12:22/')).body === 'LOCAL') { cleared = true; break; } } catch {} await sleep(100); } assert.ok(cleared, log);
+});
+
 const listen = (s: net.Server | http.Server, host = '127.0.0.1') =>
   new Promise<number>((resolve) =>
     s.listen(0, host, () => resolve((s.address() as net.AddressInfo).port)),

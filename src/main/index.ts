@@ -748,6 +748,7 @@ for (const [name, handler] of Object.entries({
     if (error) throw new Error(error);
   },
   clearDiagnostics: (id: string) => getCorporateVpn().clearDiagnostics(id),
+  clearDiscoveredTargets: (id: string) => getCorporateVpn().clearDiscoveredTargets(id),
   apply: () => handleCoreStart({ userInitiated: true }),
 })) {
   ipcMain.handle(`vpn:${name}`, (event, ...args: any[]) => {

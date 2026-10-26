@@ -19,6 +19,7 @@ export interface VpnProfile {
   authChoices?: VpnAuthMethod[];
   diagnosticMode?: 'off' | 'detail' | 'full';
   trafficMode?: 'split' | 'vpn' | 'custom';
+  autoDiscoverPrivate?: boolean;
   customRouting?: { domestic: VpnOutlet; foreign: VpnOutlet; lan: VpnOutlet };
   rememberPassword: boolean;
   rememberSession: boolean;
@@ -95,6 +96,7 @@ export interface VpnSnapshot {
   encryptionAvailable: boolean;
   passwordSaved?: Record<string, boolean>;
   diagnostics?: Record<string, { exists: boolean; path: string; mode: string; error?: string }>;
+  discoveredTargets?: Record<string, VpnTarget[]>;
 }
 export interface VpnRuntimeProfile {
   profile: VpnProfile;
@@ -105,6 +107,7 @@ export interface VpnRuntimeProfile {
   dnsPath: string;
   internetPath?: string;
   internetDnsPath?: string;
+  discoveredGuardPath?: string;
 }
 export interface VpnRuntime {
   profiles: VpnRuntimeProfile[];
@@ -125,6 +128,7 @@ export interface CorporateVpnAPI {
   savePassword(id: string, password: string, remember: boolean): Promise<void>;
   openDiagnostics(id: string): Promise<void>;
   clearDiagnostics(id: string): Promise<void>;
+  clearDiscoveredTargets(id: string): Promise<void>;
   apply(): Promise<boolean>;
   onState(callback: (state: VpnState) => void): () => void;
 }

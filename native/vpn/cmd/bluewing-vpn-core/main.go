@@ -35,7 +35,7 @@ import (
 const protocolVersion = 1
 const maxFrame = 4 * 1024 * 1024
 
-var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.2-softether"
+var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.3-private-discovery"
 
 type target struct {
 	GuardOnly bool     `json:"guardOnly,omitempty"`
@@ -56,12 +56,13 @@ type profile struct {
 		Host string `json:"host"`
 		Port int    `json:"port"`
 	} `json:"gateway"`
-	Username       string `json:"username"`
-	AuthMethod     string `json:"authMethod"`
-	LoginDomain    string `json:"loginDomain"`
-	DiagnosticMode string `json:"diagnosticMode"`
-	TrafficMode    string `json:"trafficMode"`
-	CustomRouting  struct {
+	Username            string `json:"username"`
+	AuthMethod          string `json:"authMethod"`
+	LoginDomain         string `json:"loginDomain"`
+	DiagnosticMode      string `json:"diagnosticMode"`
+	TrafficMode         string `json:"trafficMode"`
+	AutoDiscoverPrivate bool   `json:"autoDiscoverPrivate"`
+	CustomRouting       struct {
 		Domestic string `json:"domestic"`
 		Foreign  string `json:"foreign"`
 		LAN      string `json:"lan"`
@@ -119,6 +120,7 @@ type session struct {
 	leases          map[string]dnsLease
 	connsMu         sync.Mutex
 	conns           map[net.Conn]struct{}
+	privateRoutes   *privateRoutePicker
 }
 type dnsLease struct {
 	domain  string
@@ -351,6 +353,17 @@ func (c *controller) setup(s *session, password, sessionData string) (res resour
 	if err = s.stack.Prepare(); err != nil {
 		return res, err
 	}
+	s.privateRoutes = &privateRoutePicker{local: s.dialer.DialContext, vpn: func(ctx context.Context, _ string, address string) (net.Conn, error) {
+		host, portText, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			return nil, err
+		}
+		return s.stack.DialTCP(ctx, &net.TCPAddr{IP: net.ParseIP(host), Port: port})
+	}}
 	return res, nil
 }
 func (c *controller) connect(cmd command) {

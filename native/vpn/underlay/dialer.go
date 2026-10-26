@@ -188,6 +188,15 @@ func newUnderlayResolver(interfaceName, localDNSServer string) *net.Resolver {
 	}
 }
 
+// LookupIPv4 uses the same physical-interface DNS path as underlay TCP sockets.
+func (d *Dialer) LookupIPv4(ctx context.Context, host string) ([]net.IP, error) {
+	if d == nil {
+		return net.DefaultResolver.LookupIP(ctx, "ip4", host)
+	}
+	name := d.ensureInterface(net.JoinHostPort(host, "53"))
+	return newUnderlayResolver(name, d.localDNSServer).LookupIP(ctx, "ip4", host)
+}
+
 func isLoopbackAddress(address string) bool {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
