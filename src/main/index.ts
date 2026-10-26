@@ -94,10 +94,21 @@ if (appDataDir === portableDataDir) {
 // 短等重试吸收时序抖动,10 秒仍拿不到锁才放弃;whenReady 在锁落定前绝不初始化,
 // 保证重试期间不闪窗(与 --bb-shutdown 的零闪窗承诺同一约束)。
 let isSecondaryInstance = false;
+// 提权重启竞态标志:由 ElevatedRelaunch 守候脚本传给提权实例。只有这种场景
+// 下"旧实例正在退出清理(可达数十秒)、锁即将释放",重试拿锁才有意义。
+const isElevatedRelaunch = process.argv.includes('--bb-elevated-relaunch');
 const lockSettled = (async (): Promise<boolean> => {
   if (app.requestSingleInstanceLock()) {
     bootLog('single-instance lock acquired (first try)');
     return true;
+  }
+  // 锁被健康实例持有(用户双击图标唤起窗口的常规场景):它不会退出,重试
+  // 注定失败——且每次重调 requestSingleInstanceLock 都会让运行中实例收到
+  // second-instance,把用户刚点 X 收进托盘的窗口又拽出来(表现为"关闭钮
+  // 连点多次才生效")。第一次调用已经完成了唤起通知,立即退出即可。
+  if (!isElevatedRelaunch) {
+    bootLog('single-instance lock held by running instance, exiting');
+    return false;
   }
   bootLog('single-instance lock held by another instance, retrying');
   for (let i = 0; i < 10; i++) {
