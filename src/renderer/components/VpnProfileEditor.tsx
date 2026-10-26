@@ -28,6 +28,7 @@ import { Portal } from './Portal';
 import { Select } from './Select';
 import { toast } from './Toast';
 import { useModalExit } from '../hooks/useModalExit';
+import { modalOverlayClass, modalPopClass, useMaskDrag } from './ModalShell';
 
 const lines = (value: string) =>
   value
@@ -109,6 +110,7 @@ export function VpnProfileEditor({
     profile.username === form.username && profile.authMethod === form.authMethod && profile.loginDomain === form.loginDomain;
   // 收场动画:无未保存修改直接动画关闭;有修改先就地确认(编辑器保持可见,不播动画)
   const { exiting, requestClose: animatedClose } = useModalExit(onClose);
+  const maskDrag = useMaskDrag();
   const close = () => {
     if (busy) return;
     if (dirty && !readOnly) {
@@ -249,21 +251,13 @@ export function VpnProfileEditor({
   return (
     <Portal>
       <div
-        className={`vpn-modal-backdrop no-drag ${exiting ? 'overlay-exit' : 'overlay-enter'}`}
-        onPointerDown={(e) => {
-          if (e.button !== 0 || e.target !== e.currentTarget) return;
-          try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-          } catch {}
-          window.electronAPI?.window.beginDrag();
-        }}
-        onPointerUp={() => window.electronAPI?.window.endDrag()}
-        onPointerCancel={() => window.electronAPI?.window.endDrag()}
-        onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
+        {...maskDrag}
+        className={`vpn-modal-backdrop no-drag ${modalOverlayClass(exiting)}`}
+          {...maskDrag}
       >
         <div
           ref={root}
-          className={`vpn-surface vpn-editor ${exiting ? 'pop-exit' : 'pop-enter'}`}
+          className={`vpn-surface vpn-editor ${modalPopClass(exiting)}`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="vpn-editor-title"

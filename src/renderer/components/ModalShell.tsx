@@ -8,6 +8,32 @@ const ModalCloseContext = createContext<() => void>(() => {});
 /** 获取当前弹窗的收场关闭函数(取消按钮/X 均应使用它而非直接调用 onClose prop) */
 export const useModalClose = () => useContext(ModalCloseContext);
 
+/** 蒙版拖拽窗口的指针事件组(与页头同一 IPC 机制)。所有弹窗蒙版 spread 这个即可,点按蒙版空白拖动窗口 */
+export function useMaskDrag() {
+  return React.useMemo(
+    () => ({
+      onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0 || e.target !== e.currentTarget) return;
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {}
+        window.electronAPI?.window.beginDrag();
+      },
+      onPointerUp: () => window.electronAPI?.window.endDrag(),
+      onPointerCancel: () => window.electronAPI?.window.endDrag(),
+      onLostPointerCapture: () => window.electronAPI?.window.endDrag(),
+    }),
+    [],
+  );
+}
+
+/** 弹窗蒙版动画类:开=overlay-enter,收=overlay-exit */
+export const modalOverlayClass = (exiting: boolean) =>
+  exiting ? 'overlay-exit' : 'overlay-enter';
+/** 弹窗面板动画类:开=pop-enter,收=pop-exit */
+export const modalPopClass = (exiting: boolean) =>
+  exiting ? 'pop-exit' : 'pop-enter';
+
 interface ModalShellProps {
   onClose: () => void;
   children: React.ReactNode;
@@ -50,23 +76,13 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   z = 200,
 }) => {
   const { exiting, requestClose } = useModalExit(onClose);
+  const maskDrag = useMaskDrag();
   return (
     <ModalCloseContext.Provider value={requestClose}>
     <div
-      className={`no-drag fixed inset-0 ${overlayClassName} flex items-center justify-center p-4 ${
-        exiting ? 'overlay-exit' : 'overlay-enter'
-      }`}
+      {...maskDrag}
+      className={`no-drag fixed inset-0 ${overlayClassName} flex items-center justify-center p-4 ${modalOverlayClass(exiting)}`}
       style={{ zIndex: z }}
-      onPointerDown={(e) => {
-        if (e.button !== 0 || e.target !== e.currentTarget) return;
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {}
-        window.electronAPI?.window.beginDrag();
-      }}
-      onPointerUp={() => window.electronAPI?.window.endDrag()}
-      onPointerCancel={() => window.electronAPI?.window.endDrag()}
-      onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
     >
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return child;

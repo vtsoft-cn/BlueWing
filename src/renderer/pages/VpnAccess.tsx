@@ -45,7 +45,7 @@ import {
   VpnProfileEditor,
 } from '../components/VpnProfileEditor';
 import { Portal } from '../components/Portal';
-import { ModalCloseX } from '../components/ModalShell';
+import { ModalCloseX, modalOverlayClass, modalPopClass, useMaskDrag } from '../components/ModalShell';
 import { useModalExit } from '../hooks/useModalExit';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
@@ -142,6 +142,7 @@ export const VpnAccess: React.FC<{
   const { exiting: pickerExiting, requestClose: closePicker } = useModalExit(
     () => setAddPickerOpen(false),
   );
+  const pickerDrag = useMaskDrag();
   // ---- 协议引擎类档案(IKEv2/L2TP/SSTP/OpenVPN/WireGuard/…,与原生协议并列在同一列表) ----
   const [engineProfiles, setEngineProfiles] = useState<EngineVpnProfile[]>([]);
   const [engineRuntime, setEngineRuntime] = useState<VpnRuntimeInfo | null>(null);
@@ -1160,19 +1161,10 @@ export const VpnAccess: React.FC<{
       {addPickerOpen && (
         <Portal>
           <div
-            className={`vpn-modal-backdrop no-drag ${pickerExiting ? 'overlay-exit' : 'overlay-enter'}`}
-            onPointerDown={(e) => {
-              if (e.button !== 0 || e.target !== e.currentTarget) return;
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId);
-              } catch {}
-              window.electronAPI?.window.beginDrag();
-            }}
-            onPointerUp={() => window.electronAPI?.window.endDrag()}
-            onPointerCancel={() => window.electronAPI?.window.endDrag()}
-            onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
+            {...pickerDrag}
+            className={`vpn-modal-backdrop no-drag ${modalOverlayClass(pickerExiting)}`}
           >
-            <div className={`vpn-surface ${pickerExiting ? 'pop-exit' : 'pop-enter'}`} role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
+            <div className={`vpn-surface ${modalPopClass(pickerExiting)}`} role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <strong style={{ fontSize: 14 }}>选择接入类型</strong>
                 <ModalCloseX onClick={closePicker} />
@@ -1247,6 +1239,7 @@ export const VpnAccessStatus: React.FC<{
   const [challengeView, setChallengeView] = useState(state.challenge);
   const [challengeExiting, setChallengeExiting] = useState(false);
   const challengeSeenRef = useRef(false);
+  const challengeDrag = useMaskDrag();
   useEffect(() => {
     if (state.challenge) {
       challengeSeenRef.current = true;
@@ -1311,21 +1304,12 @@ export const VpnAccessStatus: React.FC<{
       {challengeView && (
         <Portal>
           <div
-            className={`vpn-modal-backdrop vpn-challenge-backdrop no-drag ${challengeExiting ? 'overlay-exit' : 'overlay-enter'}`}
+            {...challengeDrag}
+            className={`vpn-modal-backdrop vpn-challenge-backdrop no-drag ${modalOverlayClass(challengeExiting)}`}
             style={{ display: challengeOpen || challengeExiting ? undefined : 'none' }}
-            onPointerDown={(e) => {
-              if (e.button !== 0 || e.target !== e.currentTarget) return;
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId);
-              } catch {}
-              window.electronAPI?.window.beginDrag();
-            }}
-            onPointerUp={() => window.electronAPI?.window.endDrag()}
-            onPointerCancel={() => window.electronAPI?.window.endDrag()}
-            onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
           >
             <div
-              className={`vpn-surface vpn-auth-dialog ${challengeExiting ? 'pop-exit' : 'pop-enter'}`}
+              className={`vpn-surface vpn-auth-dialog ${modalPopClass(challengeExiting)}`}
               ref={challengeRoot}
               role="dialog"
               aria-modal="true"

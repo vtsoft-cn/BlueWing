@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { modalOverlayClass, modalPopClass, useMaskDrag } from './ModalShell';
 
 export interface ConfirmOptions {
   title?: string;
@@ -29,6 +30,7 @@ export const ConfirmDialogHost: React.FC = () => {
   // 收场动画:resolve 立即放行调用方,蒙版/面板播完 overlay-exit/pop-exit 再卸载
   const [exiting, setExiting] = useState(false);
   const closingRef = React.useRef(false);
+  const maskDrag = useMaskDrag();
 
   useEffect(() => {
     askFn = (options) =>
@@ -52,24 +54,12 @@ export const ConfirmDialogHost: React.FC = () => {
 
   return (
     <div
-      className={`no-drag fixed inset-0 z-[210] bg-black/60 flex items-center justify-center p-4 ${
-        exiting ? 'overlay-exit' : 'overlay-enter'
-      }`}
-      onPointerDown={(e) => {
-        if (e.button !== 0 || e.target !== e.currentTarget) return;
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {}
-        window.electronAPI?.window.beginDrag();
-      }}
-      onPointerUp={() => window.electronAPI?.window.endDrag()}
-      onPointerCancel={() => window.electronAPI?.window.endDrag()}
-      onLostPointerCapture={() => window.electronAPI?.window.endDrag()}
+      {...maskDrag}
+      className={`no-drag fixed inset-0 z-[210] bg-black/60 flex items-center justify-center p-4 ${modalOverlayClass(exiting)}`}
+      {...maskDrag}
     >
       <div
-        className={`bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl ${
-          exiting ? 'pop-exit' : 'pop-enter'
-        }`}
+        className={`bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl ${modalPopClass(exiting)}`}
       >
         {options.title && (
           <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100 mb-1.5">{options.title}</h4>
