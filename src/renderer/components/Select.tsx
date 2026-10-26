@@ -80,7 +80,7 @@ export const Select: React.FC<SelectProps> = ({ value, options, onChange, classN
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-left focus:outline-none focus:border-blue-500 transition-colors ${className}`}
+        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-left focus:outline-none focus:border-blue-500 focus:ring-[3px] focus:ring-blue-500/10 transition-colors ${className}`}
       >
         <span className={`text-xs truncate ${current ? '' : 'text-slate-400'}`}>
           {current?.label || placeholder || value}
