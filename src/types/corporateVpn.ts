@@ -1,4 +1,5 @@
-export type VpnProtocol = 'easyconnect' | 'atrust';
+export type VpnProtocol = 'easyconnect' | 'atrust' | 'softether';
+export type VpnOutlet = 'direct' | 'proxy' | 'vpn';
 export interface VpnTarget {
   guardOnly?: boolean;
   domains: string[];
@@ -14,6 +15,11 @@ export interface VpnProfile {
   username: string;
   authMethod: string;
   loginDomain: string;
+  authName?: string;
+  authChoices?: VpnAuthMethod[];
+  diagnosticMode?: 'off' | 'detail' | 'full';
+  trafficMode?: 'split' | 'vpn' | 'custom';
+  customRouting?: { domestic: VpnOutlet; foreign: VpnOutlet; lan: VpnOutlet };
   rememberPassword: boolean;
   rememberSession: boolean;
   tls: {
@@ -76,16 +82,19 @@ export interface VpnState {
   profileId?: string;
   challenge?: VpnChallenge;
   error?: string;
+  errorDetail?: { stage: string; message: string; serverCode?: string };
   resources?: VpnResources;
   requiresCoreRebuild?: boolean;
   revision?: string;
   coreAvailable?: boolean;
+  preparingRouting?: boolean;
 }
 export interface VpnSnapshot {
   profiles: VpnProfile[];
   state: VpnState;
   encryptionAvailable: boolean;
   passwordSaved?: Record<string, boolean>;
+  diagnostics?: Record<string, { exists: boolean; path: string; mode: string; error?: string }>;
 }
 export interface VpnRuntimeProfile {
   profile: VpnProfile;
@@ -94,6 +103,8 @@ export interface VpnRuntimeProfile {
   routePath: string;
   guardPath: string;
   dnsPath: string;
+  internetPath?: string;
+  internetDnsPath?: string;
 }
 export interface VpnRuntime {
   profiles: VpnRuntimeProfile[];
@@ -112,6 +123,8 @@ export interface CorporateVpnAPI {
   respond(id: string, generation: number, value: string): Promise<void>;
   clearCredentials(id: string): Promise<void>;
   savePassword(id: string, password: string, remember: boolean): Promise<void>;
+  openDiagnostics(id: string): Promise<void>;
+  clearDiagnostics(id: string): Promise<void>;
   apply(): Promise<boolean>;
   onState(callback: (state: VpnState) => void): () => void;
 }

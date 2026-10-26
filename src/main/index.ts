@@ -28,7 +28,7 @@ import { UniversalSubscriptionParser } from './net/UniversalSubscriptionParser';
 import { TrayManager } from './tray/TrayManager';
 import { TrafficStats, Subscription, VpnProfile as EngineVpnProfile, VpnRuntimeInfo } from '../types';
 import { LogManager } from './log/LogManager';
-import { existingCorporateVpn, getCorporateVpn } from './vpn/VpnService';
+import { existingCorporateVpn, getCorporateVpn, setVpnRoutingInitializer } from './vpn/VpnService';
 import { applyCorporateConfig } from './vpn/CorporateConfig';
 import { VpnEngineManager } from './system/vpn/VpnEngineManager';
 import { OpenVpnEngine, derToPem } from './system/vpn/OpenVpnEngine';
@@ -463,6 +463,7 @@ function fetchClashConnections(
 }
 
 async function handleCoreStop(): Promise<boolean> {
+  await existingCorporateVpn()?.disconnect();
   const core = SingBoxManager.getInstance();
   const settings = Database.getInstance().getSettings();
   await core.stop();
@@ -622,7 +623,8 @@ function scheduleTunFatalRetry(): void {
   }, TUN_FATAL_RETRY_DELAY_MS);
 }
 
-async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<boolean> {
+async function handleCoreStart(options?: { userInitiated?: boolean; shouldContinue?: () => boolean }): Promise<boolean> {
+  if (options?.shouldContinue && !options.shouldContinue()) return false;
   const db = Database.getInstance();
   const core = SingBoxManager.getInstance();
   const settings = db.getSettings();
@@ -674,6 +676,7 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
   }
 
   const corporateRuntime = await getCorporateVpn().prepareRuntime(true);
+  if (options?.shouldContinue && !options.shouldContinue()) return false;
   SystemProxy.setCorporateRouting(corporateRuntime.profiles.length > 0);
   const config = ConfigGenerator.generate(
     activeNodeId,
@@ -690,6 +693,7 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
   LogManager.getInstance().addLog('info', '正在启动 Sing-box 核心代理引擎...', 'app');
   let started = await core.start(config);
   if (!started) {
+    if (options?.shouldContinue && !options.shouldContinue()) return false;
     // 规则源下载被间歇性重置等瞬时故障:自动重试一次,避免用户手动反复点击
     LogManager.getInstance().addLog('warn', '核心首次启动失败,2 秒后自动重试一次...', 'core');
     // TUN 网卡冲突(幽灵设备,特征见 SingBoxManager.consumeTunAdapterFatal):
@@ -704,6 +708,7 @@ async function handleCoreStart(options?: { userInitiated?: boolean }): Promise<b
       );
     }
     await new Promise((r) => setTimeout(r, 2000));
+    if (options?.shouldContinue && !options.shouldContinue()) return false;
     started = await core.start(config);
   }
   if (started) {
@@ -888,6 +893,11 @@ for (const [name, handler] of Object.entries({
   respond: (id: string, generation: number, value: string) => getCorporateVpn().respond(id, generation, value),
   clearCredentials: (id: string) => getCorporateVpn().clearCredentials(id),
   savePassword: (id: string, password: string, remember: boolean) => getCorporateVpn().savePassword(id, password, remember),
+  openDiagnostics: async (id: string) => {
+    const error = await shell.openPath(getCorporateVpn().diagnosticFile(id));
+    if (error) throw new Error(error);
+  },
+  clearDiagnostics: (id: string) => getCorporateVpn().clearDiagnostics(id),
   apply: () => handleCoreStart({ userInitiated: true }),
 })) {
   ipcMain.handle(`vpn:${name}`, (event, ...args: any[]) => {
@@ -1032,6 +1042,10 @@ ipcMain.handle('core:validateConfig', () => {
 });
 
 // Forward core state change
+setVpnRoutingInitializer(isCurrent => handleCoreStart({
+  userInitiated: SingBoxManager.getInstance().getState() !== 'running',
+  shouldContinue: isCurrent,
+}));
 SingBoxManager.getInstance().setConfigEnricher(async config=>{
   const runtime=await getCorporateVpn().prepareRuntime(true);
   SystemProxy.setCorporateRouting(runtime.profiles.length>0);

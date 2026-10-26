@@ -6,7 +6,7 @@ export const vpnProviders: Record<
   {
     name: string;
     mark: string;
-    tone: 'blue' | 'violet';
+    tone: 'blue' | 'violet' | 'teal';
     description: string;
     authDiscovery: boolean;
     deviceSession: boolean;
@@ -27,6 +27,14 @@ export const vpnProviders: Record<
     description: '登录域与多种认证方式',
     authDiscovery: true,
     deviceSession: true,
+  },
+  softether: {
+    name: 'SoftEther',
+    mark: 'SE',
+    tone: 'teal',
+    description: 'Virtual HUB 与账号密码认证',
+    authDiscovery: false,
+    deviceSession: false,
   },
 };
 

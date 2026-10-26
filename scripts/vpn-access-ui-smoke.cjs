@@ -81,7 +81,7 @@ const root=createRoot(document.getElementById('root'));
 let proxySettings={mixedPort:2080,inboundAuth:false,tunEnabled:false,routingMode:'rule'},proxyState='running',currentPage='vpn-access',dashboardNodes=[];
 const selectNode=()=>{proxySettings={...proxySettings,routingMode:'rule'};render();};
 const selectDirect=()=>{proxySettings={...proxySettings,routingMode:'direct'};render();};
-const render=()=>root.render(<div className="h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100"><Sidebar currentTab={currentPage} onSelectTab={page=>{currentPage=page;render();}} theme="dark"/><div className="flex-1 overflow-auto min-w-0 no-drag"><VpnAccessStatus showSummary={false} onOpen={()=>{}}/><main className="p-6 max-w-5xl mx-auto">{currentPage==='dashboard'?<Dashboard nodes={dashboardNodes} activeNodeId="saved" coreState={proxyState} settings={proxySettings} onToggleConnect={()=>{proxyState=proxyState==='running'?'stopped':'running';render();}} onSelectNode={selectNode} onSelectDirect={selectDirect} traffic={{downloadSpeed:0,uploadSpeed:0,totalDownload:0,totalUpload:0,latency:0,uptime:0,activeConnections:0}} onUpdateSettings={value=>{proxySettings={...proxySettings,...value};render();}} onNavigate={page=>{currentPage=page;render();}} onRequestTunElevation={()=>{}}/>:currentPage==='nodes'?<Nodes nodes={dashboardNodes} activeNodeId="saved" onSelectNode={selectNode} onSelectDirect={selectDirect} directSelected={proxySettings.routingMode==='direct'||!dashboardNodes.length} subscriptions={[]}/>:<VpnAccess settings={proxySettings} coreState={proxyState}/>}</main></div><ToastHost/><ConfirmDialogHost/></div>);
+const render=()=>root.render(<div className="h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100"><Sidebar currentTab={currentPage} onSelectTab={page=>{currentPage=page;render();}} theme="dark"/><div className="flex-1 overflow-auto min-w-0 no-drag"><VpnAccessStatus showSummary={false} onOpen={()=>{}}/><main className="p-6 max-w-5xl mx-auto">{currentPage==='dashboard'?<Dashboard nodes={dashboardNodes} activeNodeId="saved" coreState={proxyState} settings={proxySettings} onToggleConnect={()=>{proxyState=proxyState==='running'?'stopped':'running';render();}} onSelectNode={selectNode} onSelectDirect={selectDirect} traffic={{downloadSpeed:0,uploadSpeed:0,totalDownload:0,totalUpload:0,latency:0,uptime:0,activeConnections:0}} onUpdateSettings={value=>{proxySettings={...proxySettings,...value};render();}} onNavigate={page=>{currentPage=page;render();}} onRequestTunElevation={()=>{}}/>:currentPage==='nodes'?<Nodes nodes={dashboardNodes} activeNodeId="saved" onSelectNode={selectNode} onSelectDirect={selectDirect} directSelected={proxySettings.routingMode==='direct'||!dashboardNodes.length} subscriptions={[]}/>:<VpnAccess settings={proxySettings} coreState={proxyState} publicProxy={{enabled:proxySettings.routingMode!=='direct' && dashboardNodes.length>0,name:dashboardNodes[0]?.name}}/>}</main></div><ToastHost/><ConfirmDialogHost/></div>);
 window.addEventListener('fixture:proxy',event=>{proxySettings={...proxySettings,...event.detail.settings};proxyState=event.detail.coreState||proxyState;currentPage=event.detail.page||currentPage;dashboardNodes=event.detail.nodes||dashboardNodes;render();});
 render();
 `,
@@ -113,13 +113,13 @@ contextBridge.exposeInMainWorld('electronAPI',{corporateVpn:{
 snapshot:async()=>({profiles,state,encryptionAvailable:true,passwordSaved:Object.fromEntries(profiles.map(p=>[p.id,!!passwords[p.id]]))}),
 save:async(value)=>{const saved={...value,id:value.id||'new-fixture-'+(++serial)};const i=profiles.findIndex(p=>p.id===saved.id);if(i<0)profiles.push(saved);else profiles[i]=saved;emit({});return{profile:saved,requiresCoreRebuild:false};},
 remove:async(id)=>{profiles=profiles.filter(p=>p.id!==id);emit({});},
-connect:async(id,password)=>{if(!password&&!passwords[id])throw new Error('fixture password required');emit({state:'waiting_user',profileId:id,generation:state.generation+1,challenge:{id:'otp-fixture',profileId:id,generation:state.generation+1,kind:'otp',title:'请输入动态码',expiresAt:Date.now()+120000}});},
-disconnect:async()=>emit({state:'idle',challenge:undefined}),
-discover:async()=>[{authName:'示例认证',authType:'auth/psw',loginDomain:'fixture',supported:true}],
+connect:async(id,password)=>{if(!password&&!passwords[id])throw new Error('fixture password required');if(state.requiresCoreRebuild){const generation=state.generation+1;emit({state:'starting',preparingRouting:true,profileId:id,generation});await new Promise(r=>setTimeout(r,1800));if(state.generation!==generation||state.state!=='starting')return;emit({requiresCoreRebuild:false,preparingRouting:false});}emit({state:'waiting_user',profileId:id,generation:state.generation+1,challenge:{id:'otp-fixture',profileId:id,generation:state.generation+1,kind:'otp',title:'请输入动态码',expiresAt:Date.now()+120000}});},
+disconnect:async()=>emit({state:'idle',generation:state.generation+1,challenge:undefined,preparingRouting:false}),
+discover:async(id)=>{const methods=[{authName:'企业认证',authType:'auth/psw',loginDomain:'custom0001',supported:true},{authName:'本地密码认证',authType:'auth/psw',loginDomain:'local',supported:true}];profiles=profiles.map(p=>p.id===id?{...p,authChoices:methods}:p);emit({});return methods;},
 certificate:async()=>({fingerprint:'a'.repeat(64),subject:'Fixture Certificate',issuer:'Fixture CA',validTo:'2027-01-01',chainTrusted:!state.error,trustIssues:state.error?['UNTRUSTED_AUTHORITY','NAME_MISMATCH']:[]}),
 respond:async(id,generation,value)=>{if(id==='otp-fixture'&&value!=='123456')throw new Error('fixture OTP mismatch');if(id==='points-fixture'){const p=JSON.parse(value);if(p.width!==1||p.height!==1||!Array.isArray(p.coordinates)||p.coordinates.length!==1)throw new Error('fixture captcha mismatch');}emit({state:'connected',challenge:undefined,resources:{targets:[{domains:['docs.corp.example'],cidrs:[],ports:['443'],network:'tcp'}],hosts:{},dnsServers:['10.20.0.53']}});},
 savePassword:async(id,password,remember)=>{profiles=profiles.map(p=>p.id===id?{...p,rememberPassword:remember}:p);if(remember&&password)passwords[id]=password;if(!remember)delete passwords[id];emit({});},
-clearCredentials:async(id)=>{delete passwords[id];emit({});},apply:async()=>true,onState:callback=>{listeners.add(callback);return()=>listeners.delete(callback);}
+clearCredentials:async(id)=>{delete passwords[id];emit({});},openDiagnostics:async()=>{},clearDiagnostics:async()=>{},apply:async()=>true,onState:callback=>{listeners.add(callback);return()=>listeners.delete(callback);}
 }});
 `,
 );
@@ -182,7 +182,7 @@ app.whenReady().then(async()=>{
  assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>JSON.stringify(s.profiles).includes("fixture-editor-password"))'),false);
  await textClick('高级分流');await wait('document.querySelector("#vpn-tab-routing").getAttribute("aria-selected")==="true"');
  assert.equal(await js('document.activeElement.getAttribute("aria-label")'),'自定义域名');
- for(const [label,value] of [['自定义域名','custom.corp.example'],['自定义 IP / 网段','10.80.30.40'],['固定域名解析','custom.corp.example 10.80.30.40']]){
+ for(const [label,value] of [['自定义域名','https://custom.corp.example/business/login'],['自定义 IP / 网段','10.80.30.40'],['固定域名解析','custom.corp.example 10.80.30.40']]){
    await js('(()=>{const el=document.querySelector('+JSON.stringify('textarea[aria-label="'+label+'"]')+');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(el,'+JSON.stringify(value)+');el.dispatchEvent(new Event("input",{bubbles:true}));})()');await sleep(60);
  }
  assert.equal(await js('document.querySelector("#vpn-panel-routing").textContent.includes("用户自定义 → 服务器资源")'),true);await capture('vpn-access-company-routing');
@@ -209,7 +209,27 @@ app.whenReady().then(async()=>{
  await click('[aria-label="编辑接入配置"]');await textClick('删除接入');await textClick('确认删除');await wait('!document.querySelector("[data-vpn-editor]")');
  assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.profiles.length)'),2);
  w.webContents.send('fixture:profiles',[]);await wait('document.body.innerText.includes("添加你的第一个 VPN 接入")');await capture('vpn-access-empty');
- await textClick('添加接入');await wait('!!document.querySelector("[data-vpn-editor]")');await textClick('取消');
+ await textClick('添加接入');await wait('!!document.querySelector("[data-vpn-editor]")');
+ await js('Array.from(document.querySelectorAll(".vpn-provider-option")).find(b=>b.textContent.includes("SoftEther")).click()');
+ assert.equal(await js('document.querySelector("input[aria-label=网关端口]").value'),'5555');
+ assert.equal(await js('Array.from(document.querySelectorAll("input")).find(el=>el.getAttribute("aria-label")==="Virtual HUB").value'),'VPN');
+ await input('配置名称','SoftEther fixture');await input('网关地址','vpn.example.com');await input('登录账号','fixture-user');
+ await click('#vpn-tab-routing');
+ assert.equal(await js('document.querySelector("#vpn-panel-routing").innerText.includes("公司 VPN 无需具备公网访问权限")'),true);await capture('vpn-access-softether-routing');
+ assert.equal(await js('document.querySelectorAll(".vpn-mode-option").length'),3);
+ assert.equal(await js('document.querySelector(".vpn-mode-option[aria-pressed=true]").textContent.includes("智能分流")'),true);
+ await js('Array.from(document.querySelectorAll(".vpn-mode-option")).find(el=>el.textContent.includes("全部走 VPN")).click()');
+ assert.equal(await js('document.querySelector("#vpn-panel-routing").textContent.includes("国外网站优先走代理")'),true);await capture('vpn-access-mode-vpn');
+ await js('Array.from(document.querySelectorAll(".vpn-mode-option")).find(el=>el.textContent.includes("自定义")).click()');
+ await js('(()=>{const el=Array.from(document.querySelectorAll("select")).find(el=>el.getAttribute("aria-label")==="国内公网出口");Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value").set.call(el,"vpn");el.dispatchEvent(new Event("change",{bubbles:true}));})()');
+ await capture('vpn-access-mode-custom');
+ await textClick('保存配置');await wait('!document.querySelector("[data-vpn-editor]")');
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.profiles[0].protocol)'), 'softether');
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>"routeChina" in s.profiles[0])'), false);
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.profiles[0].trafficMode)'), 'custom');
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.profiles[0].customRouting.domestic)'), 'vpn');
+ await click('[aria-label="编辑接入配置"]');await click('#vpn-tab-routing');
+ assert.equal(await js('document.querySelector(".vpn-mode-option[aria-pressed=true]").textContent.includes("自定义")'),true);await textClick('取消');
  w.webContents.send('fixture:profiles',require('./fixture.json'));await wait('!!document.querySelector(".vpn-connection-title")');
  await input('登录密码','fixture-only-secret');await click('input[aria-label="加密记住密码"]');
  await wait('window.electronAPI.corporateVpn.snapshot().then(s=>s.passwordSaved.fixture===true)');assert.equal(await js('document.querySelector("input[aria-label=登录密码]").value'),'');
@@ -228,6 +248,15 @@ app.whenReady().then(async()=>{
  w.webContents.send('fixture:state',{challenge:{...firstChallenge,expiresAt:Date.now()-1}});await wait('document.body.innerText.includes("本轮验证已超时")');
  await js('document.querySelector(".vpn-auth-dialog form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');await sleep(60);
  assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.state.state)'),'waiting_user');
+ await js('Array.from(document.querySelectorAll(".vpn-auth-dialog button")).find(b=>b.textContent.trim()==="取消连接").click()');await wait('!document.querySelector(".vpn-auth-dialog")');
+ w.webContents.send('fixture:state',{state:'idle',profileId:'fixture-other',requiresCoreRebuild:true});await wait('document.body.innerText.includes("连接时自动准备分流")');
+ assert.equal(await js('document.querySelector(".vpn-connect-actions button[type=submit]").disabled'),false);
+ assert.equal(await js('Array.from(document.querySelector(".vpn-access").querySelectorAll("button")).some(b=>b.textContent.trim()==="应用分流")'),false);
+ await input('登录密码','fixture-auto-routing');await textClick('连接 VPN');await wait('document.querySelector(".vpn-session-status").textContent.includes("正在准备分流")');
+ assert.equal(await js('Array.from(document.querySelectorAll(".vpn-connect-actions button")).find(b=>b.textContent.includes("取消连接")).disabled'),false);await capture('vpn-access-auto-routing');
+ await textClick('取消连接');await sleep(1900);assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.state.state)'), 'idle');assert.equal(await js('document.querySelector(".vpn-auth-dialog")'),null);
+ await input('登录密码','fixture-auto-routing');await textClick('连接 VPN');await wait('!!document.querySelector(".vpn-auth-dialog")');
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.state.requiresCoreRebuild)'),false);
  await js('Array.from(document.querySelectorAll(".vpn-auth-dialog button")).find(b=>b.textContent.trim()==="取消连接").click()');await wait('!document.querySelector(".vpn-auth-dialog")');
  await textClick('连接 VPN');await wait('!!document.querySelector("input[aria-label=验证码]")');
  assert.equal(await js('document.querySelector("input[aria-label=验证码]").value'),'');
@@ -252,6 +281,26 @@ app.whenReady().then(async()=>{
  await js('(()=>{const img=document.querySelector("img[alt=服务器验证码]"),r=img.getBoundingClientRect();img.dispatchEvent(new MouseEvent("click",{bubbles:true,clientX:r.left+0.1,clientY:r.top+0.1}));})()');
  await sleep(80);await textClick('提交验证码');await wait('document.body.innerText.includes("VPN 隧道已连接")');
  await textClick('断开连接');await wait('!!document.querySelector("input[aria-label=登录密码]")');assert.equal(await js('document.querySelector("input[aria-label=登录密码]").value'),'');
+ const baseFixture=require('./fixture.json')[0];
+ w.webContents.send('fixture:profiles', [{...baseFixture,id:'fixture-atrust',name:'aTrust 办公',protocol:'atrust',loginDomain:'local',authName:'本地密码认证'},{...baseFixture,id:'fixture-other',name:'另一个接入'}]);
+ await wait('document.querySelector(".vpn-connection-title")?.textContent.includes("aTrust 办公")');
+ await textClick('获取登录方式');await wait('document.querySelectorAll(".vpn-auth-choice").length===2');
+ assert.equal(await js('document.querySelector(".vpn-auth-choice[aria-pressed=true]").textContent.includes("本地密码认证")'),true);
+ await js('document.querySelectorAll(".vpn-auth-choice")[0].click()');await wait('document.querySelector(".vpn-auth-choice[aria-pressed=true]").textContent.includes("企业认证")');
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.profiles.find(p=>p.id==="fixture-atrust").loginDomain)'), 'custom0001');
+ await click('[aria-label="编辑接入配置"]');await click('#vpn-tab-advanced');
+ await js('(()=>{const el=document.querySelector("select[aria-label=本机诊断日志]");Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value").set.call(el,"full");el.dispatchEvent(new Event("change",{bubbles:true}));})()');
+ await wait('document.querySelector("#vpn-panel-advanced").textContent.includes("明文密码、验证码")');await js('document.querySelector("select[aria-label=本机诊断日志]").scrollIntoView({block:"center"});');await capture('vpn-access-diagnostics-settings');
+ await textClick('保存配置');await wait('!document.querySelector("[data-vpn-editor]")');await wait('document.querySelector(".vpn-diagnostics-bar").textContent.includes("含明文凭据")');
+ w.webContents.send('fixture:state',{state:'failed',profileId:'fixture-atrust',generation:20,error:'ATRUST_TRUSTED_ENDPOINT_REQUIRED',errorDetail:{stage:'authCheck',serverCode:'75500503',message:'authCheck failed with code 75500503: Client is not installed or web-only mode.'}});
+ await wait('!!document.querySelector(".vpn-error-detail[open]")');assert.equal(await noOverflow(),true);
+ await js('Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async value=>{window.fixtureCopied=value;}}});void 0;');await textClick('复制错误详情');assert.equal(await js('JSON.parse(window.fixtureCopied).serverCode'),'75500503');
+ await js('document.querySelector("main").parentElement.scrollTop=0;');await capture('vpn-access-atrust-login-diagnostic');
+ w.webContents.send('fixture:state',{state:'connected',profileId:'fixture-atrust',generation:21,error:undefined,errorDetail:undefined});await wait('document.body.innerText.includes("VPN 隧道已连接")');
+ await js('Array.from(document.querySelectorAll(".vpn-profile-item")).find(b=>b.textContent.includes("另一个接入")).click()');await wait('document.querySelector(".vpn-connection-title").textContent.includes("另一个接入")');
+ await input('登录密码','fixture-switch-password');await textClick('切换并连接');await wait('!!document.querySelector(".vpn-auth-dialog")');
+ assert.equal(await js('window.electronAPI.corporateVpn.snapshot().then(s=>s.state.profileId)'), 'fixture-other');
+ await js('Array.from(document.querySelectorAll(".vpn-auth-dialog button")).find(b=>b.textContent.trim()==="取消连接").click()');await wait('!document.querySelector(".vpn-auth-dialog")');
  assert.deepEqual(errors,[]);
  const report={renderer:'Electron',noNodeDashboard:true,directModeDashboard:true,light:true,dark:true,compact980:true,noHorizontalOverflow:true,connectVisibleAt780:true,applicationProxy:true,proxyPortUpdates:true,proxyAddressCopy:true,proxyPortCopy:true,proxyStatusAndAuth:true,proxyCopyFailure:true,search:true,editorTabs:true,preserveResourcePorts:true,advancedRoutingShortcut:true,customRoutingSaved:true,customRoutingScoped:true,routingPriorityVisible:true,createAtrust:true,saveAndDiscover:true,authDiscovery:true,certificate:true,certificateErrorShortcut:true,passwordSavedBeforeLogin:true,explicitPasswordSave:true,editorPasswordSave:true,realSystemEncryption:true,discardUnsaved:true,deleteProfile:true,keyboardFocusTrap:true,emptyState:true,manualOTP:true,challengeHideResume:true,challengeEscapeResume:true,challengeNewRoundReset:true,challengeExpiredSubmitBlocked:true,connectedReadOnlyView:true,atrustClickCaptcha:true,passwordCleared:true,errors};
  fs.writeFileSync(path.join(__dirname,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));w.destroy();app.quit();

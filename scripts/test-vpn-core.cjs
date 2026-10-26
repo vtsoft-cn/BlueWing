@@ -16,6 +16,7 @@ const result = spawnSync(
     './internal/winproxy',
     './client/easyconnect/...',
     './client/atrust/...',
+    './client/softether/...',
     './underlay',
   ],
   {

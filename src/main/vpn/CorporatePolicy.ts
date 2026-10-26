@@ -135,7 +135,21 @@ export class CorporatePolicy {
       const folder = path.join(this.dir, 'vpn-runtime', profile.id);
       const routePath = path.join(folder, 'route.json'),
         guardPath = path.join(folder, 'guard.json'),
-        dnsPath = path.join(folder, 'dns.json');
+        dnsPath = path.join(folder, 'dns.json'),
+        internetPath = path.join(folder, 'internet-active.json'),
+        internetDnsPath = path.join(folder, 'internet-dns-active.json');
+      this.publish(internetDnsPath, { version: 3, rules:
+        this.activeId === profile.id ? [{ domain_regex: ['.*'] }] : [] });
+      this.publish(internetPath, { version: 3, rules:
+        this.activeId === profile.id
+          ? [{ type: 'logical', mode: 'or', rules: [
+            { domain_regex: ['.*'] }, { ip_cidr: ['0.0.0.0/0', '::/0'] },
+          ] }] : [] });
+      // Revoke the previous preview's broad domestic outlet even if an older
+      // public core is still watching its rule-set during an upgrade.
+      const legacyChinaPath = path.join(folder, 'china-active.json');
+      if (fs.existsSync(legacyChinaPath))
+        this.publish(legacyChinaPath, { version: 3, rules: [] });
       this.publish(guardPath, sourceRules(all, true));
       this.publish(
         dnsPath,
@@ -173,6 +187,8 @@ export class CorporatePolicy {
         routePath,
         guardPath,
         dnsPath,
+        internetPath,
+        internetDnsPath,
       });
     }
     atomicJSON(

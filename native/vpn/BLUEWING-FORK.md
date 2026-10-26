@@ -8,6 +8,16 @@ Build with Go 1.25.6: from the BlueWing root run `npm run build:vpn-core` (`GO_B
 
 Control transport: newline-delimited JSON v1 on inherited stdin/stdout; hello must precede commands. Supported commands: configure, discoverAuth, connect, respond, setProbe, disconnect, shutdown. Passwords/session data travel only in the inherited pipe, not argv. stdout contains machine events; raw upstream logs and stderr are never forwarded into application logs. stdin EOF closes owned resources.
 
+Optional diagnostic events capture HTTP authentication metadata, or original headers/bodies in explicit full mode. The host's per-profile full diagnostics can intentionally record submitted plaintext passwords/verification codes and session cookies in separate local rotated files; it is disabled by default and reset on profile export/import. Raw upstream debug output remains disabled so application payload dumps cannot corrupt NDJSON. A trusted-endpoint rejection (75500503) retains its original server message and is not treated as a wrong password. This does not implement official aTrust endpoint attestation or solve gateways requiring the official client. See BlueWing's docs/design/atrust-diagnostics-and-upstream-review.md for gateway findings and upstream issue verification.
+
+SoftEther is implemented in `client/softether`, adapting MIT-licensed govpn wire
+helpers (pinned source and license in that directory) to the existing private
+gVisor stack. It uses bound TLS TCP, DHCP/ARP and lease renewal without an OS
+TAP/service/default route. The shared control protocol and per-profile routing
+keep company-only routing isolated from public direct/proxy outlets. See
+`docs/design/softether-access-implementation.md` in the BlueWing root for scope,
+real-gateway acceptance evidence and testing instructions.
+
 TCP company traffic is tunnel-only. Company DNS uses the provider DNS through the userspace stack; no public/system fallback. Local SOCKS requires per-launch random credentials. IPv4 TCP office workloads are implemented; external SOCKS UDP/ICMP and IPv6 tunnel traffic are not advertised as supported. CAS/OAuth/certificate login are not enabled in the product UI. aTrust requires its own real gateway acceptance, independent of EasyConnect.
 
 The AGPL source/license materials do not resolve BlueWing's overall distribution licensing decision. The application's release process must resolve the design's pending license decision before publishing a combined installer.

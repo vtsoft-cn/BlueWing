@@ -407,7 +407,8 @@ export const App: React.FC = () => {
 
             {currentTab === 'dns' && <DNS dns={dns} onSaveDns={handleSaveDns} />}
             {currentTab === 'vpn-access' && (
-              <VpnAccess settings={settings} coreState={coreState} />
+              <VpnAccess settings={settings} coreState={coreState}
+                publicProxy={{ enabled: !!activeNode && settings.routingMode !== 'direct', name: activeNode?.name, mode: settings.routingMode }} />
             )}
 
 

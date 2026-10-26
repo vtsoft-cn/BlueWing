@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/netip"
@@ -12,6 +14,38 @@ import (
 
 	"github.com/miekg/dns"
 )
+
+func TestOnlyExplicitVPNModesMayExpandCompanyScope(t *testing.T) {
+	var p profile
+	if err := json.Unmarshal([]byte(`{"routeChina":true,"trafficMode":"split","targets":[{"domains":["office.company.cn"],"cidrs":["10.20.0.0/16"]}]}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	s := &session{p: p}
+	if !s.allowed("10.20.30.40", 22, "tcp") || !s.companyDomain("office.company.cn") {
+		t.Fatal("company target not accepted")
+	}
+	if s.allowed("223.5.5.5", 80, "tcp") || s.companyDomain("chatgpt.com") {
+		t.Fatal("smart mode expanded into public traffic")
+	}
+	s.p.TrafficMode = "vpn"
+	if !s.allowed("223.5.5.5", 80, "tcp") || !s.companyDomain("www.baidu.com") {
+		t.Fatal("explicit VPN mode not applied")
+	}
+	if s.allowed("223.5.5.5", 80, "udp") || s.allowed("2606:4700::1111", 443, "tcp") {
+		t.Fatal("unsupported public transport accepted")
+	}
+	s.p.TrafficMode = "custom"
+	s.p.CustomRouting.Domestic = "direct"
+	s.p.CustomRouting.Foreign = "proxy"
+	s.p.CustomRouting.LAN = "direct"
+	if s.broadVPN() {
+		t.Fatal("custom mode without a VPN outlet expanded scope")
+	}
+	s.p.CustomRouting.Domestic = "vpn"
+	if !s.broadVPN() {
+		t.Fatal("explicit custom VPN outlet was ignored")
+	}
+}
 
 func TestRangeCIDRsDoesNotBroaden(t *testing.T) {
 	first, last := netip.MustParseAddr("10.20.1.1"), netip.MustParseAddr("10.20.2.0")
@@ -175,5 +209,15 @@ func TestCompanyDNSOfflineAndNoPublicFallback(t *testing.T) {
 	response, _, err = dnsClient.Exchange(q, ep.dns.Listener.Addr().String())
 	if err != nil || response.Rcode != dns.RcodeSuccess || len(response.Answer) != 0 {
 		t.Fatal("IPv4-only host must return empty AAAA", err)
+	}
+}
+func TestTrustedEndpointFailureKeepsServerEvidence(t *testing.T) {
+	err := fmt.Errorf("authCheck failed with code 75500503: client is not installed")
+	if safeCode(err) != "ATRUST_TRUSTED_ENDPOINT_REQUIRED" {
+		t.Fatal("trusted endpoint error misclassified")
+	}
+	d := failureDetail(err)
+	if d["stage"] != "authCheck" || d["serverCode"] != "75500503" || d["message"] != err.Error() {
+		t.Fatal("original error lost", d)
 	}
 }

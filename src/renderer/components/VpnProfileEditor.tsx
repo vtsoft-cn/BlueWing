@@ -24,6 +24,7 @@ import {
   VpnProfile,
 } from '../../types/corporateVpn';
 import { vpnProviderList, vpnProviders } from '../vpn/providers';
+import { vpnTrafficModes } from '../../utils/vpnRouting';
 import { Portal } from './Portal';
 import { Select } from './Select';
 import { toast } from './Toast';
@@ -35,6 +36,12 @@ const lines = (value: string) =>
     .split(/[\s,;，；]+/)
     .map((x) => x.trim())
     .filter(Boolean);
+const companyDomains = (value: string) => lines(value).map(entry => {
+  if (!/^https?:\/\//i.test(entry)) return entry;
+  const url = new URL(entry);
+  if (url.username || url.password) throw new Error('公司网址请勿包含账号或密码');
+  return url.hostname;
+});
 export const newVpnProfile = (): VpnProfile => ({
   id: '',
   name: '',
@@ -43,6 +50,8 @@ export const newVpnProfile = (): VpnProfile => ({
   username: '',
   authMethod: 'auth/psw',
   loginDomain: '',
+  trafficMode: 'split',
+  customRouting: { domestic: 'direct', foreign: 'proxy', lan: 'direct' },
   rememberPassword: false,
   rememberSession: false,
   tls: {},
@@ -90,7 +99,7 @@ export function VpnProfileEditor({
       .join('\n'),
   );
   const [tab, setTab] = useState<(typeof tabs)[number]['id']>(initialTab);
-  const [methods, setMethods] = useState<VpnAuthMethod[]>([]);
+  const [methods, setMethods] = useState<VpnAuthMethod[]>(profile.authChoices || []);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [password, setPassword] = useState('');
@@ -189,7 +198,7 @@ export function VpnProfileEditor({
       (fixed[parts[0]] ??= []).push(parts[1]);
     }
     const unchanged =
-      JSON.stringify(lines(domains)) ===
+      JSON.stringify(companyDomains(domains)) ===
         JSON.stringify(profile.targets.flatMap((t) => t.domains)) &&
       JSON.stringify(lines(cidrs)) ===
         JSON.stringify(profile.targets.flatMap((t) => t.cidrs));
@@ -199,10 +208,10 @@ export function VpnProfileEditor({
       targets: unchanged
         ? profile.targets
         : [
-            ...(lines(domains).length
+            ...(companyDomains(domains).length
               ? [
                   {
-                    domains: [...new Set(lines(domains))],
+                    domains: [...new Set(companyDomains(domains))],
                     cidrs: [],
                     network: 'tcp' as const,
                   },
@@ -244,7 +253,7 @@ export function VpnProfileEditor({
     await onSaved(result.profile);
     toast.success(
       result.requiresCoreRebuild
-        ? '配置已保存，请应用接入分流后连接'
+        ? '配置已保存，连接 VPN 时自动准备分流'
         : `已保存「${result.profile.name}」的接入配置`,
     );
   };
@@ -341,11 +350,13 @@ export function VpnProfileEditor({
                           className="vpn-provider-option"
                           aria-pressed={form.protocol === item.id}
                           onClick={() => {
+                            if (form.protocol === item.id) return;
                             setForm({
                               ...form,
                               protocol: item.id,
+                              gateway: { ...form.gateway, port: item.id === 'softether' ? 5555 : 10443 },
                               authMethod: 'auth/psw',
-                              loginDomain: '',
+                              loginDomain: item.id === 'softether' ? 'VPN' : '',
                               rememberSession:
                                 item.deviceSession && form.rememberSession,
                             });
@@ -440,6 +451,30 @@ export function VpnProfileEditor({
                       }
                     />
                   </label>
+                  {form.protocol === 'softether' && (
+                    <>
+                      <div className="vpn-two-columns">
+                        <label className="vpn-field">
+                          <span>Virtual HUB <em>*</em></span>
+                          <input className="vpn-input" aria-label="Virtual HUB" value={form.loginDomain}
+                            placeholder="例如 VPN，由管理员提供" maxLength={100}
+                            onChange={(e) => setForm({ ...form, loginDomain: e.target.value })} />
+                        </label>
+                        <label className="vpn-field">
+                          <span>认证方式</span>
+                          <select className="vpn-input" aria-label="SoftEther 认证方式" value={form.authMethod}
+                            onChange={(e) => setForm({ ...form, authMethod: e.target.value })}>
+                            <option value="auth/psw">标准密码认证</option>
+                            <option value="softether/radius">RADIUS / 域账号密码</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="vpn-notice"><Network size={17} /><p>
+                        内置原生协议，无需同时运行 SoftEther VPN Client。自动获取虚拟地址与 DNS；
+                        公司网段或域名可在「高级分流」补充，不改变系统默认网关。
+                      </p></div>
+                    </>
+                  )}
                   {provider.authDiscovery && (
                     <div className="vpn-auth-settings">
                       <div className="vpn-section-heading">
@@ -459,11 +494,10 @@ export function VpnProfileEditor({
                                 profileId = result.profile.id;
                                 await onSaved(result.profile, true);
                               }
-                              setMethods(
-                                await window.electronAPI.corporateVpn.discover(
-                                  profileId,
-                                ),
-                              );
+                              const discovered: VpnAuthMethod[] = await window.electronAPI.corporateVpn.discover(profileId);
+                              setMethods(discovered);
+                              setForm(current => ({ ...current, authChoices: discovered,
+                                authName: discovered.find(m => m.loginDomain === current.loginDomain && m.authType === current.authMethod)?.authName || current.authName }));
                               toast.success('认证方式已获取');
                             })
                           }
@@ -493,22 +527,28 @@ export function VpnProfileEditor({
                             value={form.loginDomain + '|' + form.authMethod}
                             onChange={(v) => {
                               const [loginDomain, authMethod] = v.split('|');
-                              setForm({ ...form, loginDomain, authMethod });
+                              const method = methods.find((m) => m.loginDomain === loginDomain && m.authType === authMethod);
+                              setForm({ ...form, loginDomain, authMethod, authName: method?.authName || '', authChoices: methods });
                             }}
                             options={[
-                              {
-                                value: form.loginDomain + '|' + form.authMethod,
-                                label: `当前：${form.loginDomain || '未指定登录域'}`,
-                              },
+                              ...(!methods.some((m) => m.loginDomain === form.loginDomain && m.authType === form.authMethod)
+                                ? [{
+                                    value: form.loginDomain + '|' + form.authMethod,
+                                    label: form.authName || '当前入口尚未匹配，请获取认证方式',
+                                  }]
+                                : []),
                               ...methods.map((method) => ({
                                 value: method.loginDomain + '|' + method.authType,
-                                label: `${method.authName} · ${method.loginDomain}${method.supported ? '' : '（暂不支持）'}`,
+                                label: `${method.authName}${method.supported ? '' : '（暂不支持）'}`,
                                 disabled: !method.supported,
                               })),
                             ]}
                           />
                         </label>
                       )}
+                      <details className="vpn-auth-parameters">
+                      <summary>手动配置认证参数</summary>
+                      <p className="vpn-field-hint">通常选择上面的认证入口即可。仅在管理员提供参数时手动填写。</p>
                       <div className="vpn-two-columns">
                         <label className="vpn-field">
                           <span>登录域</span>
@@ -518,7 +558,7 @@ export function VpnProfileEditor({
                             value={form.loginDomain}
                             placeholder="由网关提供"
                             onChange={(e) =>
-                              setForm({ ...form, loginDomain: e.target.value })
+                              setForm({ ...form, loginDomain: e.target.value, authName: '' })
                             }
                           />
                         </label>
@@ -528,7 +568,7 @@ export function VpnProfileEditor({
                             className="w-full"
                             ariaLabel="认证方式"
                             value={form.authMethod}
-                            onChange={(v) => setForm({ ...form, authMethod: v })}
+                            onChange={(v) => setForm({ ...form, authMethod: v, authName: '' })}
                             options={[
                               { value: 'auth/psw', label: '账号密码' },
                               { value: 'auth/smsCheckCode', label: '短信验证码' },
@@ -536,6 +576,7 @@ export function VpnProfileEditor({
                           />
                         </label>
                       </div>
+                      </details>
                     </div>
                   )}
                   {form.authMethod !== 'auth/smsCheckCode' && (
@@ -619,12 +660,55 @@ export function VpnProfileEditor({
                   <div className="vpn-section-intro">
                     <Network size={19} />
                     <div>
-                      <h3>此接入的自定义分流</h3>
+                      <h3>选择流量如何连接</h3>
                       <p>
-                        仅保存到「{form.name || '当前接入'}」，其他公司的配置独立。留空时使用服务器自动下发的资源。
+                        仅保存到「{form.name || '当前接入'}」，其他公司的配置独立。
+                        {form.protocol === 'softether' ? '自动识别虚拟网段；其他公司网段和域名请在此添加。' : '留空时使用服务器自动下发的资源。'}
                       </p>
                     </div>
                   </div>
+                  <div className="vpn-notice">
+                    <Globe2 size={18} />
+                    <p>{form.trafficMode === 'vpn'
+                      ? '默认流量通过 VPN。已启用公网代理时，国外网站优先走代理；VPN 需要允许相应目标。'
+                      : form.trafficMode === 'custom'
+                        ? '按下方设置分配出口。公司目标始终优先走 VPN，访问失败时不会回退公网。'
+                        : '公司目标通过 VPN；国内公网使用本机网络，国外网站使用已开启的公网代理。公司 VPN 无需具备公网访问权限。'}
+                      {' '}当前 VPN 隧道支持 IPv4 TCP；未开启代理时，智能分流的普通公网使用本机网络。</p>
+                  </div>
+                  <div className="vpn-mode-options" role="group" aria-label="分流模式">
+                    {vpnTrafficModes.map(mode => (
+                      <button type="button" key={mode.id} className="vpn-mode-option"
+                        aria-pressed={(form.trafficMode || 'split') === mode.id}
+                        onClick={() => setForm({ ...form, trafficMode: mode.id })}>
+                        <span className="vpn-mode-option-top"><strong>{mode.name}</strong>
+                          {mode.recommended ? <span className="vpn-mode-recommended">默认</span> : null}</span>
+                        <small>{mode.summary}</small>
+                        {(form.trafficMode || 'split') === mode.id && <Check size={15} />}
+                      </button>
+                    ))}
+                  </div>
+                  {form.trafficMode === 'custom' && (
+                    <div className="vpn-custom-outlets">
+                      {([['domestic', '国内公网'], ['foreign', '国外网站'], ['lan', '其他局域网']] as const).map(([key, label]) => (
+                        <label className="vpn-field" key={key}><span>{label}</span>
+                          <select className="vpn-input" aria-label={`${label}出口`}
+                            value={form.customRouting?.[key] || (key === 'foreign' ? 'proxy' : 'direct')}
+                            onChange={e => setForm({ ...form, customRouting: {
+                              domestic: 'direct', foreign: 'proxy', lan: 'direct', ...form.customRouting,
+                              [key]: e.target.value,
+                            } })}>
+                            <option value="direct">本机网络</option>
+                            <option value="vpn">此 VPN</option>
+                            <option value="proxy">公网代理（未启用时直连）</option>
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <div className="vpn-section-heading"><div><h3>公司资源</h3>
+                    <p>{form.protocol === 'softether' ? '自动发现虚拟网段；其他资源可补充。' : '连接后自动读取网关授权资源，也可以手动补充。'}
+                      不知道网段时，填写一个公司网址或服务器 IP 也可以。</p></div></div>
                   <div className="vpn-two-columns">
                     <label className="vpn-field">
                       <span>自定义域名</span>
@@ -636,7 +720,7 @@ export function VpnProfileEditor({
                         value={domains}
                         onChange={(e) => setDomains(e.target.value)}
                       />
-                      <small>每行一个域名，包含它的子域名</small>
+                      <small>每行一个公司域名或 http(s) 网址，自动提取域名并包含子域名</small>
                     </label>
                     <label className="vpn-field">
                       <span>自定义 IP / 网段</span>
@@ -822,6 +906,20 @@ export function VpnProfileEditor({
                       </button>
                     </div>
                   )}
+                  <label className="vpn-field">
+                    <span>本机诊断日志</span>
+                    <select className="vpn-input" aria-label="本机诊断日志"
+                      value={form.diagnosticMode || 'off'}
+                      onChange={e => setForm({ ...form, diagnosticMode: e.target.value as VpnProfile['diagnosticMode'] })}>
+                      <option value="off">基础错误（默认）</option>
+                      <option value="detail">连接诊断（请求路径、状态和耗时）</option>
+                      <option value="full">完整诊断（含密码和验证码）</option>
+                    </select>
+                    <small>保存在本机独立文件，可在连接页面打开或清空。每个文件最多约 10 MB，保留一份轮换文件。</small>
+                  </label>
+                  {form.diagnosticMode === 'full' && <div className="vpn-notice danger" role="status"><p>
+                    完整诊断会记录提交的明文密码、验证码及原始认证请求和响应（含 Cookie、令牌）。仅在本机保存，请勿直接分享此日志。
+                  </p></div>}
                 </section>
               </fieldset>
             </div>

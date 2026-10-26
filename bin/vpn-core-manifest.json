@@ -8,12 +8,23 @@
     "commit": "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da"
   },
   "toolchain": "go version go1.25.6 windows/amd64",
-  "sourceSha256": "946216fb59c65b8fb921d225d80d96042ecadb22c4fdb1f0a86ea41e2b1a9f41",
-  "sha256": "9acb009120b5d70df3be28d66a3eee54988a80007c30a44489a08152d283d6ca",
-  "sourceArchiveSha256": "f9a664bd587b1c04ca0b1557d8e2172210426704287e0df6b2bf8b4cada9c7fd",
+  "additionalProviders": [
+    {
+      "name": "softether",
+      "repository": "https://github.com/bclswl0827/govpn",
+      "tag": "v0.2.4",
+      "commit": "78c78a37330f361c8f4922b0e7e126a3fc495742",
+      "license": "MIT",
+      "source": "client/softether"
+    }
+  ],
+  "sourceSha256": "59dd4b7aa8b25dd8b422e129c7d331106ef8fb54c6d21f360ffc942f0f8566eb",
+  "sha256": "8c6d49f3728b208d2c9f83c94c6f9e9d8b6c3d4f7578515b62b2778eba53bf65",
+  "sourceArchiveSha256": "c61bbf821a46b757a555a7f0d6f15a9379947cbb27e63409e436e1cd130d83ae",
   "protocols": [
     "easyconnect",
-    "atrust"
+    "atrust",
+    "softether"
   ],
   "supportedAuth": {
     "easyconnect": [
@@ -27,12 +38,17 @@
       "auth/smsCheckCode",
       "otp",
       "image"
+    ],
+    "softether": [
+      "auth/psw",
+      "softether/radius"
     ]
   },
   "udp": false,
   "verification": {
     "easyconnect": "NOT_RUN_REAL_GATEWAY",
     "atrust": "NOT_RUN_REAL_GATEWAY",
+    "softether": "NOT_RUN_REAL_GATEWAY",
     "tun": "NOT_RUN_REAL_WINDOWS"
   },
   "license": "AGPL-3.0",

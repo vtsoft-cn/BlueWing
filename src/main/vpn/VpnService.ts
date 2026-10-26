@@ -8,6 +8,10 @@ import { CorporateVpnManager } from './CorporateVpnManager';
 import { VpnCoreProcess } from './VpnCoreProcess';
 
 let instance: CorporateVpnManager | undefined;
+let routingInitializer: ((isCurrent: () => boolean) => Promise<boolean>) | undefined;
+export function setVpnRoutingInitializer(initializer: (isCurrent: () => boolean) => Promise<boolean>): void {
+  routingInitializer = initializer;
+}
 export function getCorporateVpn(): CorporateVpnManager {
   if (!instance) {
     const db = Database.getInstance(),
@@ -21,6 +25,10 @@ export function getCorporateVpn(): CorporateVpnManager {
         running: () => SingBoxManager.getInstance().getState() === 'running',
         pid: () => SingBoxManager.getInstance().getPid(),
         settings: () => db.getSettings(),
+        applyRouting: async isCurrent => {
+          if (!routingInitializer) throw new Error('ROUTING_PREPARE_FAILED');
+          return routingInitializer(isCurrent);
+        },
       },
     );
   }

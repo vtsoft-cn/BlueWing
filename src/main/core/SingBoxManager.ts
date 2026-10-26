@@ -400,7 +400,10 @@ export class SingBoxManager extends EventEmitter {
         // 18s 覆盖 sing-box 的 15s 入站超时;进程死亡也会立即终止等待。
         const tunInbound = config.inbounds?.find((i: any) => i.type === 'tun');
         const tunName: string | undefined = tunInbound?.interface_name;
-        const isReady = await this.waitForReady(mixedPort, clashPort, tunName ? 18_000 : 5000, tunName);
+        // Windows adapter/DNS changes and loaded machines can delay startup past
+        // five seconds. Keep the same child alive instead of killing a healthy
+        // startup and presenting an avoidable automatic reconnect.
+        const isReady = await this.waitForReady(mixedPort, clashPort, 20_000, tunName);
         if (isReady && this.process && !this.process.killed) {
           this.setState('running');
           this.emit('configured',config);
