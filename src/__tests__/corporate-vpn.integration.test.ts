@@ -9,7 +9,7 @@ import path from 'path';
 import { execFileSync, spawn } from 'child_process';
 import { ProfileRepository } from '../main/vpn/ProfileRepository';
 import { CorporatePolicy } from '../main/vpn/CorporatePolicy';
-import { CorporateVpnManager } from '../main/vpn/CorporateVpnManager';
+import { CorporateVpnSession as CorporateVpnManager } from '../main/vpn/CorporateVpnSession';
 import { CredentialVault } from '../main/vpn/CredentialVault';
 import { VpnCoreProcess } from '../main/vpn/VpnCoreProcess';
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
@@ -22,7 +22,7 @@ import { AppSettings, DnsConfig, ProxyNode } from '../types';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-test('A company VPN that rejects public traffic leaves CN local and foreign traffic on the proxy', { timeout: 35000 }, async (t) => {
+test('A company VPN that rejects public traffic leaves CN local and foreign traffic on the proxy', { timeout: 120000 }, async (t) => {
   const cases = [
     { name: 'smart / public VPN denied', mode: 'split', proxy: true, domestic: 'DIRECT', foreign: 'PUBLIC', lan: 'DIRECT', denyPublic: true },
     { name: 'all VPN / foreign proxy has priority', mode: 'vpn', proxy: true, domestic: 'VPN', foreign: 'PUBLIC', lan: 'VPN', denyPublic: false },
@@ -53,7 +53,7 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
           const host = data[3] === 1 ? [...data.subarray(4, 8)].join('.') : data.subarray(5, 5 + data[4]).toString();
           if (companyOnly) {
             companyAttempts.push(host);
-            if (policyCase.denyPublic && !['192.0.2.10', 'office.company.cn'].includes(host)) { socket.end(Buffer.from([5, 2, 0, 1, 0, 0, 0, 0, 0, 0])); stage = 4; return; }
+            if (policyCase.denyPublic && !['8.8.8.8', 'office.company.cn'].includes(host)) { socket.end(Buffer.from([5, 2, 0, 1, 0, 0, 0, 0, 0, 0])); stage = 4; return; }
           }
           data = data.subarray(n); socket.write(Buffer.from([5, 0, 0, 1, 127, 0, 0, 1, 0, 1])); stage = 3;
         }
@@ -64,7 +64,7 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
   const vpnPort = await serve('VPN', true), publicPort = await serve('PUBLIC');
   // Both mock SOCKS outlets use password authentication; no real site is contacted.
   const repo = new ProfileRepository(dir);
-  const p = repo.save({ id: 'cn', name: 'Company only', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: '', trafficMode: policyCase.mode, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['192.0.2.10/32'] }], hosts: {}, bindInterface: '' });
+  const p = repo.save({ id: 'cn', name: 'Company only', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: '', trafficMode: policyCase.mode, autoDiscoverPrivate: false, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['8.8.8.8/32'] }], hosts: {}, bindInterface: '' });
   const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')); stored.profiles[0].socksPort = vpnPort; stored.profiles[0].dnsPort = await freePort(); fs.writeFileSync(path.join(dir, 'vpn-profiles.json'), JSON.stringify(stored)); repo.reload();
   const policy = new CorporatePolicy(dir); policy.prepare(repo.list()); const runtime = policy.runtime();
   const direct = await serve('DIRECT');
@@ -76,26 +76,92 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
   const file = path.join(dir, 'config.json'), binary = path.resolve('bin/sing-box.exe'); fs.writeFileSync(file, JSON.stringify(config)); execFileSync(binary, ['check', '-c', file], { windowsHide: true });
   const port = config.inbounds.find((r: any) => r.tag === 'mixed-in').listen_port;
   let log = ''; sb = spawn(binary, ['run', '-c', file], { windowsHide: true }); sb.stdout?.on('data', b => log += b); sb.stderr?.on('data', b => log += b);
-  let ready = false; for (let i = 0; i < 40; i++) { try { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT') { ready = true; break; } } catch {} await sleep(100); }
+  // Match the product's 20s startup budget on busy Windows hosts; exited cores fail immediately.
+  let ready = false; const startupDeadline = Date.now() + 20000;
+  while (Date.now() < startupDeadline) { if (sb.exitCode !== null) break; try { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT') { ready = true; break; } } catch {} await sleep(100); }
   assert.ok(ready, log); const pid = sb.pid;
+  assert.equal((await request(port, 'http://8.8.8.8/')).body, policyCase.proxy ? 'PUBLIC' : 'DIRECT', 'An inactive VPN intercepted a saved public target');
   policy.setProbe(p.id, 'company-on', repo.list());
-  let active = false; for (let i = 0; i < 30; i++) { try { if ((await request(port, 'http://192.0.2.10/')).body === 'VPN') { active = true; break; } } catch {} await sleep(100); }
+  let active = false; for (let i = 0; i < 30; i++) { try { if ((await request(port, 'http://8.8.8.8/')).body === 'VPN') { active = true; break; } } catch {} await sleep(100); }
   assert.ok(active, log);
   assert.equal((await request(port, 'http://www.baidu.com/')).body, policyCase.domestic, log);
   assert.equal((await request(port, 'http://223.5.5.5/')).body, policyCase.domestic, log);
   assert.equal((await request(port, 'http://chatgpt.com/')).body, policyCase.foreign, log);
   assert.equal((await request(port, 'http://1.1.1.1/')).body, policyCase.foreign, log);
   assert.equal((await request(port, 'http://192.168.77.1/')).body, policyCase.lan, log);
-  assert.equal((await request(port, 'http://192.0.2.10/')).body, 'VPN', log);
+  assert.equal((await request(port, 'http://8.8.8.8/')).body, 'VPN', log);
   assert.equal((await request(port, 'http://office.company.cn/')).body, 'VPN', log);
-  if (policyCase.denyPublic) assert.ok(companyAttempts.every(host => ['192.0.2.10', 'office.company.cn'].includes(host)), 'Public traffic must never enter the company VPN');
+  if (policyCase.denyPublic) assert.ok(companyAttempts.every(host => ['8.8.8.8', 'office.company.cn'].includes(host)), 'Public traffic must never enter the company VPN');
   policy.deactivate(repo.list()); let restored = false;
-  for (let i = 0; i < 30; i++) { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT') { restored = true; break; } await sleep(100); }
+  for (let i = 0; i < 30; i++) { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT' && (await request(port, 'http://8.8.8.8/')).body === (policyCase.proxy ? 'PUBLIC' : 'DIRECT')) { restored = true; break; } await sleep(100); }
   assert.ok(restored, log); assert.equal(sb.pid, pid); assert.equal(sb.exitCode, null);
   assert.equal((await request(port, 'http://chatgpt.com/')).body, policyCase.proxy ? 'PUBLIC' : 'DIRECT', log);
-  try { assert.notEqual((await request(port, 'http://192.0.2.10/')).body, 'DIRECT'); } catch (error) { if (error instanceof assert.AssertionError) throw error; }
+  assert.equal((await request(port, 'http://8.8.8.8/')).body, policyCase.proxy ? 'PUBLIC' : 'DIRECT', 'Explicit disconnect must restore ordinary routing');
   });
 });
+test('Automatic private dispatch protects a learned TCP port after a failure and releases it on explicit disconnect', { timeout: 30000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-auto-private-'));
+  const sockets = new Set<net.Socket>(), servers: net.Server[] = [];
+  let child: ReturnType<typeof spawn> | undefined;
+  t.after(async () => {
+    if (child) { const closed = new Promise(r => child!.exitCode !== null ? r(null) : child!.once('exit', r)); child.kill(); await closed; }
+    for (const socket of sockets) socket.destroy(); for (const server of servers) server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const attempted: string[] = [];
+  const serve = async (body: string, automatic = false) => {
+    const server = net.createServer(socket => {
+      sockets.add(socket); socket.once('close', () => sockets.delete(socket));
+      let stage = 0, data = Buffer.alloc(0);
+      socket.on('data', chunk => {
+        data = Buffer.concat([data, chunk]);
+        if (stage === 0 && data.length >= 2 + data[1]) { data = data.subarray(2 + data[1]); socket.write(Buffer.from([5, 2])); stage = 1; }
+        if (stage === 1 && data.length >= 3 + data[1]) {
+          const n = 3 + data[1] + data[2 + data[1]]; if (data.length < n) return;
+          data = data.subarray(n); socket.write(Buffer.from([1, 0])); stage = 2;
+        }
+        if (stage === 2 && data.length >= 5) {
+          const n = data[3] === 1 ? 10 : data[3] === 4 ? 22 : 7 + data[4]; if (data.length < n) return;
+          const host = data[3] === 1 ? [...data.subarray(4, 8)].join('.') : data.subarray(5, 5 + data[4]).toString();
+          if (automatic) attempted.push(host + ':' + data.readUInt16BE(n - 2));
+          data = data.subarray(n); socket.write(Buffer.from([5, 0, 0, 1, 127, 0, 0, 1, 0, 1])); stage = 3;
+        }
+        if (stage === 3 && data.includes(Buffer.from('\r\n\r\n'))) { socket.end(`HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n${body}`); stage = 4; }
+      });
+    }); servers.push(server); return listen(server);
+  };
+  const autoPort = await serve('AUTO', true), localPort = await serve('LOCAL'), publicPort = await serve('PUBLIC');
+  const repo = new ProfileRepository(dir), p = repo.save({ id: 'auto-private', name: 'Auto', protocol: 'softether', gateway: { host: 'vpn.example.com', port: 5555 }, username: 'fixture', loginDomain: 'VPN', authMethod: 'auth/psw', targets: [], hosts: {}, tls: {}, bindInterface: '' });
+  const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')); stored.profiles[0].socksPort = autoPort; stored.profiles[0].dnsPort = await freePort(); fs.writeFileSync(path.join(dir, 'vpn-profiles.json'), JSON.stringify(stored)); repo.reload();
+  const policy = new CorporatePolicy(dir); policy.prepare(repo.list());
+  const config = ConfigGenerator.generate('public', [{ id: 'public', name: 'Public', type: 'socks', server: '127.0.0.1', port: publicPort, username: 'fixture', password: 'fixture', groupId: 'fixture' }], [], [],
+    { mode: 'standard', remoteDns: '223.5.5.5', directDns: '223.5.5.5', servers: [] } as DnsConfig,
+    { mixedPort: await freePort(), tunEnabled: false, routingMode: 'rule', clashApiEnabled: false, logLevel: 'warn' } as AppSettings, undefined, policy.runtime());
+  config.experimental.cache_file.path = path.join(dir, 'cache.db').replace(/\\/g, '/');
+  config.outbounds[config.outbounds.findIndex((o: any) => o.tag === 'direct')] = { tag: 'direct', type: 'socks', server: '127.0.0.1', server_port: localPort, username: 'fixture', password: 'fixture', version: '5' };
+  config.inbounds.find((i: any) => i.tag === 'speedtest-in').listen_port = await freePort();
+  const file = path.join(dir, 'config.json'), binary = path.resolve('bin/sing-box.exe'); fs.writeFileSync(file, JSON.stringify(config));
+  execFileSync(binary, ['check', '-c', file], { windowsHide: true });
+  child = spawn(binary, ['run', '-c', file], { windowsHide: true }); let log = ''; child.stderr?.on('data', b => log += b);
+  const port = config.inbounds.find((i: any) => i.tag === 'mixed-in').listen_port;
+  let ready = false; for (let i = 0; i < 40; i++) { try { if ((await request(port, 'http://192.168.77.12:22/')).body === 'LOCAL') { ready = true; break; } } catch {} await sleep(100); } assert.ok(ready, log);
+  policy.setProbe(p.id, 'active', repo.list());
+  let active = false; for (let i = 0; i < 30; i++) { if ((await request(port, 'http://192.168.77.12:22/')).body === 'AUTO') { active = true; break; } await sleep(100); } assert.ok(active, log);
+  assert.equal((await request(port, 'http://223.5.5.5/')).body, 'LOCAL');
+  assert.equal((await request(port, 'http://1.1.1.1/')).body, 'PUBLIC');
+  assert.ok(attempted.every(value => value === '192.168.77.12:22'), 'Public destinations entered discovery');
+  policy.learn(p.id, { address: '192.168.77.12', port: 22, network: 'tcp', outlet: 'vpn' }, repo.list());
+  policy.deactivate(repo.list(), true);
+  let protectedPort = false;
+  for (let i = 0; i < 30; i++) { try { protectedPort = !['AUTO', 'LOCAL'].includes((await request(port, 'http://192.168.77.12:22/')).body); } catch { protectedPort = true; } if (protectedPort) break; await sleep(100); }
+  assert.ok(protectedPort, log);
+  try { assert.notEqual((await request(port, 'http://192.168.77.12:22/')).body, 'LOCAL'); } catch (e) { if (e instanceof assert.AssertionError) throw e; }
+  assert.equal((await request(port, 'http://192.168.77.12:80/')).body, 'LOCAL', 'learned port expanded into whole-host ownership');
+  policy.deactivate(repo.list());
+  assert.equal(policy.discovery.targets(repo.get(p.id)).length, 1, 'Disconnect must retain discovery settings');
+  let cleared = false; for (let i = 0; i < 30; i++) { try { if ((await request(port, 'http://192.168.77.12:22/')).body === 'LOCAL') { cleared = true; break; } } catch {} await sleep(100); } assert.ok(cleared, log);
+});
+
 const listen = (s: net.Server | http.Server, host = '127.0.0.1') =>
   new Promise<number>((resolve) =>
     s.listen(0, host, () => resolve((s.address() as net.AddressInfo).port)),
@@ -215,7 +281,7 @@ test('Standalone VPN: no node and explicit direct mode resolve and reach ordinar
     assert.equal(proxyConnections, 0, 'ordinary or company traffic must never use a saved proxy in direct mode');
     assert.ok(!queries.includes('dev.corp.example'), 'company DNS must never fall back to ordinary internet DNS');
     policy.deactivate(repo.list()); await sleep(400);
-    try { const result = await request(mixedPort, `http://127.0.0.2:${trapPort}/`); assert.notEqual(result.body, 'COMPANY-LEAK'); } catch (error) { if (error instanceof assert.AssertionError) throw error; }
+    assert.equal((await request(mixedPort, `http://127.0.0.2:${trapPort}/`)).body, 'COMPANY-LEAK', 'Manual disconnect must release prior company targets');
     assert.equal((await request(mixedPort, `http://ordinary.public.example:${ordinaryPort}/`)).body, 'PUBLIC-DIRECT');
   });
 });
@@ -665,4 +731,32 @@ test('A running public proxy installs a newly saved VPN on connect and skips the
   assert.equal((await request(mixedPort, url)).body, 'PUBLIC-PROXY');
   const installed = sb.getPid(); await vpn.disconnect(); await vpn.connect(p.id, 'fixture-only-password');
   assert.equal(applications, 1); assert.equal(loginCommands, 2); assert.equal(sb.getPid(), installed);
+});
+
+test('Runtime TUN permission fallback releases default-NIC binding without creating a TUN', { timeout: 30000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-vpn-route-fallback-'));
+  const prior = process.env.BLUEWING_DATA_DIR; process.env.BLUEWING_DATA_DIR = dir;
+  Database.resetInstance();
+  const db = Database.getInstance(dir), manager: SingBoxManager = new (SingBoxManager as any)();
+  t.mock.method(manager, 'isAdmin', () => false);
+  t.mock.method(LogManager, 'getInstance', () => ({ addLog() {} }) as any);
+  const sockets = new Set<net.Socket>(), server = http.createServer((_, response) => response.end('OS-ROUTE'));
+  server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  const localPort = await listen(server), mixedPort = await freePort();
+  t.after(async () => {
+    await manager.stop(); for (const socket of sockets) socket.destroy(); server.close(); Database.resetInstance();
+    if (prior === undefined) delete process.env.BLUEWING_DATA_DIR; else process.env.BLUEWING_DATA_DIR = prior;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  db.saveSettings({ mixedPort, tunEnabled: true, routingMode: 'direct', clashApiEnabled: false });
+  const config = ConfigGenerator.generate('', [], [], [], { mode: 'standard', remoteDns: '223.5.5.5', directDns: '223.5.5.5', servers: [] } as DnsConfig, db.getSettings());
+  config.inbounds.find((i: any) => i.tag === 'speedtest-in').listen_port = await freePort();
+  assert.equal(config.route.auto_detect_interface, true);
+  assert.equal(await manager.start(config), true);
+  assert.equal(manager.wasTunStrippedLastStart(), true);
+  const live = JSON.parse(manager.getLiveConfig());
+  assert.equal(live.route.auto_detect_interface, false);
+  assert.equal(live.inbounds.some((i: any) => i.type === 'tun'), false);
+  assert.equal((await request(mixedPort, `http://127.0.0.1:${localPort}/`)).body, 'OS-ROUTE');
+  assert.equal(db.getSettings().tunEnabled, true, 'Runtime fallback overwrote the saved user choice');
 });

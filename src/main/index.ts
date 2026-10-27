@@ -887,10 +887,10 @@ for (const [name, handler] of Object.entries({
   save: (profile: unknown) => getCorporateVpn().save(profile),
   remove: (id: string) => getCorporateVpn().remove(id),
   connect: (id: string, password: string) => getCorporateVpn().connect(id, password),
-  disconnect: () => getCorporateVpn().disconnect(),
+  disconnect: (id?: string) => getCorporateVpn().disconnect(id),
   discover: (id: string) => getCorporateVpn().discover(id),
   certificate: (id: string) => getCorporateVpn().certificate(id),
-  respond: (id: string, generation: number, value: string) => getCorporateVpn().respond(id, generation, value),
+  respond: (id: string, generation: number, value: string, profileId?: string) => getCorporateVpn().respond(id, generation, value, profileId),
   clearCredentials: (id: string) => getCorporateVpn().clearCredentials(id),
   savePassword: (id: string, password: string, remember: boolean) => getCorporateVpn().savePassword(id, password, remember),
   openDiagnostics: async (id: string) => {
@@ -898,6 +898,7 @@ for (const [name, handler] of Object.entries({
     if (error) throw new Error(error);
   },
   clearDiagnostics: (id: string) => getCorporateVpn().clearDiagnostics(id),
+  clearDiscoveredTargets: (id: string) => getCorporateVpn().clearDiscoveredTargets(id),
   apply: () => handleCoreStart({ userInitiated: true }),
 })) {
   ipcMain.handle(`vpn:${name}`, (event, ...args: any[]) => {

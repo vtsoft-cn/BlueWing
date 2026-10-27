@@ -17,7 +17,7 @@ import {
   childEnvironment,
   VpnCoreProcess,
 } from '../main/vpn/VpnCoreProcess';
-import { CorporateVpnManager } from '../main/vpn/CorporateVpnManager';
+import { CorporateVpnSession as CorporateVpnManager } from '../main/vpn/CorporateVpnSession';
 import { applyCorporateConfig } from '../main/vpn/CorporateConfig';
 import { VpnProfile } from '../types/corporateVpn';
 import { ImportJournal } from '../main/db/backup/ImportJournal';
@@ -28,6 +28,7 @@ import { gatewayTrust } from '../main/vpn/GatewayTrust';
 import { dataDirArgument, launchDataDir } from '../main/system/LaunchDataDir';
 import { vpnRouting } from '../utils/vpnRouting';
 import { VpnDiagnostics } from '../main/vpn/VpnDiagnostics';
+import { PrivateRouteDiscovery, privateIPv4 } from '../main/vpn/PrivateRouteDiscovery';
 
 export const sample = (): VpnProfile => ({
   id: '',
@@ -57,6 +58,59 @@ function temp(t: any) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test('Automatic private discovery defaults on, preserves opt-out and never accepts public scope', t => {
+  const repo = new ProfileRepository(temp(t));
+  const p = repo.save(sample());
+  assert.equal(p.autoDiscoverPrivate, true);
+  repo.save({ ...p, autoDiscoverPrivate: false });
+  assert.equal(new ProfileRepository(repo.dir).get(p.id).autoDiscoverPrivate, false);
+  assert.throws(() => validateProfile({ ...p, autoDiscoverPrivate: 'yes' }), /自动识别/);
+  for (const ip of ['10.0.0.1', '172.16.0.1', '172.31.255.254', '192.168.1.1']) assert.equal(privateIPv4(ip), true);
+  for (const ip of ['1.1.1.1', '127.0.0.1', '169.254.1.1', '172.32.0.1', '198.18.0.1', '::1', 'fd00::1', '10.0.0.999']) assert.equal(privateIPv4(ip), false);
+});
+
+test('Discovery learns exact private TCP endpoints per gateway and forgets a path found locally', t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample());
+  let cache = new PrivateRouteDiscovery(dir);
+  assert.equal(cache.observe(p, '192.168.77.12', 22, 'vpn'), true);
+  assert.equal(cache.observe(p, '192.168.77.12', 22, 'vpn'), false);
+  cache = new PrivateRouteDiscovery(dir);
+  assert.deepEqual(cache.targets(p), [{ domains: [], cidrs: ['192.168.77.12/32'], ports: ['22'], network: 'tcp' }]);
+  assert.deepEqual(cache.targets({ ...p, gateway: { ...p.gateway, host: 'other.example.com' } }), []);
+  assert.deepEqual(cache.targets({ ...p, id: 'other-company' }), []);
+  for (const [ip, port] of [['1.1.1.1', 443], ['192.168.77.12', 0], ['192.168.77.12', 65536], ['192.168.77.12', '22']] as const)
+    assert.equal(cache.observe(p, ip, port, 'vpn'), false);
+  assert.equal(cache.observe({ ...p, autoDiscoverPrivate: false }, '192.168.77.13', 22, 'vpn'), false);
+  assert.equal(cache.observe({ ...p, trafficMode: 'vpn' }, '192.168.77.13', 22, 'vpn'), false);
+  assert.equal(cache.observe(p, '192.168.77.12', 22, 'direct'), true);
+  assert.deepEqual(new PrivateRouteDiscovery(dir).targets(p), []);
+  cache.observe(p, '10.99.0.1', 443, 'vpn'); cache.clear(p.id);
+  assert.deepEqual(new PrivateRouteDiscovery(dir).targets(p), []);
+});
+
+test('Learned endpoint guards preserve ports and never expand manual or gateway ownership', t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), policy = new CorporatePolicy(dir);
+  policy.prepare(repo.list());
+  const observation = { address: '192.168.77.12', port: 22, network: 'tcp', outlet: 'vpn' };
+  assert.equal(policy.learn(p.id, observation, repo.list()), false);
+  policy.setProbe(p.id, 'connected', repo.list());
+  assert.equal(policy.learn(p.id, { ...observation, network: 'udp' }, repo.list()), false);
+  assert.equal(policy.learn(p.id, observation, repo.list()), true);
+  const runtime = policy.runtime().profiles[0], guard = JSON.parse(fs.readFileSync(runtime.discoveredGuardPath!, 'utf8'));
+  assert.deepEqual(guard.rules, [{ ip_cidr: ['192.168.77.12/32'], network: ['tcp'], port: [22] }]);
+  assert.ok(!fs.readFileSync(runtime.guardPath, 'utf8').includes('192.168.77.12'));
+  assert.ok(!fs.readFileSync(runtime.routePath, 'utf8').includes('192.168.77.12'));
+  policy.deactivate(repo.list(), true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(runtime.discoveredGuardPath!, 'utf8')), guard);
+  const restarted = new CorporatePolicy(dir); restarted.prepare(repo.list());
+  assert.equal(restarted.discovery.targets(p).length, 1);
+  assert.deepEqual(JSON.parse(fs.readFileSync(runtime.discoveredGuardPath!, 'utf8')).rules, []);
+  restarted.begin(p.id, repo.list());
+  restarted.clearDiscovered(p, repo.list());
+  assert.deepEqual(JSON.parse(fs.readFileSync(runtime.discoveredGuardPath!, 'utf8')).rules, []);
+  assert.ok(fs.readFileSync(runtime.guardPath, 'utf8').includes('10.20.30.40'));
+});
 
 test('SoftEther validates HUB/auth and strips secrets and the legacy broad VPN outlet', (t) => {
   const repo = new ProfileRepository(temp(t));
@@ -340,7 +394,7 @@ test('VPN child environment strips case-insensitive proxy and TLS keylog variabl
   assert.equal(env.BLUEWING_DATA_DIR, 'fixture');
   assert.equal(Object.keys(env).length, 2);
 });
-test('Company policy guards all ports, only activates selected profile and retains revoked targets across restart', (t) => {
+test('Company protection applies only to the selected attempt and restores saved targets on reconnect', (t) => {
   const dir = temp(t),
     repo = new ProfileRepository(dir),
     p = repo.save(sample()),
@@ -352,6 +406,11 @@ test('Company policy guards all ports, only activates selected profile and retai
       .rules,
     [],
   );
+  for (const r of policy.runtime().profiles)
+    for (const file of [r.guardPath, r.dnsPath]) assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).rules, []);
+  policy.begin(p.id, repo.list());
+  assert.ok(JSON.parse(fs.readFileSync(policy.runtime().profiles[0].guardPath, 'utf8')).rules.length > 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(policy.runtime().profiles[1].guardPath, 'utf8')).rules, []);
   policy.setProbe(p.id, 'testnonce', repo.list());
   let runtime = policy.runtime();
   const rules = JSON.parse(
@@ -382,12 +441,17 @@ test('Company policy guards all ports, only activates selected profile and retai
   policy.update(p.id, { targets: [], hosts: {}, dnsServers: [] }, repo.list());
   const restarted = new CorporatePolicy(dir);
   restarted.prepare(repo.list());
+  assert.deepEqual(JSON.parse(fs.readFileSync(restarted.runtime().profiles[0].guardPath, 'utf8')).rules, []);
+  restarted.begin(p.id, repo.list());
   assert.ok(
     fs
       .readFileSync(restarted.runtime().profiles[0].guardPath, 'utf8')
       .includes('10.30.40.0/24'),
   );
   assert.equal(restarted.runtime().profiles[1].profile.id, other.id);
+  restarted.deactivate(repo.list());
+  for (const r of restarted.runtime().profiles)
+    for (const file of [r.guardPath, r.dnsPath, r.routePath]) assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).rules, []);
 });
 test('Company resources preserve per-resource port/protocol grouping', () => {
   const result = sourceRules([
@@ -505,6 +569,85 @@ const untrustedCertificate = () => ({
   validTo: '2040-01-01T00:00:00Z',
   chainTrusted: false,
   trustIssues: ['UNTRUSTED_AUTHORITY', 'NAME_MISMATCH'],
+});
+
+test('Upgrade startup preserves saved configuration and revokes previous-session routing files', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), old = new CorporatePolicy(dir);
+  old.setProbe(p.id, 'old-session', repo.list());
+  const files = ['vpn-profiles.json', 'vpn-vault.json', 'bluewing.json'];
+  fs.writeFileSync(path.join(dir, 'vpn-vault.json'), JSON.stringify({ fixture: 'dpapi:fixture-encrypted' }));
+  fs.writeFileSync(path.join(dir, 'bluewing.json'), JSON.stringify({ settings: { tunEnabled: true, routingMode: 'rule' }, activeNodeId: 'saved-node' }));
+  const saved = files.map(file => fs.readFileSync(path.join(dir, file), 'utf8'));
+  const policy = new CorporatePolicy(dir), profiles = new ProfileRepository(dir);
+  const manager = new CorporateVpnManager(profiles, policy, new CredentialVault(dir, unavailable), new FakeCore() as unknown as VpnCoreProcess,
+    { running: () => true, pid: () => 7, settings: () => ({ mixedPort: 12345 }) });
+  t.after(() => manager.dispose());
+  assert.equal(manager.snapshot().state.state, 'idle');
+  assert.equal(manager.snapshot().state.trafficProtected, false);
+  assert.deepEqual(files.map(file => fs.readFileSync(path.join(dir, file), 'utf8')), saved);
+  const r = policy.runtime().profiles[0];
+  for (const file of [r.routePath, r.guardPath, r.dnsPath, r.internetPath!, r.internetDnsPath!, r.discoveredGuardPath!])
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).rules, []);
+  assert.ok(profiles.get(p.id).targets.length > 0);
+});
+
+test('VPN attempts isolate guards, retain them on an unexpected drop and release them on explicit stop', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), policy = new CorporatePolicy(dir), core = new FakeCore();
+  const manager = new CorporateVpnManager(repo, policy, new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess,
+    { running: () => true, pid: () => 7, settings: () => ({ mixedPort: 12345 }) }, []);
+  t.after(() => manager.dispose());
+  t.mock.method(manager as any, 'verifyPolicy', async () => {});
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  await manager.connect(p.id, 'fixture-password');
+  assert.equal(manager.snapshot().state.trafficProtected, true);
+  const emit = (type: string, code?: string) => core.emit('event', { v: 1, type, code, generation: manager.snapshot().state.generation, profileId: p.id });
+  emit('tunnelReady'); await new Promise<void>(resolve => setImmediate(resolve));
+  emit('error', 'VPN_TRANSPORT_DOWN');
+  assert.equal(manager.snapshot().state.state, 'failed');
+  assert.equal(manager.snapshot().state.trafficProtected, true);
+  const guard = policy.runtime().profiles[0].guardPath;
+  assert.ok(JSON.parse(fs.readFileSync(guard, 'utf8')).rules.length > 0);
+  await manager.disconnect();
+  assert.equal(manager.snapshot().state.trafficProtected, false);
+  assert.deepEqual(JSON.parse(fs.readFileSync(guard, 'utf8')).rules, []);
+  await manager.connect(p.id, 'fixture-password');
+  emit('error', 'AUTH_FAILED');
+  assert.equal(manager.snapshot().state.trafficProtected, false, 'An initial rejected login must not leave a hidden guard');
+});
+
+test('Discovery observations require the active generation and a cache error never disconnects VPN', async t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample()), core = new FakeCore(), policy = new CorporatePolicy(dir);
+  const manager = new CorporateVpnManager(repo, policy, new CredentialVault(dir, unavailable), core as unknown as VpnCoreProcess,
+    { running: () => true, pid: () => 7, settings: () => ({ mixedPort: 12345 }) });
+  t.after(() => manager.dispose());
+  // The end-to-end probe is covered by the real-core integration test.
+  t.mock.method(manager as any, 'verifyPolicy', async () => {});
+  manager.publicCoreStarted(await manager.prepareRuntime());
+  await manager.connect(p.id, 'fixture-password');
+  const generation = manager.snapshot().state.generation;
+  const data = { address: '192.168.77.12', port: 22, network: 'tcp', outlet: 'vpn' };
+  const emit = (type: string, value = data, gen = generation, id = p.id) => core.emit('event', { v: 1, type, data: value, generation: gen, profileId: id });
+  emit('privateRouteObserved'); // Authentication has not completed.
+  assert.deepEqual(manager.snapshot().discoveredTargets?.[p.id], []);
+  emit('tunnelReady'); await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(manager.snapshot().state.state, 'connected');
+  emit('privateRouteObserved', data, generation - 1);
+  emit('privateRouteObserved', data, generation, 'other-company');
+  emit('privateRouteObserved', { ...data, network: 'udp' });
+  assert.deepEqual(manager.snapshot().discoveredTargets?.[p.id], []);
+  emit('privateRouteObserved');
+  assert.equal(manager.snapshot().discoveredTargets?.[p.id].length, 1);
+  await assert.rejects(manager.clearDiscoveredTargets(p.id), /断开/);
+  const broken = t.mock.method(policy.discovery, 'observe', () => { throw new Error('simulated cache disk failure'); });
+  emit('privateRouteObserved', { ...data, address: '192.168.77.13' });
+  assert.equal(manager.snapshot().state.state, 'connected');
+  broken.mock.restore();
+  await manager.disconnect();
+  emit('privateRouteObserved', { ...data, address: '192.168.77.14' });
+  assert.equal(manager.snapshot().discoveredTargets?.[p.id].length, 1);
+  await manager.clearDiscoveredTargets(p.id);
+  assert.deepEqual(manager.snapshot().discoveredTargets?.[p.id], []);
+  assert.ok(repo.get(p.id).targets.length > 0, 'clearing discovery removed manual resources');
 });
 
 test('Automatic gateway trust binds first use, detects changed pins and never downgrades a known CA', () => {

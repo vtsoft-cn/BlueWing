@@ -7,16 +7,17 @@ export const api = {
     snapshot: () => ipcRenderer.invoke('vpn:snapshot'),
     save: (profile: VpnProfile) => ipcRenderer.invoke('vpn:save', profile),
     remove: (id: string) => ipcRenderer.invoke('vpn:remove', id),
-    connect: (id: string, password: string) => ipcRenderer.invoke('evpn:connect', id, password),
-    disconnect: () => ipcRenderer.invoke('evpn:disconnect'),
+    connect: (id: string, password: string) => ipcRenderer.invoke('vpn:connect', id, password),
+    disconnect: (id?: string) => ipcRenderer.invoke('vpn:disconnect', id),
     discover: (id: string) => ipcRenderer.invoke('vpn:discover', id),
     certificate: (id: string) => ipcRenderer.invoke('vpn:certificate', id),
-    respond: (id: string, generation: number, value: string) => ipcRenderer.invoke('vpn:respond', id, generation, value),
+    respond: (id: string, generation: number, value: string, profileId?: string) => ipcRenderer.invoke('vpn:respond', id, generation, value, profileId),
     clearCredentials: (id: string) => ipcRenderer.invoke('vpn:clearCredentials', id),
     savePassword: (id: string, password: string, remember: boolean) => ipcRenderer.invoke('vpn:savePassword', id, password, remember),
     apply: () => ipcRenderer.invoke('vpn:apply'),
     openDiagnostics: (id: string) => ipcRenderer.invoke('vpn:openDiagnostics', id),
     clearDiagnostics: (id: string) => ipcRenderer.invoke('vpn:clearDiagnostics', id),
+    clearDiscoveredTargets: (id: string) => ipcRenderer.invoke('vpn:clearDiscoveredTargets', id),
     onState: (callback: (state: VpnState) => void) => {
       const handler = (_: unknown, state: VpnState) => callback(state);
       ipcRenderer.on('evpn:state', handler);

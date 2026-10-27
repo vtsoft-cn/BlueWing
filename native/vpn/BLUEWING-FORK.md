@@ -10,6 +10,14 @@ Control transport: newline-delimited JSON v1 on inherited stdin/stdout; hello mu
 
 Optional diagnostic events capture HTTP authentication metadata, or original headers/bodies in explicit full mode. The host's per-profile full diagnostics can intentionally record submitted plaintext passwords/verification codes and session cookies in separate local rotated files; it is disabled by default and reset on profile export/import. Raw upstream debug output remains disabled so application payload dumps cannot corrupt NDJSON. A trusted-endpoint rejection (75500503) retains its original server message and is not treated as a wrong password. This does not implement official aTrust endpoint attestation or solve gateways requiring the official client. See BlueWing's docs/design/atrust-diagnostics-and-upstream-review.md for gateway findings and upstream issue verification.
 
+Optional smart private routing reuses the physical underlay first and attempts
+the active VPN only for an actual RFC1918 TCP target that was not reachable
+locally. It never scans subnets or sends application bytes to both outlets.
+Hints are session-owned, exact IP:port, bounded and revalidated after expiry;
+known company resource restrictions stay authoritative. Local LAN sockets are
+owned by their endpoint so a VPN logout does not tear them down. The host stores
+per-gateway observations separately from explicit company ownership rules.
+
 SoftEther is implemented in `client/softether`, adapting MIT-licensed govpn wire
 helpers (pinned source and license in that directory) to the existing private
 gVisor stack. It uses bound TLS TCP, DHCP/ARP and lease renewal without an OS

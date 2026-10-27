@@ -523,7 +523,9 @@ export class ConfigGenerator {
       rules: routeRules,
       rule_set: ruleSets,
       final: finalOutbound,
-      auto_detect_interface: true,
+      // Binding every outbound to the default NIC prevents TUN loops, but in
+      // proxy-only mode it bypasses more-specific routes from other VPN clients.
+      auto_detect_interface: !!useTun,
     };
     if (routeConfig.default_domain_resolver === undefined) delete routeConfig.default_domain_resolver;
 

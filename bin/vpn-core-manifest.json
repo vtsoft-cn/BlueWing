@@ -18,9 +18,9 @@
       "source": "client/softether"
     }
   ],
-  "sourceSha256": "59dd4b7aa8b25dd8b422e129c7d331106ef8fb54c6d21f360ffc942f0f8566eb",
-  "sha256": "8c6d49f3728b208d2c9f83c94c6f9e9d8b6c3d4f7578515b62b2778eba53bf65",
-  "sourceArchiveSha256": "c61bbf821a46b757a555a7f0d6f15a9379947cbb27e63409e436e1cd130d83ae",
+  "sourceSha256": "69b4a49b9bca4004579b9be74f3dad8ea4e362929cbc5cf981a558cf4842a627",
+  "sha256": "c07a14298e9c9bc1b925d74a3251ce8df193e0f4d257c36a31632eebea5f4cb4",
+  "sourceArchiveSha256": "8ed2d7dc72012adcab262461287023e0492469b8148cb11a708e69ee4fc42914",
   "protocols": [
     "easyconnect",
     "atrust",

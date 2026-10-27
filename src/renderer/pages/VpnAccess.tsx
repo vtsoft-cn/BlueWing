@@ -37,7 +37,7 @@ import {
 } from '../../types/corporateVpn';
 import { AppSettings } from '../../types';
 import { captchaAnswer } from '../../utils/vpnChallenge';
-import { vpnRouting, vpnTrafficModes } from '../../utils/vpnRouting';
+import { orderedVpnProfiles, vpnRouting, vpnTrafficModes } from '../../utils/vpnRouting';
 import { useVpnSnapshot } from '../vpn/useVpnSnapshot';
 import { VpnProfile as EngineVpnProfile, VpnProfileType, VpnRuntimeInfo } from '../../types';
 import { VpnProfileEditorModal, TYPE_GROUPS } from './VpnProfileEditorModal';
@@ -204,7 +204,14 @@ export const VpnAccess: React.FC<{
     await refreshEngineProfiles();
   };
   const [expanded, setExpanded] = useState(false);
-  const state = snapshot.state;
+  const detailRef = useRef<HTMLDivElement>(null);
+  const stateFor = (id: string): VpnState => snapshot.states?.[id] || (snapshot.state.profileId === id ? snapshot.state : {
+    state: 'idle', generation: 0, coreAvailable: snapshot.state.coreAvailable, requiresCoreRebuild: snapshot.state.requiresCoreRebuild,
+  });
+  const state = stateFor(selectedId);
+  const connectedCount = Object.values(snapshot.states || { legacy: snapshot.state }).filter(s => s.state === 'connected').length;
+  const runningCount = Object.values(snapshot.states || { legacy: snapshot.state }).filter(s => !['idle', 'failed'].includes(s.state)).length;
+  const defaultProfile = snapshot.profiles.find(p => p.id === snapshot.defaultProfileId);
   const active = !['idle', 'failed'].includes(state.state);
   const engineItems = engineProfiles.map((p) => ({
     key: engineKey(p.id),
@@ -246,8 +253,10 @@ export const VpnAccess: React.FC<{
       ? state.state
       : 'idle';
   const selectedActive = active && state.profileId === selectedId;
+  const selectedProtected = state.trafficProtected === true && state.profileId === selectedId;
   const selectedDiagnostic = selected && snapshot.diagnostics?.[selected.id];
   const errorDetail = state.profileId === selectedId ? state.errorDetail : undefined;
+  const effectivePublicPolicy = defaultProfile || (selected && !selected.engine ? selected.profile : undefined);
   // 列表与空状态按「corporate + 引擎」总数判定,只加引擎类档案也要出现在页面上
   const totalCount = snapshot.profiles.length + engineProfiles.length;
   useEffect(() => {
@@ -266,6 +275,7 @@ export const VpnAccess: React.FC<{
     setReveal(false);
     setActionError('');
     setExpanded(false);
+    detailRef.current?.scrollTo(0, 0);
   }, [selectedId]);
   const run = async (job: () => Promise<void>) => {
     setBusy(true);
@@ -286,6 +296,7 @@ export const VpnAccess: React.FC<{
           ...selected.profile.targets.map((target) => ({ target, source: '用户自定义' })),
           ...Object.entries(selected.profile.hosts).map(([domain, ips]) => ({
             target: { domains: [domain], cidrs: ips, network: 'tcp' as const },
+          ...(snapshot.discoveredTargets?.[selected.profile.id] || []).map((target) => ({ target, source: '自动识别' })),
             source: '用户固定解析',
           })),
           ...(resources?.targets || []).map((target) => ({
@@ -350,7 +361,7 @@ export const VpnAccess: React.FC<{
         {!!totalCount && (
           <button
             className="vpn-button"
-            disabled={active || busy}
+            disabled={busy}
             onClick={() => setAddPickerOpen(true)}
           >
             <Plus size={16} />
@@ -358,6 +369,11 @@ export const VpnAccess: React.FC<{
           </button>
         )}
       </header>
+      {snapshot.states && <div className="vpn-multi-summary" role="status" aria-label="多 VPN 连接状态">
+        <span><Network size={15} />已连接 <strong>{connectedCount}</strong> 个接入
+          {defaultProfile && <small>默认策略：{defaultProfile.name} · 优先级 {defaultProfile.routingPriority ?? 100}</small>}</span>
+        {runningCount > 0 && <button className="vpn-text-button" disabled={busy} onClick={() => run(async () => { await window.electronAPI.corporateVpn.disconnect(); await refresh(); })}>断开全部</button>}
+      </div>}
       {loadError && (
         <div className="vpn-notice danger" role="alert">
           <p>{loadError}</p>
@@ -446,17 +462,13 @@ export const VpnAccess: React.FC<{
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <div className="vpn-profile-items">
-              {profiles.map((profile) => (
+            <div className="vpn-profile-items" role="region" aria-label="VPN 接入列表" tabIndex={0}>
+              {profiles.map((profile) => { const itemState = stateFor(profile.id); return (
                 <button
                   key={profile.id}
                   className={`vpn-profile-item ${selectedId === profile.id ? 'selected' : ''}`}
                   aria-pressed={selectedId === profile.id}
-                  title={
-                    active && state.profileId !== profile.id
-                      ? '请先断开当前接入后切换'
-                      : profile.host
-                  }
+                  title={profile.host}
                   onClick={() => setSelectedId(profile.id)}
                 >
                   <div className="vpn-profile-item-top">
@@ -472,24 +484,21 @@ export const VpnAccess: React.FC<{
                       ? engineStateFor(profile.engine.id)?.state === 'connected' && (
                           <CheckCircle2 size={15} className="vpn-success-text shrink-0" />
                         )
-                      : state.profileId === profile.id &&
-                        state.state === 'connected' && (
+                      : itemState.state === 'connected' && (
                           <CheckCircle2 size={15} className="vpn-success-text shrink-0" />
                         )}
                   </div>
-                  <span className="vpn-profile-gateway">{profile.host}</span>
+                  <span className="vpn-profile-gateway">
+                    {profile.host}
+                  </span>
                   <span className="vpn-profile-protocol">
                     {profile.label}
-                    {profile.engine
-                      ? engineStateFor(profile.engine.id) && (
-                          <span>{engineStateFor(profile.engine.id)!.state === 'connected' ? '已连接' : engineStateFor(profile.engine.id)!.state === 'connecting' ? '连接中' : ''}</span>
-                        )
-                      : state.profileId === profile.id && active && (
-                          <span>{labels[state.state]}</span>
-                        )}
+                    {!['idle'].includes(itemState.state) && (
+                      <span>{labels[itemState.state]}</span>
+                    )}
                   </span>
                 </button>
-              ))}
+              ); })}
               {!profiles.length && (
                 <div className="vpn-search-empty">
                   <p>没有匹配的接入</p>
@@ -503,8 +512,8 @@ export const VpnAccess: React.FC<{
               )}
             </div>
             <p className="vpn-list-footnote">
-              <LockKeyhole size={13} />
-              同一时间连接一个接入
+              <Network size={13} />
+              支持多个接入同时连接
             </p>
           </aside>
           {selected && selected.engine && (
@@ -682,6 +691,13 @@ export const VpnAccess: React.FC<{
                       role="alert"
                     >
                       <p>{connectionError}</p>
+                      {selectedProtected && state.state === 'failed' && (
+                        <div>
+                          <p>VPN 异常断开，此接入的已知资源暂时受保护。重新连接可恢复 VPN，或停止此接入并恢复普通分流。</p>
+                          <button type="button" className="vpn-button compact" disabled={busy}
+                            onClick={() => run(async () => { await window.electronAPI.corporateVpn.disconnect(selected.id); await refresh(); })}>恢复普通分流</button>
+                        </div>
+                      )}
                       {errorDetail && <details className="vpn-error-detail" open={state.error === 'ATRUST_TRUSTED_ENDPOINT_REQUIRED'}>
                         <summary>原始错误 · {errorDetail.stage}{errorDetail.serverCode ? ` · ${errorDetail.serverCode}` : ''}</summary>
                         <pre>{errorDetail.message}</pre>
@@ -718,7 +734,6 @@ export const VpnAccess: React.FC<{
                         const secret = password;
                         setPassword('');
                         setReveal(false);
-                        if (active && !selectedActive) await window.electronAPI.corporateVpn.disconnect();
                         await window.electronAPI.corporateVpn.connect(
                           selected.id,
                           secret,
@@ -840,7 +855,7 @@ export const VpnAccess: React.FC<{
                           disabled={cancelling}
                           onClick={async () => {
                             setCancelling(true);
-                            try { await window.electronAPI.corporateVpn.disconnect(); }
+                            try { await window.electronAPI.corporateVpn.disconnect(selected.id); }
                             catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
                             finally { setCancelling(false); }
                           }}
@@ -864,12 +879,11 @@ export const VpnAccess: React.FC<{
                           ) : (
                             <Plug size={16} />
                           )}
-                          {active ? '切换并连接' : '连接 VPN'}
+                          连接 VPN
                         </button>
                       )}
                     </div>
                   </form>
-                  {active && !selectedActive && <p className="vpn-field-hint">当前连接:{snapshot.profiles.find((p) => p.id === state.profileId)?.name}。切换会断开当前 VPN,公网代理继续保留。</p>}
                   <div className="vpn-diagnostics-bar">
                     <span>{selected.profile.diagnosticMode === 'full' ? '完整诊断已开启 · 含明文凭据' : selected.profile.diagnosticMode === 'detail' ? '连接诊断已开启' : '基础错误日志'}</span>
                     <div><button type="button" className="vpn-text-button" disabled={busy || !selectedDiagnostic?.exists}
@@ -903,29 +917,42 @@ export const VpnAccess: React.FC<{
                     <Settings2 size={14} />{active ? '查看策略' : '调整策略'}
                   </button>
                 </div>
+                {defaultProfile && defaultProfile.id !== selected.id && <p className="vpn-field-hint" role="status">
+                  国内和国外流量当前按「{defaultProfile.name}」的策略处理；此接入的公司资源仍走各自隧道。
+                </p>}
                 <div className="vpn-outlet-grid">
                   {([
                     { label: '公司资源', icon: Network, outlet: 'vpn' as const },
-                    { label: '国内公网', icon: Globe2, outlet: vpnRouting(selected.profile, publicProxy.enabled).domestic },
-                    { label: '国外网站', icon: Waypoints, outlet: vpnRouting(selected.profile, publicProxy.enabled).foreign },
+                    { label: '国内公网', icon: Globe2, outlet: vpnRouting(effectivePublicPolicy!, publicProxy.enabled).domestic },
+                    { label: '国外网站', icon: Waypoints, outlet: vpnRouting(effectivePublicPolicy!, publicProxy.enabled).foreign },
                   ]).map(({ label, icon: Icon, outlet }) => {
                     const connected = selectedState === 'connected';
-                    const actual = !connected && label !== '公司资源'
+                    const actual = !connected && label === '公司资源' && !selectedProtected ? 'normal' : !defaultProfile && !connected && label !== '公司资源'
                       ? (publicProxy.enabled && (label === '国外网站' || publicProxy.mode === 'global') ? 'proxy' : 'direct') : outlet;
                     return <div className={`vpn-outlet-item ${actual}`} key={label}>
                       <span className="vpn-outlet-icon"><Icon size={18} /></span><span className="vpn-outlet-label">{label}</span>
-                      <strong>{actual === 'vpn' ? 'VPN 隧道' : actual === 'proxy' ? '公网代理' : '本机直连'}</strong>
-                      <small>{actual === 'vpn' ? connected ? selected.name : '未连接 · 已知目标受保护'
+                      <strong>{actual === 'normal' ? '普通分流' : actual === 'vpn' ? 'VPN 隧道' : actual === 'proxy' ? '公网代理' : '本机直连'}</strong>
+                      <small>{actual === 'normal' ? '此接入未接管流量' : actual === 'vpn' ? label !== '公司资源' && defaultProfile ? defaultProfile.name : connected ? selected.name : '连接未就绪 · 已知目标受保护'
                         : actual === 'proxy' ? `${publicProxy.name || '当前节点'}${coreState !== 'running' ? ' · 未启动' : ''}` : '保留本地网络出口'}</small>
                     </div>;
                   })}
                 </div>
                 <div className="vpn-discovery-note"><ShieldCheck size={15} /><p>
-                  {selected.profile.protocol === 'softether' ? 'SoftEther 自动发现部分网络,公司其他资源可手动补充。'
-                    : resources?.targets.length ? `已读取 ${resources.targets.length} 条网关资源;手动补充规则优先。`
-                    : '连接后自动读取公司资源;只知道业务网址或服务器 IP,也可以手动添加。'}
-                  {publicProxy.enabled ? ' 国外网站保持公网代理出口。' : ' 开启公网代理后,国外网站可走代理。'}
+                  {(selected.profile.trafficMode || 'split') === 'split' && selected.profile.autoDiscoverPrivate !== false
+                    ? '自动识别已开启：未知私网目标先验证本机路径，再按优先级尝试已连接的 VPN。公网公司地址与特殊域名可手动补充。'
+                    : selected.profile.protocol === 'softether' ? 'SoftEther 自动发现部分网络，公司其他资源可手动补充。'
+                    : resources?.targets.length ? `已读取 ${resources.targets.length} 条网关资源；手动补充规则优先。`
+                    : '连接后自动读取公司资源；只知道业务网址或服务器 IP，也可以手动添加。'}
+                  {publicProxy.enabled ? ' 国外网站保持公网代理出口。' : ' 开启公网代理后，国外网站可走代理。'}
                 </p></div>
+                {!!snapshot.discoveredTargets?.[selected.id]?.length && (
+                  <div className="vpn-learned-summary">
+                    <span>此接入已自动识别 {snapshot.discoveredTargets[selected.id].length} 个 TCP 目标；新会话会重新验证路径。</span>
+                    <button className="vpn-button compact" disabled={active || busy}
+                      title={active ? '断开 VPN 后可清空自动识别记录' : '清空此接入的自动识别记录，保留手动规则'}
+                      onClick={() => run(async () => { await window.electronAPI.corporateVpn.clearDiscoveredTargets(selected.id); await refresh(); })}>清空识别记录</button>
+                  </div>
+                )}
               </section>
               <section className="vpn-proxy-card" aria-label="应用代理">
                 <div className="vpn-proxy-heading">
@@ -1202,7 +1229,7 @@ export const VpnAccess: React.FC<{
         <VpnProfileEditor
           profile={editor}
           initialTab={editorTab}
-          readOnly={active}
+          readOnly={!['idle', 'failed'].includes(stateFor(editor.id).state)}
           passwordSaved={!!snapshot.passwordSaved?.[editor.id]}
           encryptionAvailable={snapshot.encryptionAvailable}
           onClose={() => setEditor(undefined)}
@@ -1332,6 +1359,8 @@ export const VpnAccessStatus: React.FC<{
 }> = ({ onOpen, showSummary = true }) => {
   const { snapshot } = useVpnSnapshot();
   const { state } = snapshot;
+  const connectedCount = Object.values(snapshot.states || { legacy: state }).filter(s => s.state === 'connected').length;
+  const challengeName = snapshot.profiles.find(p => p.id === state.challenge?.profileId)?.name;
   const [challengeOpen, setChallengeOpen] = useState(true);
   const challengeRoot = useRef<HTMLDivElement>(null);
   // 挑战弹窗收场动画:后端挑战消失时保留最后内容 200ms 播 overlay-exit/pop-exit
@@ -1395,6 +1424,7 @@ export const VpnAccessStatus: React.FC<{
         <button onClick={() => state.challenge ? setChallengeOpen(true) : onOpen()} className="vpn-surface vpn-global-status">
           <Network size={14} />
           <span>VPN 接入</span>
+          {snapshot.states && <span>已连接 {connectedCount} 个</span>}
           <ConnectionBadge state={state.state} />
           <span className="vpn-global-hint">{state.challenge ? '继续填写验证码' : '查看接入'}</span>
           <ArrowRight size={13} />
@@ -1416,7 +1446,7 @@ export const VpnAccessStatus: React.FC<{
             >
               <div className="vpn-auth-label">
                 <ShieldCheck size={16} />
-                <span className="flex-1">VPN 身份验证</span>
+                <span className="flex-1">VPN 身份验证{challengeName ? ` · ${challengeName}` : ''}</span>
                 <button type="button" className="vpn-icon-button" aria-label="收起身份验证" title="稍后继续填写" onClick={() => setChallengeOpen(false)}><X size={17} /></button>
               </div>
               <ChallengeForm
@@ -1591,7 +1621,7 @@ function ChallengeForm({
           className={button}
           onClick={() =>
             window.electronAPI.corporateVpn
-              .disconnect()
+              .disconnect(challenge.profileId)
               .catch((e) => toast.error(String(e)))
           }
         >
