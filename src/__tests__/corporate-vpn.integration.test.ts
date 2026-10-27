@@ -9,7 +9,7 @@ import path from 'path';
 import { execFileSync, spawn } from 'child_process';
 import { ProfileRepository } from '../main/vpn/ProfileRepository';
 import { CorporatePolicy } from '../main/vpn/CorporatePolicy';
-import { CorporateVpnManager } from '../main/vpn/CorporateVpnManager';
+import { CorporateVpnSession as CorporateVpnManager } from '../main/vpn/CorporateVpnSession';
 import { CredentialVault } from '../main/vpn/CredentialVault';
 import { VpnCoreProcess } from '../main/vpn/VpnCoreProcess';
 import { ConfigGenerator } from '../main/core/ConfigGenerator';

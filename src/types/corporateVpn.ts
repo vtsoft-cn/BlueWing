@@ -20,6 +20,7 @@ export interface VpnProfile {
   diagnosticMode?: 'off' | 'detail' | 'full';
   trafficMode?: 'split' | 'vpn' | 'custom';
   autoDiscoverPrivate?: boolean;
+  routingPriority?: number;
   customRouting?: { domestic: VpnOutlet; foreign: VpnOutlet; lan: VpnOutlet };
   rememberPassword: boolean;
   rememberSession: boolean;
@@ -94,6 +95,8 @@ export interface VpnState {
 export interface VpnSnapshot {
   profiles: VpnProfile[];
   state: VpnState;
+  states?: Record<string, VpnState>;
+  defaultProfileId?: string;
   encryptionAvailable: boolean;
   passwordSaved?: Record<string, boolean>;
   diagnostics?: Record<string, { exists: boolean; path: string; mode: string; error?: string }>;
@@ -113,6 +116,7 @@ export interface VpnRuntimeProfile {
 export interface VpnRuntime {
   profiles: VpnRuntimeProfile[];
   coreProcessName: string;
+  privateProxy?: { port: number; user: string; password: string; rulePath: string };
 }
 export interface CorporateVpnAPI {
   snapshot(): Promise<VpnSnapshot>;
@@ -121,10 +125,10 @@ export interface CorporateVpnAPI {
   ): Promise<{ profile: VpnProfile; requiresCoreRebuild: boolean }>;
   remove(id: string): Promise<void>;
   connect(id: string, password: string): Promise<void>;
-  disconnect(): Promise<void>;
+  disconnect(id?: string): Promise<void>;
   discover(id: string): Promise<VpnAuthMethod[]>;
   certificate(id: string): Promise<VpnCertificate>;
-  respond(id: string, generation: number, value: string): Promise<void>;
+  respond(id: string, generation: number, value: string, profileId?: string): Promise<void>;
   clearCredentials(id: string): Promise<void>;
   savePassword(id: string, password: string, remember: boolean): Promise<void>;
   openDiagnostics(id: string): Promise<void>;

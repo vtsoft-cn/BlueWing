@@ -10,6 +10,7 @@ import {
 } from '../../types/corporateVpn';
 import { atomicJSON, validateResources, targets } from './ProfileRepository';
 import { PrivateRouteDiscovery } from './PrivateRouteDiscovery';
+import { orderedVpnProfiles } from '../../utils/vpnRouting';
 
 export function sourceRules(
   targets: VpnTarget[],
@@ -40,8 +41,9 @@ export class CorporatePolicy {
   private resources = new Map<string, VpnResources>();
   private protectedTargets = new Map<string, VpnTarget[]>();
   private probes = new Map<string, string>();
-  private activeId?: string;
-  private guardedId?: string;
+  private activeIds = new Set<string>();
+  private guardedIds = new Set<string>();
+  private privateProxy?: VpnRuntime['privateProxy'];
   private current: VpnRuntime = {
     profiles: [],
     coreProcessName: 'bluewing-vpn-core.exe',
@@ -71,17 +73,22 @@ export class CorporatePolicy {
     return structuredClone(this.resources.get(id));
   }
   isProtected(id?: string): boolean {
-    return !!id && this.guardedId === id;
+    return !!id && this.guardedIds.has(id);
+  }
+  isActive(id: string): boolean { return this.activeIds.has(id); }
+  setPrivateProxy(proxy: NonNullable<VpnRuntime['privateProxy']>, profiles: VpnProfile[]): void {
+    this.privateProxy = proxy;
+    this.prepare(profiles);
   }
   begin(id: string, profiles: VpnProfile[]): void {
-    this.activeId = undefined;
-    this.guardedId = id;
-    this.probes.clear();
+    this.activeIds.delete(id);
+    this.guardedIds.add(id);
+    this.probes.delete(id);
     this.prepare(profiles);
   }
   learn(id: string, data: any, profiles: VpnProfile[]): boolean {
     const profile = profiles.find(p => p.id === id);
-    if (this.activeId !== id || !profile || data?.network !== 'tcp' || !this.discovery.observe(profile, data.address, data.port, data.outlet)) return false;
+    if (!this.activeIds.has(id) || !profile || data?.network !== 'tcp' || !this.discovery.observe(profile, data.address, data.port, data.outlet)) return false;
     this.prepare(profiles);
     return true;
   }
@@ -90,15 +97,21 @@ export class CorporatePolicy {
     this.prepare(profiles);
   }
   setProbe(id: string, nonce: string, profiles: VpnProfile[]): void {
-    this.activeId = id;
-    this.guardedId = id;
+    this.activeIds.add(id);
+    this.guardedIds.add(id);
     this.probes.set(id, nonce);
     this.prepare(profiles);
   }
-  deactivate(profiles: VpnProfile[], preserveGuard = false): void {
-    this.activeId = undefined;
-    if (!preserveGuard) this.guardedId = undefined;
-    this.probes.clear();
+  deactivate(profiles: VpnProfile[], preserveGuard = false, id?: string): void {
+    if (id) {
+      this.activeIds.delete(id);
+      if (!preserveGuard) this.guardedIds.delete(id);
+      this.probes.delete(id);
+    } else {
+      this.activeIds.clear();
+      if (!preserveGuard) this.guardedIds.clear();
+      this.probes.clear();
+    }
     this.prepare(profiles);
   }
   update(id: string, input: unknown, profiles: VpnProfile[]): string {
@@ -124,13 +137,15 @@ export class CorporatePolicy {
   prepare(profiles: VpnProfile[]): VpnRuntime {
     const next: VpnRuntimeProfile[] = [];
     const ids = new Set(profiles.map(p => p.id));
-    if (this.guardedId && !ids.has(this.guardedId)) this.guardedId = undefined;
-    if (this.activeId && !ids.has(this.activeId)) this.activeId = undefined;
+    for (const id of this.guardedIds) if (!ids.has(id)) this.guardedIds.delete(id);
+    for (const id of this.activeIds) if (!ids.has(id)) this.activeIds.delete(id);
     // A running core may still watch a removed profile until its next reload.
     for (const old of this.current.profiles.filter(r => !ids.has(r.profile.id)))
       for (const file of [old.routePath, old.guardPath, old.dnsPath, old.internetPath, old.internetDnsPath, old.discoveredGuardPath])
         if (file) this.publish(file, { version: 3, rules: [] });
-    for (const profile of profiles) {
+    const ordered = orderedVpnProfiles(profiles);
+    const internetOwner = ordered.find(p => this.activeIds.has(p.id))?.id;
+    for (const profile of ordered) {
       const protectedNow = this.isProtected(profile.id);
       let credentials = this.credentials.get(profile.id);
       if (!credentials) {
@@ -177,9 +192,9 @@ export class CorporatePolicy {
         protectedNow && profile.autoDiscoverPrivate !== false && (profile.trafficMode || 'split') === 'split'
           ? this.discovery.targets(profile) : []));
       this.publish(internetDnsPath, { version: 3, rules:
-        this.activeId === profile.id ? [{ domain_regex: ['.*'] }] : [] });
+        internetOwner === profile.id ? [{ domain_regex: ['.*'] }] : [] });
       this.publish(internetPath, { version: 3, rules:
-        this.activeId === profile.id
+        internetOwner === profile.id
           ? [{ type: 'logical', mode: 'or', rules: [
             { domain_regex: ['.*'] }, { ip_cidr: ['0.0.0.0/0', '::/0'] },
           ] }] : [] });
@@ -202,7 +217,7 @@ export class CorporatePolicy {
       this.publish(
         routePath,
         sourceRules(
-          this.activeId === profile.id
+          this.activeIds.has(profile.id)
             ? [
                 ...current,
                 ...(nonce
@@ -234,7 +249,10 @@ export class CorporatePolicy {
       path.join(this.dir, 'vpn-runtime', 'known-targets.json'),
       Object.fromEntries(this.protectedTargets),
     );
-    this.current = { profiles: next, coreProcessName: 'bluewing-vpn-core.exe' };
+    if (this.privateProxy) this.publish(this.privateProxy.rulePath, { version: 3, rules:
+      (ordered.find(p => p.id === internetOwner)?.trafficMode || 'split') === 'split' && next.some(r => this.activeIds.has(r.profile.id) && (r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false)
+        ? [{ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'], network: ['tcp'] }] : [] });
+    this.current = { profiles: next, coreProcessName: 'bluewing-vpn-core.exe', ...(this.privateProxy ? { privateProxy: this.privateProxy } : {}) };
     return this.runtime();
   }
   private publish(file: string, value: Record<string, unknown>): void {

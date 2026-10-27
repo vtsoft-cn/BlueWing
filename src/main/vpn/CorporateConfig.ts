@@ -16,7 +16,7 @@ export function applyCorporateConfig(
 ): void {
   // Callers that rebuild through the tray or selector fallback receive the same managed layer.
   config.outbounds = config.outbounds.filter(
-    (r: any) => !r.tag?.startsWith('corp-out-'),
+    (r: any) => !r.tag?.startsWith('corp-out-') && r.tag !== 'corp-private-out',
   );
   config.route.rule_set = config.route.rule_set.filter(
     (r: any) => !r.tag?.startsWith('corp-'),
@@ -39,6 +39,12 @@ export function applyCorporateConfig(
   const managedRules: any[] = [],
     dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [], discoveryRules: any[] = [], discoveryGuards: any[] = [];
   const publicProxy = config.outbounds.find((o: any) => o.tag === 'proxy');
+  if (runtime.privateProxy) {
+    const proxy = runtime.privateProxy;
+    config.outbounds.push({ type: 'socks', tag: 'corp-private-out', server: '127.0.0.1', server_port: proxy.port, version: '5', username: proxy.user, password: proxy.password, network: 'tcp', connect_timeout: '20s' });
+    config.route.rule_set.push({ type: 'local', tag: 'corp-private-active', format: 'source', path: proxy.rulePath.replace(/\\/g, '/') });
+    discoveryRules.push({ rule_set: ['corp-private-active'], outbound: 'corp-private-out' });
+  }
   const proxyEnabled = publicProxy?.type === 'selector'
     ? publicProxy.outbounds?.some((tag: string) => tag !== 'direct') && publicProxy.default !== 'direct'
     : !!publicProxy && publicProxy.type !== 'direct';
@@ -79,6 +85,9 @@ export function applyCorporateConfig(
       network: ['tcp'],
       outbound: `corp-out-${id}`,
     });
+    // Preserve ownership at this priority even while this company is reconnecting.
+    // Never leak an established company's failed target into a lower-priority VPN.
+    managedRules.push({ rule_set: [`corp-guard-${id}`], action: 'reject' });
     dnsRules.push({
       rule_set: [`corp-dns-${id}`],
       action: 'route',
@@ -104,7 +113,7 @@ export function applyCorporateConfig(
       // Keep the app's local endpoints reachable; explicit company rules still
       // precede this layer. Private/company overlaps are decided by those rules.
       internetRules.push({ ...active({ ip_cidr: ['127.0.0.0/8', '::1/128'] }), outbound: 'direct' });
-      if ((r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false) {
+      if (!runtime.privateProxy && (r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false) {
         const condition = active({ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'] });
         discoveryRules.push({ ...condition, rules: [...condition.rules, { network: ['tcp'] }], outbound: `corp-out-${id}` });
       }
@@ -132,12 +141,6 @@ export function applyCorporateConfig(
       }
     }
   }
-  // All authorized routes precede every guard; overlapping resources can use the active profile.
-  for (const r of runtime.profiles)
-    managedRules.push({
-      rule_set: [`corp-guard-${r.profile.id}`],
-      action: 'reject',
-    });
   const setup: any[] = [],
     blocked: any[] = [],
     ordinary: any[] = [],

@@ -130,6 +130,8 @@ export function validateProfile(input: unknown): VpnProfile {
     throw new Error('不支持的 VPN 分流模式');
   if (p.autoDiscoverPrivate !== undefined && typeof p.autoDiscoverPrivate !== 'boolean')
     throw new Error('自动识别内网设置不正确');
+  if (p.routingPriority !== undefined && (!Number.isInteger(p.routingPriority) || p.routingPriority < 1 || p.routingPriority > 9999))
+    throw new Error('VPN 分流优先级须为 1 到 9999 的整数');
   const customRouting = p.customRouting || { domestic: 'direct', foreign: 'proxy', lan: 'direct' };
   if (![customRouting.domestic, customRouting.foreign, customRouting.lan].every(v => ['direct', 'proxy', 'vpn'].includes(v)))
     throw new Error('自定义分流出口不正确');
@@ -152,6 +154,7 @@ export function validateProfile(input: unknown): VpnProfile {
     diagnosticMode: p.diagnosticMode || 'off',
     trafficMode: p.trafficMode || 'split',
     autoDiscoverPrivate: p.autoDiscoverPrivate !== false,
+    routingPriority: p.routingPriority ?? 100,
     customRouting: { domestic: customRouting.domestic, foreign: customRouting.foreign, lan: customRouting.lan },
     rememberPassword: p.rememberPassword === true,
     rememberSession: p.rememberSession === true,
@@ -248,7 +251,7 @@ export class ProfileRepository {
     while (used.has(port) || used.has(port + 1)) port += 2;
     p.socksPort = old?.socksPort ?? port;
     p.dnsPort = old?.dnsPort ?? port + 1;
-    const next = [...this.profiles.filter((v) => v.id !== p.id), p];
+    const next = old ? this.profiles.map(v => v.id === p.id ? p : v) : [...this.profiles, p];
     atomicJSON(this.file, { schemaVersion: 1, profiles: next });
     this.profiles = next;
     return structuredClone(p);
@@ -269,7 +272,7 @@ export class ProfileRepository {
       dnsPort: 0,
     }));
   }
-  reassignPorts(): void {
+  reassignPorts(id?: string): void {
     let port =
       Math.max(
         21078,
@@ -277,7 +280,7 @@ export class ProfileRepository {
       ) + 1;
     if (port + this.profiles.length * 2 > 65535)
       throw new Error('VPN 接入 本机端口租约已耗尽');
-    const next = this.profiles.map((p) => ({
+    const next = this.profiles.map((p) => id && p.id !== id ? p : ({
       ...p,
       socksPort: port++,
       dnsPort: port++,

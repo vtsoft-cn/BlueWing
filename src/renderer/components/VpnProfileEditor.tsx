@@ -49,6 +49,7 @@ export const newVpnProfile = (): VpnProfile => ({
   loginDomain: '',
   trafficMode: 'split',
   autoDiscoverPrivate: true,
+  routingPriority: 100,
   customRouting: { domestic: 'direct', foreign: 'proxy', lan: 'direct' },
   rememberPassword: false,
   rememberSession: false,
@@ -689,6 +690,11 @@ export function VpnProfileEditor({
                       </button>
                     ))}
                   </div>
+                  <label className="vpn-field"><span>分流优先级</span>
+                    <input type="number" className="vpn-input" aria-label="分流优先级" min={1} max={9999}
+                      value={form.routingPriority ?? 100} onChange={e => setForm({ ...form, routingPriority: Number(e.target.value) })}/>
+                    <small>数字越小越优先；同优先级按接入列表顺序。多个 VPN 同时连接时，重叠资源及默认公网策略按此顺序选择，明确的公司资源仍优先。</small>
+                  </label>
                   {(form.trafficMode || 'split') === 'split' && (
                     <div className="vpn-auto-discovery">
                       <label>
@@ -697,7 +703,7 @@ export function VpnProfileEditor({
                           onChange={e => setForm({ ...form, autoDiscoverPrivate: e.target.checked })}/>
                         <strong>自动识别私网目标</strong><span className="vpn-mode-recommended">默认</span>
                       </label>
-                      <p>只在访问未知私网 IP 或已解析为私网的域名时判断路径：本机可达就直连，否则尝试此 VPN。首次访问可能多等约一秒，不影响普通公网。</p>
+                      <p>只在访问未知私网 IP 或已解析为私网的域名时判断路径。本机可达就直连；多个接入开启此功能时，按优先级尝试已连接的 VPN。首次访问可能需要几秒，不影响普通公网。</p>
                       <p>只记住验证过的 IP、端口和 TCP 协议；重新连接后重新判断。公网公司地址、特殊域名和同地址冲突请在下方明确配置。</p>
                     </div>
                   )}

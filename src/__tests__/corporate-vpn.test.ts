@@ -17,7 +17,7 @@ import {
   childEnvironment,
   VpnCoreProcess,
 } from '../main/vpn/VpnCoreProcess';
-import { CorporateVpnManager } from '../main/vpn/CorporateVpnManager';
+import { CorporateVpnSession as CorporateVpnManager } from '../main/vpn/CorporateVpnSession';
 import { applyCorporateConfig } from '../main/vpn/CorporateConfig';
 import { VpnProfile } from '../types/corporateVpn';
 import { ImportJournal } from '../main/db/backup/ImportJournal';

@@ -11,9 +11,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && tsc -p tsconfig.node.json",
-    "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts src/__tests__/datadir.test.ts src/__tests__/corporate-vpn.test.ts",
-    "test:vpn": "npx tsx --test src/__tests__/corporate-vpn.test.ts",
-    "test:vpn:integration": "npx tsx --test src/__tests__/corporate-vpn.integration.test.ts",
+    "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts src/__tests__/datadir.test.ts src/__tests__/corporate-vpn.test.ts src/__tests__/corporate-vpn-multi.test.ts",
+    "test:vpn": "npx tsx --test src/__tests__/corporate-vpn.test.ts src/__tests__/corporate-vpn-multi.test.ts",
+    "test:vpn:integration": "npx tsx --test src/__tests__/corporate-vpn.integration.test.ts src/__tests__/corporate-vpn-multi.integration.test.ts",
     "test:vpn:watch": "node scripts/vpn-watch-lab.cjs",
     "test:vpn:ui": "node scripts/vpn-access-ui-smoke.cjs",
     "test:vpn-core": "node scripts/test-vpn-core.cjs",

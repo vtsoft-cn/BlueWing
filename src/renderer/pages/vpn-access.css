@@ -44,6 +44,10 @@
 .vpn-access > :not(.vpn-workspace) {
   flex-shrink: 0;
 }
+.vpn-multi-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid var(--vpn-border); border-radius: 12px; background: var(--vpn-soft); color: var(--vpn-muted); font-size: 12px; }
+.vpn-multi-summary > span { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.vpn-multi-summary strong { color: var(--vpn-text); }
+.vpn-multi-summary small { font-size: 12px; }
 .vpn-access > .vpn-empty-state {
   flex: 1;
   min-height: 0;

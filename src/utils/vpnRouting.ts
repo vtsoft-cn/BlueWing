@@ -1,5 +1,9 @@
 import { VpnOutlet, VpnProfile } from '../types/corporateVpn';
 
+export function orderedVpnProfiles(profiles: VpnProfile[]): VpnProfile[] {
+  return [...profiles].sort((a, b) => (a.routingPriority ?? 100) - (b.routingPriority ?? 100));
+}
+
 export const vpnTrafficModes = [
   { id: 'split', name: '智能分流', summary: '公司走 VPN，国内走本机', recommended: true },
   { id: 'vpn', name: '全部走 VPN', summary: '默认经 VPN，国外优先代理', recommended: false },

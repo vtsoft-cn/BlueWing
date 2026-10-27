@@ -24,7 +24,14 @@ export function getCorporateVpn(): CorporateVpnManager {
       {
         running: () => SingBoxManager.getInstance().getState() === 'running',
         pid: () => SingBoxManager.getInstance().getPid(),
-        settings: () => db.getSettings(),
+        settings: () => {
+          const settings = db.getSettings();
+          const core = SingBoxManager.getInstance();
+          if (core.getState() === 'running') {
+            try { return { ...settings, tunEnabled: JSON.parse(core.getLiveConfig()).inbounds?.some((i: any) => i.type === 'tun') === true }; } catch { /* Use the saved mode until a live config is available. */ }
+          }
+          return settings;
+        },
         applyRouting: async isCurrent => {
           if (!routingInitializer) throw new Error('ROUTING_PREPARE_FAILED');
           return routingInitializer(isCurrent);
