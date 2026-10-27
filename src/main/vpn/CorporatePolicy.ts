@@ -41,6 +41,7 @@ export class CorporatePolicy {
   private protectedTargets = new Map<string, VpnTarget[]>();
   private probes = new Map<string, string>();
   private activeId?: string;
+  private guardedId?: string;
   private current: VpnRuntime = {
     profiles: [],
     coreProcessName: 'bluewing-vpn-core.exe',
@@ -69,6 +70,15 @@ export class CorporatePolicy {
   getResources(id: string): VpnResources | undefined {
     return structuredClone(this.resources.get(id));
   }
+  isProtected(id?: string): boolean {
+    return !!id && this.guardedId === id;
+  }
+  begin(id: string, profiles: VpnProfile[]): void {
+    this.activeId = undefined;
+    this.guardedId = id;
+    this.probes.clear();
+    this.prepare(profiles);
+  }
   learn(id: string, data: any, profiles: VpnProfile[]): boolean {
     const profile = profiles.find(p => p.id === id);
     if (this.activeId !== id || !profile || data?.network !== 'tcp' || !this.discovery.observe(profile, data.address, data.port, data.outlet)) return false;
@@ -81,11 +91,14 @@ export class CorporatePolicy {
   }
   setProbe(id: string, nonce: string, profiles: VpnProfile[]): void {
     this.activeId = id;
+    this.guardedId = id;
     this.probes.set(id, nonce);
     this.prepare(profiles);
   }
-  deactivate(profiles: VpnProfile[]): void {
+  deactivate(profiles: VpnProfile[], preserveGuard = false): void {
     this.activeId = undefined;
+    if (!preserveGuard) this.guardedId = undefined;
+    this.probes.clear();
     this.prepare(profiles);
   }
   update(id: string, input: unknown, profiles: VpnProfile[]): string {
@@ -110,7 +123,15 @@ export class CorporatePolicy {
   }
   prepare(profiles: VpnProfile[]): VpnRuntime {
     const next: VpnRuntimeProfile[] = [];
+    const ids = new Set(profiles.map(p => p.id));
+    if (this.guardedId && !ids.has(this.guardedId)) this.guardedId = undefined;
+    if (this.activeId && !ids.has(this.activeId)) this.activeId = undefined;
+    // A running core may still watch a removed profile until its next reload.
+    for (const old of this.current.profiles.filter(r => !ids.has(r.profile.id)))
+      for (const file of [old.routePath, old.guardPath, old.dnsPath, old.internetPath, old.internetDnsPath, old.discoveredGuardPath])
+        if (file) this.publish(file, { version: 3, rules: [] });
     for (const profile of profiles) {
+      const protectedNow = this.isProtected(profile.id);
       let credentials = this.credentials.get(profile.id);
       if (!credentials) {
         credentials = {
@@ -153,7 +174,7 @@ export class CorporatePolicy {
         internetDnsPath = path.join(folder, 'internet-dns-active.json'),
         discoveredGuardPath = path.join(folder, 'discovered-guard.json');
       this.publish(discoveredGuardPath, sourceRules(
-        profile.autoDiscoverPrivate !== false && (profile.trafficMode || 'split') === 'split'
+        protectedNow && profile.autoDiscoverPrivate !== false && (profile.trafficMode || 'split') === 'split'
           ? this.discovery.targets(profile) : []));
       this.publish(internetDnsPath, { version: 3, rules:
         this.activeId === profile.id ? [{ domain_regex: ['.*'] }] : [] });
@@ -167,11 +188,11 @@ export class CorporatePolicy {
       const legacyChinaPath = path.join(folder, 'china-active.json');
       if (fs.existsSync(legacyChinaPath))
         this.publish(legacyChinaPath, { version: 3, rules: [] });
-      this.publish(guardPath, sourceRules(all, true));
+      this.publish(guardPath, sourceRules(protectedNow ? all : [], true));
       this.publish(
         dnsPath,
         sourceRules(
-          all
+          (protectedNow ? all : [])
             .filter((t) => t.domains.length)
             .map((t) => ({ domains: t.domains, cidrs: [] })),
           true,

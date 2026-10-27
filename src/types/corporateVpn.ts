@@ -69,6 +69,7 @@ export interface VpnChallenge {
   mime?: string;
 }
 export interface VpnState {
+  trafficProtected?: boolean;
   state:
     | 'idle'
     | 'starting'

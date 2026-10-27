@@ -52,6 +52,7 @@ export class CorporateVpnManager extends EventEmitter {
   private mutation: Promise<unknown> = Promise.resolve();
   private desired?: { id: string; password: string };
   private retries = 0;
+  private sessionWasReady = false;
   private reconnectTimer?: NodeJS.Timeout;
   constructor(
     readonly profiles: ProfileRepository,
@@ -93,6 +94,7 @@ export class CorporateVpnManager extends EventEmitter {
       profiles: this.profiles.list(),
       state: {
         ...structuredClone(this.state),
+        trafficProtected: this.policy.isProtected(this.state.profileId),
         coreAvailable: this.core.available(),
         requiresCoreRebuild:
           signature(this.policy.runtime()) !== this.registered,
@@ -144,6 +146,7 @@ export class CorporateVpnManager extends EventEmitter {
       if (before && (before.protocol !== value.protocol || before.gateway.host !== value.gateway?.host || before.gateway.port !== value.gateway?.port))
         value = { ...value, authChoices: [], authName: '' };
       const p = this.profiles.save(value);
+      if (this.state.profileId === p.id) this.policy.deactivate(this.profiles.list());
       // Credentials are bound to the complete gateway/protocol identity, not just a display name.
       if (!p.rememberPassword) this.vault.remove(`${p.id}:password:`);
       if (!p.rememberSession) this.vault.remove(`${p.id}:session:`);
@@ -161,7 +164,7 @@ export class CorporateVpnManager extends EventEmitter {
     return this.exclusive(() => {
       if (!['idle', 'failed'].includes(this.state.state))
         throw new Error('请先断开VPN 接入');
-      // Cached target guards remain until an explicit full policy application.
+      // Revoke watched files immediately, even before the public core reloads.
       this.profiles.remove(id);
       this.policy.discovery.clear(id);
       this.vault.remove(`${id}:`);
@@ -275,6 +278,7 @@ export class CorporateVpnManager extends EventEmitter {
       if (!retry) {
         this.retries = 0;
         this.desired = undefined;
+        this.sessionWasReady = false;
       }
       let p = this.profiles.get(id);
       const needsRouting = !this.publicCore.running() || signature(this.policy.runtime()) !== this.registered;
@@ -296,6 +300,7 @@ export class CorporateVpnManager extends EventEmitter {
         const key = this.credentialKey(p, 'password');
         const secret = password || (p.rememberPassword ? this.vault.get(key) : undefined) || '';
         if (!secret && p.authMethod !== 'auth/smsCheckCode') throw new Error('请输入密码');
+        this.policy.begin(p.id, this.profiles.list());
         if (needsRouting) {
           const applied = await this.publicCore.applyRouting?.(isCurrent);
           if (!isCurrent()) return;
@@ -347,10 +352,11 @@ export class CorporateVpnManager extends EventEmitter {
     if (!preserveIntent) {
       this.desired = undefined;
       this.retries = 0;
+      this.sessionWasReady = false;
     }
     const generation = this.state.generation + 1;
     if (this.core.isRunning()) this.core.send('disconnect', { generation });
-    this.policy.deactivate(this.profiles.list());
+    this.policy.deactivate(this.profiles.list(), preserveIntent);
     this.change({
       state: 'idle',
       generation,
@@ -502,7 +508,8 @@ export class CorporateVpnManager extends EventEmitter {
     this.clearConnectionTimeout();
     const generation = this.state.generation + 1;
     if (this.core.isRunning()) this.core.send('disconnect', { generation });
-    this.policy.deactivate(this.profiles.list());
+    const keepGuard = this.sessionWasReady || (!!this.desired && ['CORE_EXITED', 'VPN_TRANSPORT_DOWN', 'GATEWAY_UNREACHABLE'].includes(error));
+    this.policy.deactivate(this.profiles.list(), keepGuard);
     if (this.state.profileId) this.diagnostics.write(this.state.profileId, { event: 'connection-error', generation: this.state.generation, code: error, ...errorDetail });
     this.change({ state: 'failed', generation, error, errorDetail, challenge: undefined, preparingRouting: false });
     if (
@@ -596,6 +603,7 @@ export class CorporateVpnManager extends EventEmitter {
         revision,
       });
     } else if (e.type === 'tunnelReady') {
+      this.sessionWasReady = true;
       this.change({ state: 'applying_policy' });
       const generation = e.generation,
         pid = this.publicCore.pid(),

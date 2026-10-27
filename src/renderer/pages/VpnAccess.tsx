@@ -151,6 +151,7 @@ export const VpnAccess: React.FC<{
   const selectedState =
     selected && state.profileId === selected.id ? state.state : 'idle';
   const selectedActive = active && state.profileId === selectedId;
+  const selectedProtected = state.trafficProtected === true && state.profileId === selectedId;
   const selectedDiagnostic = selected && snapshot.diagnostics?.[selected.id];
   const errorDetail = state.profileId === selectedId ? state.errorDetail : undefined;
   useEffect(() => {
@@ -481,6 +482,13 @@ export const VpnAccess: React.FC<{
                       role="alert"
                     >
                       <p>{connectionError}</p>
+                      {selectedProtected && state.state === 'failed' && (
+                        <div>
+                          <p>VPN 异常断开，此接入的已知资源暂时受保护。重新连接可恢复 VPN，或停止此接入并恢复普通分流。</p>
+                          <button type="button" className="vpn-button compact" disabled={busy}
+                            onClick={() => run(async () => { await window.electronAPI.corporateVpn.disconnect(); await refresh(); })}>恢复普通分流</button>
+                        </div>
+                      )}
                       {errorDetail && <details className="vpn-error-detail" open={state.error === 'ATRUST_TRUSTED_ENDPOINT_REQUIRED'}>
                         <summary>原始错误 · {errorDetail.stage}{errorDetail.serverCode ? ` · ${errorDetail.serverCode}` : ''}</summary>
                         <pre>{errorDetail.message}</pre>
@@ -708,12 +716,12 @@ export const VpnAccess: React.FC<{
                     { label: '国外网站', icon: Waypoints, outlet: vpnRouting(selected, publicProxy.enabled).foreign },
                   ]).map(({ label, icon: Icon, outlet }) => {
                     const connected = selectedState === 'connected';
-                    const actual = !connected && label !== '公司资源'
+                    const actual = !connected && label === '公司资源' && !selectedProtected ? 'normal' : !connected && label !== '公司资源'
                       ? (publicProxy.enabled && (label === '国外网站' || publicProxy.mode === 'global') ? 'proxy' : 'direct') : outlet;
                     return <div className={`vpn-outlet-item ${actual}`} key={label}>
                       <span className="vpn-outlet-icon"><Icon size={18} /></span><span className="vpn-outlet-label">{label}</span>
-                      <strong>{actual === 'vpn' ? 'VPN 隧道' : actual === 'proxy' ? '公网代理' : '本机直连'}</strong>
-                      <small>{actual === 'vpn' ? connected ? selected.name : '未连接 · 已知目标受保护'
+                      <strong>{actual === 'normal' ? '普通分流' : actual === 'vpn' ? 'VPN 隧道' : actual === 'proxy' ? '公网代理' : '本机直连'}</strong>
+                      <small>{actual === 'normal' ? '此接入未接管流量' : actual === 'vpn' ? connected ? selected.name : '连接未就绪 · 已知目标受保护'
                         : actual === 'proxy' ? `${publicProxy.name || '当前节点'}${coreState !== 'running' ? ' · 未启动' : ''}` : '保留本地网络出口'}</small>
                     </div>;
                   })}
