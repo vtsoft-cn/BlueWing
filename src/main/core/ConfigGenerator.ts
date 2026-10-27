@@ -417,7 +417,9 @@ export class ConfigGenerator {
       rules: routeRules,
       rule_set: ruleSets,
       final: finalOutbound,
-      auto_detect_interface: true,
+      // Binding every outbound to the default NIC prevents TUN loops, but in
+      // proxy-only mode it bypasses more-specific routes from other VPN clients.
+      auto_detect_interface: !!useTun,
     };
 
     // 6. Root Configuration

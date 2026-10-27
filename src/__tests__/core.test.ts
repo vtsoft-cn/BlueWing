@@ -241,6 +241,21 @@ describe('IP/Domain validators', () => {
 });
 
 describe('ConfigGenerator', () => {
+  test('Proxy-only and forced TUN fallback preserve OS VPN routes; active TUN retains loop prevention', async () => {
+    for (const [tunEnabled, forceDisableTun, binding] of [[false, false, false], [true, false, true], [true, true, false]] as const) {
+      const config = ConfigGenerator.generate('', [], [], [], defaultDns, { ...defaultSettings, tunEnabled }, forceDisableTun);
+      assert.equal(config.inbounds.some((i: any) => i.type === 'tun'), binding);
+      assert.equal(config.route.auto_detect_interface, binding);
+      assert.equal(config.route.final, 'direct');
+      const binary = path.resolve(__dirname, '../../bin/sing-box.exe');
+      if (fs.existsSync(binary)) {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'bluewing-vpn-route-check-'));
+        const file = path.join(dir, 'config.json');
+        try { fs.writeFileSync(file, JSON.stringify(config)); await execFileAsync(binary, ['check', '-c', file], { windowsHide: true }); }
+        finally { fs.rmSync(dir, { recursive: true, force: true }); }
+      }
+    }
+  });
   const sampleNodes: ProxyNode[] = [
     {
       id: 'vless',

@@ -285,6 +285,10 @@ export class SingBoxManager extends EventEmitter {
           const hasTun = config.inbounds.some((i: any) => i.type === 'tun');
           if (hasTun) {
             config.inbounds = config.inbounds.filter((i: any) => i.type !== 'tun');
+            // This is now a proxy-only core: let the OS select a VPN/LAN route
+            // instead of retaining the default-NIC binding from its TUN config.
+            if (config.route?.auto_detect_interface === true)
+              config.route.auto_detect_interface = false;
             this.tunStrippedLastStart = true;
             this.log(
               'warn',

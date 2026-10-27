@@ -725,3 +725,31 @@ test('A running public proxy installs a newly saved VPN on connect and skips the
   const installed = sb.getPid(); await vpn.disconnect(); await vpn.connect(p.id, 'fixture-only-password');
   assert.equal(applications, 1); assert.equal(loginCommands, 2); assert.equal(sb.getPid(), installed);
 });
+
+test('Runtime TUN permission fallback releases default-NIC binding without creating a TUN', { timeout: 30000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-vpn-route-fallback-'));
+  const prior = process.env.BLUEWING_DATA_DIR; process.env.BLUEWING_DATA_DIR = dir;
+  Database.resetInstance();
+  const db = Database.getInstance(dir), manager: SingBoxManager = new (SingBoxManager as any)();
+  t.mock.method(manager, 'isAdmin', () => false);
+  t.mock.method(LogManager, 'getInstance', () => ({ addLog() {} }) as any);
+  const sockets = new Set<net.Socket>(), server = http.createServer((_, response) => response.end('OS-ROUTE'));
+  server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  const localPort = await listen(server), mixedPort = await freePort();
+  t.after(async () => {
+    await manager.stop(); for (const socket of sockets) socket.destroy(); server.close(); Database.resetInstance();
+    if (prior === undefined) delete process.env.BLUEWING_DATA_DIR; else process.env.BLUEWING_DATA_DIR = prior;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  db.saveSettings({ mixedPort, tunEnabled: true, routingMode: 'direct', clashApiEnabled: false });
+  const config = ConfigGenerator.generate('', [], [], [], { mode: 'standard', remoteDns: '223.5.5.5', directDns: '223.5.5.5', servers: [] } as DnsConfig, db.getSettings());
+  config.inbounds.find((i: any) => i.tag === 'speedtest-in').listen_port = await freePort();
+  assert.equal(config.route.auto_detect_interface, true);
+  assert.equal(await manager.start(config), true);
+  assert.equal(manager.wasTunStrippedLastStart(), true);
+  const live = JSON.parse(manager.getLiveConfig());
+  assert.equal(live.route.auto_detect_interface, false);
+  assert.equal(live.inbounds.some((i: any) => i.type === 'tun'), false);
+  assert.equal((await request(mixedPort, `http://127.0.0.1:${localPort}/`)).body, 'OS-ROUTE');
+  assert.equal(db.getSettings().tunEnabled, true, 'Runtime fallback overwrote the saved user choice');
+});
