@@ -48,7 +48,7 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
       c.focus();
       const cs = getComputedStyle(c);
       out.push({ tag: c.tagName.toLowerCase(), ph: (c.placeholder || c.getAttribute('aria-label') || '').slice(0, 12),
-        border: cs.borderColor, shadow: cs.boxShadow.slice(0, 64) });
+        border: cs.borderColor, shadow: cs.boxShadow.slice(0, 64), outline: cs.outlineStyle + ' ' + cs.outlineWidth + ' ' + cs.outlineColor });
     }
     return JSON.stringify(out);
   })()`;

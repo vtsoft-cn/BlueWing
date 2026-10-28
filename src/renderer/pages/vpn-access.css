@@ -55,7 +55,12 @@
   cursor: not-allowed;
   opacity: 0.45;
 }
-.vpn-surface :is(button, input, textarea, select, summary):focus-visible {
+/* 焦点可见性:文本类控件(input/textarea/select)不描边——它们已有与全应用
+ * inputCls 一致的聚焦边框+光晕(.vpn-input:focus / tailwind focus:ring),
+ * 叠加 2px 描边会形成与其它页面不同的"粗边框+强光圈"(特异性压过
+ * focus:outline-none);描边仅保留给无光晕的按钮/复选框/单选/summary */
+.vpn-surface :is(button, summary):focus-visible,
+.vpn-surface :is(input[type='checkbox'], input[type='radio']):focus-visible {
   outline: 2px solid var(--vpn-accent);
   outline-offset: 3px;
 }
