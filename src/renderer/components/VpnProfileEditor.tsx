@@ -12,7 +12,6 @@ import {
   LockKeyhole,
   Network,
   RefreshCw,
-  Save,
   Settings2,
   ShieldCheck,
   X,
@@ -25,6 +24,7 @@ import {
 import { vpnProviders } from '../vpn/providers';
 import { vpnTrafficModes } from '../../utils/vpnRouting';
 import { VpnTargetsFields } from './VpnTargetsFields';
+import { Button } from './ui';
 import { Portal } from './Portal';
 import { Select } from './Select';
 import { toast } from './Toast';
@@ -891,33 +891,28 @@ export function VpnProfileEditor({
                   </div>
                 </div>
               ) : (
-                <>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="vpn-button"
-                      disabled={!!busy}
-                      onClick={close}
-                    >
-                      {readOnly ? '关闭' : '取消'}
-                    </button>
-                    {!readOnly && <button
-                      type="submit"
-                      className="vpn-button primary"
-                      disabled={!!busy}
-                    >
+                <div className="flex items-center justify-end gap-3">
+                  <Button
+                    variant="ghost"
+                    disabled={!!busy}
+                    onClick={close}
+                  >
+                    {readOnly ? '关闭' : '取消'}
+                  </Button>
+                  {!readOnly && (
+                    <Button type="submit" disabled={!!busy}>
                       {busy === 'save' ? (
                         <LoaderCircle
                           size={16}
                           className="animate-spin motion-reduce:animate-none"
                         />
                       ) : (
-                        <Save size={16} />
+                        <Check size={16} />
                       )}
                       保存配置
-                    </button>}
-                  </div>
-                </>
+                    </Button>
+                  )}
+                </div>
               )}
             </footer>
           </form>

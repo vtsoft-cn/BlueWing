@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
-import { X, KeyRound, Settings2, Save } from 'lucide-react';
+import { X, KeyRound, Settings2, Check } from 'lucide-react';
 import { VpnProfile, VpnProfileType } from '../../types';
 import { Portal } from '../components/Portal';
 import { Select } from '../components/Select';
 import { InfoTip } from '../components/InfoTip';
-import { FieldLabel, inputCls, Input } from '../components/ui';
+import { Button, FieldLabel, inputCls, Input } from '../components/ui';
 import { VpnTargetsFields } from '../components/VpnTargetsFields';
 
 interface VpnProfileEditorModalProps {
@@ -600,23 +600,15 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
 
             </form>
 
-            {/* Footer Buttons(form 属性绑定提交;与 body 平级,缩进/底色与 corporate 编辑器一致) */}
+            {/* Footer Buttons(form 属性绑定提交;与 body 平级;ui.tsx Button=全应用弹窗同款) */}
             <footer className="vpn-editor-footer">
-              <button
-                type="button"
-                className="vpn-button"
-                onClick={requestClose}
-              >
+              <Button variant="ghost" onClick={requestClose}>
                 取消
-              </button>
-              <button
-                type="submit"
-                form="vpn-engine-editor-form"
-                className="vpn-button primary"
-              >
-                <Save size={16} />
+              </Button>
+              <Button type="submit" form="vpn-engine-editor-form">
+                <Check size={16} />
                 保存账号
-              </button>
+              </Button>
             </footer>
         </div>
   );

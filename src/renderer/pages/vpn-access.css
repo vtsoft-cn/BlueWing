@@ -1300,12 +1300,11 @@ textarea.vpn-input {
 .vpn-editor-footer {
   flex-shrink: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   border-top: 1px solid var(--vpn-border);
-  padding: 15px 24px;
-  background: var(--vpn-soft);
-  min-height: 73px;
+  /* 与全应用弹窗 footer 一致:无灰底条、自然高度、按钮右对齐 */
+  padding: 12px 24px;
   gap: 12px;
 }
 .vpn-editor-confirm {
