@@ -311,6 +311,41 @@ export const VpnAccess: React.FC<{
     (state.profileId === selectedId && state.error
       ? errorLabels[state.error] || state.error
       : '');
+  // 左侧卡片列表直接删除:连接中先断开(引擎是单会话,无参断开;corporate 按档断开),
+  // 再走各自后端删除;成功后清空选中,由选中守卫自动落到下一项
+  const handleDeleteProfile = async (
+    item: (typeof profiles)[number],
+    e: React.MouseEvent,
+  ): Promise<void> => {
+    e.stopPropagation();
+    const kind = item.engine ? 'VPN 接入' : 'VPN 账号';
+    if (
+      !(await confirmDialog({
+        title: `删除${kind}`,
+        message: `确定要删除「${item.name}」吗?正在连接时会先断开,删除后不可恢复。`,
+        danger: true,
+      }))
+    ) {
+      return;
+    }
+    run(async () => {
+      if (item.engine) {
+        if (engineStateFor(item.engine.id)) {
+          try { await window.electronAPI?.vpn?.disconnect(); } catch { /* 断开失败不阻塞删除 */ }
+        }
+        await window.electronAPI?.vpn?.deleteProfile(item.engine.id);
+        await refreshEngineProfiles();
+      } else {
+        if (!['idle', 'failed'].includes(stateFor(item.id).state)) {
+          try { await window.electronAPI.corporateVpn.disconnect(item.id); } catch { /* 同上 */ }
+        }
+        await window.electronAPI.corporateVpn.remove(item.id);
+        await refresh();
+      }
+      setSelectedId('');
+      toast.success(`已删除「${item.name}」`);
+    });
+  };
   const connectDisabled =
     busy ||
     cancelling ||
@@ -464,12 +499,21 @@ export const VpnAccess: React.FC<{
             </label>
             <div className="vpn-profile-items" role="region" aria-label="VPN 接入列表" tabIndex={0}>
               {profiles.map((profile) => { const itemState = stateFor(profile.id); return (
-                <button
+                // 卡片容器不能用 <button>:内部要嵌删除按钮,button 嵌 button 非法
+                <div
                   key={profile.id}
+                  role="button"
+                  tabIndex={0}
                   className={`vpn-profile-item ${selectedId === profile.id ? 'selected' : ''}`}
                   aria-pressed={selectedId === profile.id}
                   title={profile.host}
                   onClick={() => setSelectedId(profile.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedId(profile.id);
+                    }
+                  }}
                 >
                   <div className="vpn-profile-item-top">
                     {profile.engine ? (
@@ -487,6 +531,14 @@ export const VpnAccess: React.FC<{
                       : itemState.state === 'connected' && (
                           <CheckCircle2 size={15} className="vpn-success-text shrink-0" />
                         )}
+                    <button
+                      className="vpn-item-delete"
+                      aria-label={`删除${profile.engine ? 'VPN 接入' : 'VPN 账号'} ${profile.name}`}
+                      title="删除"
+                      onClick={(e) => { void handleDeleteProfile(profile, e); }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                   <span className="vpn-profile-gateway">
                     {profile.host}
@@ -497,7 +549,7 @@ export const VpnAccess: React.FC<{
                       <span>{labels[itemState.state]}</span>
                     )}
                   </span>
-                </button>
+                </div>
               ); })}
               {!profiles.length && (
                 <div className="vpn-search-empty">

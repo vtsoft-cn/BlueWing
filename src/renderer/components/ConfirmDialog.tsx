@@ -35,6 +35,9 @@ export const ConfirmDialogHost: React.FC = () => {
   useEffect(() => {
     askFn = (options) =>
       new Promise<boolean>((resolve) => {
+        // Host 常驻不卸载,closingRef 在上一次收场后残留 true;新弹窗即新生命周期,必须复位,
+        // 否则第二次起所有按钮点击都被 close() 的关闭锁吞掉(确认框永久死锁)
+        closingRef.current = false;
         setPending({ options, resolve });
       });
     return () => {
@@ -49,7 +52,9 @@ export const ConfirmDialogHost: React.FC = () => {
     closingRef.current = true;
     setExiting(true);
     resolve(v);
-    setTimeout(() => setPending(null), 200);
+    // 收场动画期内若又开了新弹窗,不得把新 pending 清掉(只清自己这次的状态)
+    const mine = pending;
+    setTimeout(() => setPending((curr) => (curr === mine ? null : curr)), 200);
   };
 
   return (
