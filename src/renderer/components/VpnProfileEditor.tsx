@@ -15,7 +15,6 @@ import {
   Save,
   Settings2,
   ShieldCheck,
-  Trash2,
   X,
 } from 'lucide-react';
 import {
@@ -74,7 +73,6 @@ export function VpnProfileEditor({
   encryptionAvailable,
   onClose,
   onSaved,
-  onRemoved,
   initialTab = 'connection',
   readOnly = false,
   passwordSaved = false,
@@ -83,7 +81,6 @@ export function VpnProfileEditor({
   encryptionAvailable: boolean;
   onClose: () => void;
   onSaved: (profile: VpnProfile, keepOpen?: boolean) => Promise<void>;
-  onRemoved: () => Promise<void>;
   initialTab?: 'connection' | 'routing' | 'advanced';
   readOnly?: boolean;
   passwordSaved?: boolean;
@@ -106,7 +103,7 @@ export function VpnProfileEditor({
   const [error, setError] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [confirmation, setConfirmation] = useState<'discard' | 'delete'>();
+  const [confirmation, setConfirmation] = useState<'discard'>();
   const root = useRef<HTMLDivElement>(null);
   const initial = useRef(JSON.stringify({ form, domains, cidrs, hosts, password: '' }));
   const dirty =
@@ -905,11 +902,7 @@ export function VpnProfileEditor({
             <footer className="vpn-editor-footer">
               {confirmation ? (
                 <div className="vpn-editor-confirm" role="alert">
-                  <p>
-                    {confirmation === 'discard'
-                      ? '有未保存的修改，确定放弃？'
-                      : '删除此接入配置及保存的凭据？删除后需要重新应用分流。'}
-                  </p>
+                  <p>有未保存的修改，确定放弃？</p>
                   <div>
                     <button
                       type="button"
@@ -922,37 +915,14 @@ export function VpnProfileEditor({
                       type="button"
                       className="vpn-button danger"
                       disabled={!!busy}
-                      onClick={() =>
-                        confirmation === 'discard'
-                          ? animatedClose()
-                          : run('delete', async () => {
-                              await window.electronAPI.corporateVpn.remove(
-                                profile.id,
-                              );
-                              await onRemoved();
-                              animatedClose();
-                            })
-                      }
+                      onClick={animatedClose}
                     >
-                      {confirmation === 'discard' ? '放弃修改' : '确认删除'}
+                      放弃修改
                     </button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div>
-                    {!!profile.id && !readOnly && (
-                      <button
-                        type="button"
-                        className="vpn-button text-danger"
-                        disabled={!!busy}
-                        onClick={() => setConfirmation('delete')}
-                      >
-                        <Trash2 size={15} />
-                        删除接入
-                      </button>
-                    )}
-                  </div>
                   <div className="flex gap-2">
                     <button
                       type="button"

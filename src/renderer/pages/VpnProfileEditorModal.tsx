@@ -189,8 +189,8 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
             <ModalCloseX onClick={requestClose} />
           </header>
 
-          {/* Form Body */}
-          <form onSubmit={handleSubmit} className="vpn-editor-body space-y-4">
+          {/* Form Body(footer 在 body 外:body 有自身 padding,footer 嵌内会双重缩进、灰底条不满宽) */}
+          <form onSubmit={handleSubmit} id="vpn-engine-editor-form" className="vpn-editor-body space-y-4">
             {/* Type Selector(类型已在添加弹层选定时隐藏) */}
             <div style={lockType ? { display: 'none' } : undefined}>
               <FieldLabel>
@@ -204,7 +204,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                     onClick={() => {
                       setFormData({ ...formData, type: t.id });
                     }}
-                    className={`w-full flex items-center justify-between py-1.5 pl-3 pr-2 rounded-lg font-medium text-xs border transition-all ${
+                    className={`w-full h-[34px] flex items-center justify-between pl-3 pr-2 rounded-lg font-medium text-xs border transition-all ${
                       formData.type === t.id
                         ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                         : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -329,15 +329,15 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">分流模式(仅放行内网路由,不接管默认路由)</span>
+                <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.splitTunnel !== false}
                     onChange={(e) => setFormData({ ...formData, splitTunnel: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-0"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring"
                   />
-                </div>
+                  <span className="text-slate-600 dark:text-slate-400">分流模式(仅放行内网路由,不接管默认路由)</span>
+                </label>
               </div>
             )}
 
@@ -448,14 +448,16 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                   </div>
                 )}
 
-                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                  <span className="text-slate-600 dark:text-slate-400">使用用户名密码认证</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.authUserPass || false}
-                    onChange={(e) => setFormData({ ...formData, authUserPass: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-0"
-                  />
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.authUserPass || false}
+                      onChange={(e) => setFormData({ ...formData, authUserPass: e.target.checked })}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring"
+                    />
+                    <span className="text-slate-600 dark:text-slate-400">使用用户名密码认证</span>
+                  </label>
                 </div>
                 {formData.authUserPass && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -517,18 +519,18 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                     value={formData.servercert || ''}
                     onChange={(e) => setFormData({ ...formData, servercert: e.target.value })}
                     placeholder="pin-sha256:...(自签名网关校验失败时按日志提示填写)"
-className="font-mono"
+                    className="font-mono"
                   />
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">登录需要双因素验证码 (MFA/令牌)</span>
+                <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.useMfa || false}
                     onChange={(e) => setFormData({ ...formData, useMfa: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-0"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring"
                   />
-                </div>
+                  <span className="text-slate-600 dark:text-slate-400">登录需要双因素验证码 (MFA/令牌)</span>
+                </label>
               </div>
             )}
 
@@ -582,17 +584,18 @@ className="font-mono"
               />
             </div>
 
-            {/* Footer Buttons */}
+            </form>
+
+            {/* Footer Buttons(form 属性绑定提交;与 body 平级,缩进/底色与 corporate 编辑器一致) */}
             <footer className="vpn-editor-footer">
               <Button variant="ghost" onClick={requestClose}>
                 取消
               </Button>
-              <Button type="submit">
+              <Button type="submit" form="vpn-engine-editor-form">
                 <Check className="w-4 h-4" />
                 保存账号
               </Button>
             </footer>
-          </form>
         </div>
   );
 };

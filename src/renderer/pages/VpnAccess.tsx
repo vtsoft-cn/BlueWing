@@ -1290,10 +1290,6 @@ export const VpnAccess: React.FC<{
             setSelectedId(profile.id);
             setEditor(keepOpen ? profile : undefined);
           }}
-          onRemoved={async () => {
-            await refresh();
-            setEditor(undefined);
-          }}
         />
       )}
       {addPickerOpen && (
