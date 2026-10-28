@@ -604,19 +604,6 @@ export const VpnAccess: React.FC<{
                     >
                       <Pencil size={17} />
                     </button>
-                    <button
-                      className="vpn-icon-button"
-                      aria-label="删除接入配置"
-                      title="删除接入配置"
-                      onClick={async () => {
-                        if (!(await confirmDialog({ title: '删除 VPN 账号', message: `确定要删除「${selected.name}」吗?正在连接时会先断开。`, danger: true }))) return;
-                        await window.electronAPI?.vpn?.deleteProfile(selected.engine.id);
-                        await refreshEngineProfiles();
-                        setSelectedId('');
-                      }}
-                    >
-                      <Trash2 size={17} />
-                    </button>
                   </div>
                 </header>
                 <div className="vpn-connection-body">
@@ -655,7 +642,7 @@ export const VpnAccess: React.FC<{
                           }}
                         >
                           <Unplug size={16} />
-                          连接
+                          连接 VPN
                         </button>
                       );
                     })()}
