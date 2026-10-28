@@ -15,6 +15,21 @@
 ; 本脚本只属于安装器主编译趟;卸载器独立编译趟(BUILD_UNINSTALLER)不需要
 ; 这些逻辑(卸载即随模板默认行为删除 data/),跳过以避免未引用变量等告警。
 ; LogicLib 需自行引入(注入位置早于 common.nsh;带守卫,重复包含安全)。
+
+; ---------------------------------------------------------------
+; 位图保比例显示:MUI2 默认 _STRETCH=FitControl 把位图无比例拉伸填满控件,
+; 而控件像素宽高比随 DPI/系统字体度量变化(150% DPI 中文系统实测 ≈1.4:1),
+; 欢迎页竖幅里的圆形徽标因此被横向拉扁(实测 aspect 1.0→1.48)。
+; AspectFitHeight 按控件高度保比例缩放并把控件收窄到位图宽度(白底无缝),
+; 在任意 DPI 下徽标恒为正圆。本文件被前插到模板最前,早于 MUI2 一切消费点,
+; 安装趟(欢迎/完成页竖幅+内页头图)与卸载趟(同款页面)一并覆盖。
+; electron-builder 只经命令行下发 MUI_*_BITMAP(同名再 define 会冲突),
+; 这三个 *_STRETCH 它不下发,此处定义安全。
+; ---------------------------------------------------------------
+!define MUI_WELCOMEFINISHPAGE_BITMAP_STRETCH AspectFitHeight
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP_STRETCH AspectFitHeight
+!define MUI_HEADERIMAGE_BITMAP_STRETCH AspectFitHeight
+
 !ifndef BUILD_UNINSTALLER
 
 !include "LogicLib.nsh"
