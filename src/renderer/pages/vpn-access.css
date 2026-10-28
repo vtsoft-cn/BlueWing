@@ -655,8 +655,9 @@
 }
 .vpn-input:focus,
 .vpn-password-input:focus-within {
-  border-color: var(--vpn-accent);
-  box-shadow: 0 0 0 3px #3b82f615;
+  /* 对齐全应用 inputCls 聚焦样式:border-blue-500 + ring-blue-500/10 */
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 textarea.vpn-input {
   resize: vertical;

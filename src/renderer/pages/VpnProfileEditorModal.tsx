@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
-import { X, KeyRound, Save } from 'lucide-react';
+import { X, KeyRound, Settings2, Save } from 'lucide-react';
 import { VpnProfile, VpnProfileType } from '../../types';
 import { Portal } from '../components/Portal';
 import { Select } from '../components/Select';
@@ -74,6 +74,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
   const [extraRoutesText, setExtraRoutesText] = useState('');
   const [certFetching, setCertFetching] = useState(false);
   const [certMessage, setCertMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [tab, setTab] = useState<'connection' | 'advanced'>('connection');
 
   useEffect(() => {
     if (profile) {
@@ -185,8 +186,31 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
             <ModalCloseX onClick={requestClose} />
           </header>
 
+          {/* 分类 tab(与 corporate 编辑器同款结构) */}
+          <div className="vpn-editor-tabs" role="tablist" aria-label="接入设置分类">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'connection'}
+              onClick={() => setTab('connection')}
+            >
+              <KeyRound size={16} />
+              连接设置
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'advanced'}
+              onClick={() => setTab('advanced')}
+            >
+              <Settings2 size={16} />
+              高级选项
+            </button>
+          </div>
+
           {/* Form Body(footer 在 body 外:body 有自身 padding,footer 嵌内会双重缩进、灰底条不满宽) */}
           <form onSubmit={handleSubmit} id="vpn-engine-editor-form" className="vpn-editor-body space-y-4">
+            <section role="tabpanel" aria-label="连接设置" hidden={tab !== 'connection'} className="space-y-4">
             {/* Type Selector(类型已在添加弹层选定时隐藏) */}
             <div style={lockType ? { display: 'none' } : undefined}>
               <FieldLabel>
@@ -238,7 +262,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={isOpenVpn ? 'sm:col-span-3' : 'sm:col-span-2'}>
                 <FieldLabel>
-                  名称
+                  名称 <span className="text-blue-500">*</span>
                 </FieldLabel>
                 <Input
                   type="text"
@@ -251,7 +275,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
               {!isOpenVpn && (
                 <div className={isOpenConnect ? '' : 'sm:col-span-1'}>
                   <FieldLabel>
-                    服务器
+                    服务器 <span className="text-blue-500">*</span>
                   </FieldLabel>
                   <Input
                     type="text"
@@ -529,7 +553,9 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                 </div>
               </div>
             )}
+            </section>
 
+            <section role="tabpanel" aria-label="高级选项" hidden={tab !== 'advanced'} className="space-y-4">
             {/* Common: extra routes */}
             <div>
               <FieldLabel>
@@ -543,6 +569,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                 className={`${inputCls} font-mono text-[11px]`}
               />
             </div>
+            </section>
 
             </form>
 
