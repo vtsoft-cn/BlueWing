@@ -342,8 +342,11 @@
   color: #dc2626;
   background: rgba(220, 38, 38, 0.08);
 }
-.vpn-profile-item:hover:not(:disabled) {
-  border-color: #94a3b8;
+/* hover 对齐节点卡片:蓝边 + 颜色过渡(原 #94a3b8 灰边变化过弱,视觉上无反馈);
+ * selected 卡片保持选中蓝边不受 hover 干扰 */
+.vpn-profile-item:hover:not(.selected) {
+  border-color: #60a5fa;
+  background: var(--vpn-accent-soft);
 }
 .vpn-profile-item.selected {
   border-color: var(--vpn-accent);
