@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { useModalClose } from '../components/ModalShell';
-import { X, Check, KeyRound } from 'lucide-react';
+import { X, KeyRound, Save } from 'lucide-react';
 import { VpnProfile, VpnProfileType } from '../../types';
 import { Portal } from '../components/Portal';
 import { Select } from '../components/Select';
 import { InfoTip } from '../components/InfoTip';
-import { Button, FieldLabel, inputCls, Input } from '../components/ui';
+import { FieldLabel, inputCls, Input } from '../components/ui';
 
 interface VpnProfileEditorModalProps {
   profile?: VpnProfile | null;
@@ -27,18 +27,18 @@ export const TYPE_GROUPS: {
   /** 悬停问号图标:该协议支持哪些 VPN 网关/产品 */
   products?: string;
 }[] = [
-  { id: 'ikev2', label: 'IKEv2', hint: 'Windows 内置,零依赖', products: '标准 IKEv2/IPsec 网关:Cisco、Fortinet、MikroTik、pfSense/OPNsense、Windows Server 等' },
-  { id: 'l2tp', label: 'L2TP/IPsec', hint: 'Windows 内置,零依赖', products: '标准 L2TP/IPsec 网关:路由器/防火墙、Windows Server;SoftEther 服务器(未设默认 Hub 时用户名用 Hub名\\用户名)' },
-  { id: 'sstp', label: 'SSTP', hint: 'Windows 内置,零依赖', products: '标准 SSTP 网关:Microsoft RRAS/TMG;SoftEther 服务器(SSTP 端点)' },
-  { id: 'openvpn', label: 'OpenVPN', hint: 'OpenVPN 2.7 引擎(已随应用内置)', missing: 'OpenVPN 引擎未检测到,见页面顶部安装指引', engine: 'openvpn', products: 'OpenVPN 服务器及兼容端点:OpenVPN、SoftEther(OpenVPN 兼容端点)、各类企业网关' },
-  { id: 'anyconnect', label: 'AnyConnect', hint: 'Cisco SSL VPN(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Cisco ASA / Firepower 等 AnyConnect 网关' },
-  { id: 'fortinet', label: 'FortiClient', hint: 'Fortinet SSL VPN(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Fortinet FortiGate SSL VPN(FortiClient 协议)' },
-  { id: 'globalprotect', label: 'GlobalProtect', hint: 'Palo Alto SSL VPN(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Palo Alto GlobalProtect 网关' },
-  { id: 'pulse', label: 'Pulse/Ivanti', hint: 'Pulse Connect Secure(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Pulse Connect Secure / Ivanti Connect Secure' },
-  { id: 'nc', label: 'Juniper NC', hint: 'Juniper Network Connect(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Juniper Network Connect(旧版 Pulse Secure)' },
-  { id: 'f5', label: 'F5 BIG-IP', hint: 'F5 BIG-IP SSL VPN(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'F5 BIG-IP SSL VPN' },
-  { id: 'array', label: 'Array AG', hint: 'Array Networks SSL VPN(已随应用内置)', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Array Networks AG SSL VPN' },
-  { id: 'wireguard', label: 'WireGuard', hint: 'sing-box 原生隧道,零额外引擎', products: 'WireGuard 网关(wg-easy、Firezone、FortiGate 等);内网网段(AllowedIPs)必填,其余流量仍走代理节点' },
+  { id: 'ikev2', label: 'IKEv2', hint: '', products: '标准 IKEv2/IPsec 网关:Cisco、Fortinet、MikroTik、pfSense/OPNsense、Windows Server 等' },
+  { id: 'l2tp', label: 'L2TP/IPsec', hint: '', products: '标准 L2TP/IPsec 网关:路由器/防火墙、Windows Server;SoftEther 服务器(未设默认 Hub 时用户名用 Hub名\\用户名)' },
+  { id: 'sstp', label: 'SSTP', hint: '', products: '标准 SSTP 网关:Microsoft RRAS/TMG;SoftEther 服务器(SSTP 端点)' },
+  { id: 'openvpn', label: 'OpenVPN', hint: '', missing: 'OpenVPN 引擎未检测到,见页面顶部安装指引', engine: 'openvpn', products: 'OpenVPN 服务器及兼容端点:OpenVPN、SoftEther(OpenVPN 兼容端点)、各类企业网关' },
+  { id: 'anyconnect', label: 'AnyConnect', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Cisco ASA / Firepower 等 AnyConnect 网关' },
+  { id: 'fortinet', label: 'FortiClient', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Fortinet FortiGate SSL VPN(FortiClient 协议)' },
+  { id: 'globalprotect', label: 'GlobalProtect', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Palo Alto GlobalProtect 网关' },
+  { id: 'pulse', label: 'Pulse/Ivanti', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Pulse Connect Secure / Ivanti Connect Secure' },
+  { id: 'nc', label: 'Juniper NC', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Juniper Network Connect(旧版 Pulse Secure)' },
+  { id: 'f5', label: 'F5 BIG-IP', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'F5 BIG-IP SSL VPN' },
+  { id: 'array', label: 'Array AG', hint: '', missing: 'openconnect 引擎未检测到,见页面顶部安装指引', engine: 'openconnect', products: 'Array Networks AG SSL VPN' },
+  { id: 'wireguard', label: 'WireGuard', hint: '', products: 'WireGuard 网关(wg-easy、Firezone、FortiGate 等);内网网段(AllowedIPs)必填,其余流量仍走代理节点' },
 ];
 
 /** SoftEther 兼容端点模式说明(仅编辑历史 softether 档案时使用;新建请直接选 L2TP/SSTP/OpenVPN 类型) */
@@ -72,8 +72,6 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
     extraRoutes: [],
   });
   const [extraRoutesText, setExtraRoutesText] = useState('');
-  /** OpenVPN 配置方式:手动字段(默认) 或 完整 .ovpn */
-  const [ovpnMode, setOvpnMode] = useState<'manual' | 'file'>('manual');
   const [certFetching, setCertFetching] = useState(false);
   const [certMessage, setCertMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -81,8 +79,6 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
     if (profile) {
       setFormData({ ...profile });
       setExtraRoutesText((profile.extraRoutes || []).join('\n'));
-      // 编辑已有档案:按其现有配置来源选择模式
-      setOvpnMode((profile.configText || '').trim() ? 'file' : 'manual');
     }
   }, [profile]);
 
@@ -135,13 +131,13 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
-    // 服务器:手动模式由 OpenVPN 手动块/其他类型基础区提供;.ovpn 全文模式内含 remote,不必填
-    const ovpnFileMode = isOpenVpn && ovpnMode === 'file';
-    if (!formData.server && !ovpnFileMode) return;
+    // 服务器:手动模式由 OpenVPN 手动块/其他类型基础区提供;
+    // 历史 .ovpn 档案(configText 已有全文)内含 remote,server 可空
+    const hasOvpnConfig = !!(formData.configText || '').trim();
+    if (!formData.server && !isOpenVpn && !hasOvpnConfig) return;
     if (isOpenVpn) {
-      if (ovpnMode === 'file' && !(formData.configText || '').trim()) return;
       // 手动模式:服务器在基础区已必填;证书必须有 PEM 块
-      if (ovpnMode === 'manual' && !(formData.ovpnCaText || '').includes('-----BEGIN CERTIFICATE-----')) return;
+      if (!(formData.ovpnCaText || '').includes('-----BEGIN CERTIFICATE-----')) return;
     }
     if (isOpenConnect && !formData.username) return;
     // SoftEther 的 L2TP 端点必须走 IPsec PSK(服务器端由管理员设置,无证书模式)
@@ -159,8 +155,8 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
       server: formData.server || '',
       createdAt: profile?.createdAt || Date.now(),
       extraRoutes,
-      // 手动模式清掉 .ovpn 全文(引擎优先读 configText,残留会让手动字段失效)
-      configText: ovpnMode === 'file' ? formData.configText : undefined,
+      // 历史 .ovpn 档案的 configText 原样保留(引擎优先读它);新配置走手动字段
+      configText: formData.configText,
     };
     onSave(final);
     onClose();
@@ -242,7 +238,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={isOpenVpn ? 'sm:col-span-3' : 'sm:col-span-2'}>
                 <FieldLabel>
-                  名称{isOpenVpn && '(.ovpn 内已含服务器地址,此处仅作显示名)'}
+                  名称
                 </FieldLabel>
                 <Input
                   type="text"
@@ -344,42 +340,7 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
             {/* OpenVPN specific */}
             {isOpenVpn && (
               <div className="space-y-3">
-                {/* 配置方式:手动填写(默认) 或 粘贴完整 .ovpn */}
-                <div className="flex flex-wrap gap-2">
-                  {(['manual', 'file'] as const).map((m) => (
-                    <button
-                      type="button"
-                      key={m}
-                      onClick={() => setOvpnMode(m)}
-                      className={`py-1 px-3 rounded-lg text-xs font-medium border transition-all ${
-                        ovpnMode === m
-                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      {m === 'manual' ? '手动填写' : '粘贴 .ovpn 文件'}
-                    </button>
-                  ))}
-                </div>
-
-                {ovpnMode === 'file' && (
-                  <div>
-                    <FieldLabel>
-                      .ovpn 配置内容
-                    </FieldLabel>
-                    <textarea
-                      required
-                      rows={8}
-                      value={formData.configText || ''}
-                      onChange={(e) => setFormData({ ...formData, configText: e.target.value })}
-                      placeholder="粘贴 .ovpn 文件全文(证书请内联 &lt;ca&gt;...&lt;/ca&gt;)"
-                      className={`${inputCls} font-mono text-[11px] leading-relaxed`}
-                    />
-                  </div>
-                )}
-
-                {ovpnMode === 'manual' && (
-                  <div className="space-y-3">
+                <div className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-2">
                         <FieldLabel>
@@ -446,7 +407,6 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
                       )}
                     </div>
                   </div>
-                )}
 
                 <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                   <label className="flex items-center gap-2.5 cursor-pointer">
@@ -588,13 +548,21 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
 
             {/* Footer Buttons(form 属性绑定提交;与 body 平级,缩进/底色与 corporate 编辑器一致) */}
             <footer className="vpn-editor-footer">
-              <Button variant="ghost" onClick={requestClose}>
+              <button
+                type="button"
+                className="vpn-button"
+                onClick={requestClose}
+              >
                 取消
-              </Button>
-              <Button type="submit" form="vpn-engine-editor-form">
-                <Check className="w-4 h-4" />
+              </button>
+              <button
+                type="submit"
+                form="vpn-engine-editor-form"
+                className="vpn-button primary"
+              >
+                <Save size={16} />
                 保存账号
-              </Button>
+              </button>
             </footer>
         </div>
   );

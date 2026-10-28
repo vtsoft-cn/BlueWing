@@ -1378,7 +1378,7 @@ const AddTypePicker: React.FC<{
               <span className="vpn-provider-mark teal">{ENGINE_TYPE_MARKS[t.id] || 'EN'}</span>
               <span>
                 <strong>{t.label}</strong>
-                <small>{t.hint}</small>
+                {t.hint && <small>{t.hint}</small>}
               </span>
             </button>
           ))}
