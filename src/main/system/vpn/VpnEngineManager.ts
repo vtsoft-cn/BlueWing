@@ -90,17 +90,22 @@ export class VpnEngineManager extends EventEmitter {
   }
 
   /** 供 ConfigGenerator 的注入数据:连接激活即有意义——
-   *  WireGuard 型返回隧道参数(无 adapterName),引擎型需网卡名 */
+   *  WireGuard 型返回隧道参数(无 adapterName),引擎型需网卡名。
+   *  用户自定义域名(customDomains)并入 domainSuffixes(domain_suffix 语义
+   *  即后缀匹配,与 corporate 自定义域名行为一致);hosts 原样透传 */
   public getSplitConfig(): VpnSplitConfig | null {
     if (!this.runtime || this.runtime.state !== 'connected') return null;
     const db = Database.getInstance();
     const profile = db.getVpnProfiles().find((p) => p.id === this.runtime?.profileId);
+    const customDomains = Array.isArray(profile?.customDomains) ? profile!.customDomains!.filter(Boolean) : [];
+    const hosts = profile?.hosts && Object.keys(profile.hosts).length > 0 ? profile.hosts : undefined;
     if (profile?.type === 'wireguard') {
       return {
         adapterName: '',
         routes: this.runtime.routes,
         dnsServers: this.runtime.dnsServers,
-        domainSuffixes: this.runtime.domainSuffixes,
+        domainSuffixes: [...this.runtime.domainSuffixes, ...customDomains],
+        hosts,
         wireguard: {
           server: profile.server,
           port: profile.port || 51820,
@@ -117,7 +122,8 @@ export class VpnEngineManager extends EventEmitter {
       adapterName: this.runtime.adapterName,
       routes: this.runtime.routes,
       dnsServers: this.runtime.dnsServers,
-      domainSuffixes: this.runtime.domainSuffixes,
+      domainSuffixes: [...this.runtime.domainSuffixes, ...customDomains],
+      hosts,
     };
   }
 

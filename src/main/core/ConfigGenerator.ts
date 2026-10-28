@@ -187,6 +187,12 @@ export class ConfigGenerator {
       }
     }
 
+    // 引擎 VPN 固定域名解析:predefined 直接返回固定记录(与 corporate/应用内
+    // Hosts 同语义);不依赖 vpnDnsReady——固定记录无需查询任何 DNS 服务器
+    for (const rule of ConfigGenerator.buildPredefinedHostsRules(vpn?.hosts)) {
+      dnsRules.push(rule);
+    }
+
     if (dns.mode === 'fakeip') {
       dnsRules.push({
         inbound: useTun ? ['tun-in', 'mixed-in'] : ['mixed-in'],
@@ -319,6 +325,15 @@ export class ConfigGenerator {
       if (vpnSuffixes.length > 0) {
         routeRules.push({
           domain_suffix: vpnSuffixes,
+          outbound: vpnOutboundTag,
+        });
+      }
+      // 固定解析的域名精确匹配走 VPN(先于全局 Hosts 映射的 direct 规则,
+      // 本块在其之前注入;corporate 的 hosts 同样路由进 VPN 而非直连)
+      const vpnHostDomains = Object.keys(vpn.hosts || {});
+      if (vpnHostDomains.length > 0) {
+        routeRules.push({
+          domain: vpnHostDomains,
           outbound: vpnOutboundTag,
         });
       }
@@ -645,9 +660,32 @@ export class ConfigGenerator {
    * 合并为单条规则的多个 answer;非法记录跳过,保证配置始终可生成。
    */
   private static buildHostsDnsRules(dns: DnsConfig): any[] {
+    return ConfigGenerator.buildPredefinedRecords(
+      ConfigGenerator.validHostsRecords(dns),
+    );
+  }
+
+  /** 引擎 VPN 固定域名解析:域名→IP 列表 → predefined DNS 规则。
+   *  与应用内 Hosts/corporate 固定解析同一套记录分组与 answer 格式;
+   *  非法 IP 跳过,保证配置始终可生成。 */
+  private static buildPredefinedHostsRules(hosts?: Record<string, string[]>): any[] {
+    if (!hosts) return [];
+    const records: Array<{ domain: string; ip: string }> = [];
+    for (const [domain, ips] of Object.entries(hosts)) {
+      const d = domain.trim().toLowerCase();
+      if (!d || !Array.isArray(ips)) continue;
+      for (const ip of ips) {
+        if (typeof ip === 'string' && ip.trim()) records.push({ domain: d, ip: ip.trim() });
+      }
+    }
+    return ConfigGenerator.buildPredefinedRecords(records);
+  }
+
+  /** 记录数组 → RFC 1035 answer 分组(同域 IPv4/IPv6 合并;非法跳过) */
+  private static buildPredefinedRecords(records: Array<{ domain: string; ip: string }>): any[] {
     // domain(lowercase) -> answer 记录数组;后写入的同 IP 版本覆盖先前的
     const grouped = new Map<string, string[]>();
-    for (const { domain, ip } of ConfigGenerator.validHostsRecords(dns)) {
+    for (const { domain, ip } of records) {
       const type = ip.includes(':') ? 'AAAA' : 'A';
       const rr = `${domain}. 60 IN ${type} ${ip}`;
       const list = grouped.get(domain) || [];

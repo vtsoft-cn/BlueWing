@@ -45,10 +45,11 @@ const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, r
   await sleep(400);
   await shotTo('bw-tabs-engine-adv.png');
   _log('advanced visible: ' + await ev(`(() => { const s=[...document.querySelectorAll('[role="tabpanel"]')].find(x=>x.getAttribute('aria-label')==='高级选项'); return s&&s.offsetParent!==null; })()`));
+  _log('targets fields: ' + await ev(`(() => { const adv=[...document.querySelectorAll('[role="tabpanel"]')].find(x=>x.getAttribute('aria-label')==='高级选项'); if(!adv) return 'no-panel'; const t=adv.querySelectorAll('textarea'); return JSON.stringify({textareas:t.length, labels:[...adv.querySelectorAll('.vpn-field > span')].map(s=>s.textContent.trim()).slice(0,5)}); })()`));
   await clickText('取消'); await sleep(600);
   await clickText('添加接入'); await sleep(400);
   await clickText('EasyConnect'); await sleep(900);
-  const focus = await ev(`(() => { const i=document.querySelector('.vpn-editor .vpn-input'); if(!i) return 'no-input'; i.focus(); const cs=getComputedStyle(i); return JSON.stringify({border:cs.borderColor, shadow:cs.boxShadow.slice(0,60)}); })()`);
+  const focus = await ev(`(() => { const i=document.querySelector('.vpn-editor .vpn-input'); if(!i) return 'no-input'; i.focus(); const cs=getComputedStyle(i); return JSON.stringify({active:document.activeElement===i, disabled:i.disabled, border:cs.borderColor, shadow:cs.boxShadow.slice(0,60)}); })()`);
   _log('corp focused input: ' + focus);
   await shotTo('bw-tabs-corp-focus.png');
   proc.kill();

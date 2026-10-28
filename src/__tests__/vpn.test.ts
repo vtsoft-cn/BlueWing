@@ -133,6 +133,33 @@ describe('ConfigGenerator VPN 注入', () => {
     assert.ok(fakeipIdx > vpnIdx, 'vpn dns rule must precede fakeip catch-all');
   });
 
+  test('引擎 VPN 固定域名解析:predefined DNS 规则+域名路由先于全局 Hosts 直连', () => {
+    const config = generateWithVpn({
+      ...sampleVpn,
+      hosts: { 'git.corp.example.com': ['10.1.2.30'], 'dual.corp.example.com': ['10.1.2.31', 'fd00::1'] },
+    });
+    // predefined DNS:域名 → 固定记录(同域 A/AAAA 合并一条)
+    const pre = config.dns.rules.filter((r: any) => r.action === 'predefined');
+    const git = pre.find((r: any) => r.domain?.includes('git.corp.example.com'));
+    assert.ok(git, 'predefined rule for git host must exist');
+    assert.deepEqual(git.answer, ['git.corp.example.com. 60 IN A 10.1.2.30']);
+    const dual = pre.find((r: any) => r.domain?.includes('dual.corp.example.com'));
+    assert.ok(dual, 'predefined rule for dual host must exist');
+    assert.equal(dual.answer.length, 2, 'A+AAAA merged into one rule');
+    // 路由:固定解析域名精确匹配走 VPN
+    const hostRoute = config.route.rules.find(
+      (r: any) => r.outbound === 'vpn-corp' && Array.isArray(r.domain),
+    );
+    assert.ok(hostRoute, 'host domain route must exist');
+    assert.equal(hostRoute.domain.length, 2);
+  });
+
+  test('引擎 VPN 无 hosts 时不注入 predefined/域名路由', () => {
+    const config = generateWithVpn(sampleVpn);
+    assert.ok(!config.dns.rules.some((r: any) => r.action === 'predefined'));
+    assert.ok(!config.route.rules.some((r: any) => r.outbound === 'vpn-corp' && Array.isArray(r.domain)));
+  });
+
   test('TUN 模式下 VPN 共存强制关闭 strict_route', () => {
     const config = generateWithVpn(sampleVpn, true);
     const tun = config.inbounds.find((i: any) => i.type === 'tun');

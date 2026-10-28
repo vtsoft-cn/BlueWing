@@ -337,6 +337,10 @@ export interface VpnProfile {
 
   /** 手动补充的内网 CIDR(引擎未上报或需要覆盖时的兜底,与自动上报合并) */
   extraRoutes?: string[];
+  /** 用户自定义的公司域名(每行一个;以 domain_suffix 语义路由到 VPN 出站,含子域名) */
+  customDomains?: string[];
+  /** 固定域名解析(域名→IP 列表;predefined DNS+路由到 VPN,与 corporate 同语义) */
+  hosts?: Record<string, string[]>;
 
   // softether:服务器兼容端点选择(l2tp/sstp/openvpn),默认 l2tp
   softetherMode?: SoftEtherMode;
@@ -385,6 +389,8 @@ export interface VpnSplitConfig {
    *  WireGuard 型 VPN 无外部网卡,此字段为空并携带 wireguard 隧道参数 */
   adapterName?: string;
   routes: string[];
+  /** 引擎 VPN 的固定域名解析(域名→IP;注入 predefined DNS+VPN 路由) */
+  hosts?: Record<string, string[]>;
   dnsServers: string[];
   domainSuffixes: string[];
   /** WireGuard 型 VPN:sing-box 原生 endpoint(无外部进程/网卡,内网流量经此隧道) */

@@ -24,6 +24,7 @@ import {
 } from '../../types/corporateVpn';
 import { vpnProviders } from '../vpn/providers';
 import { vpnTrafficModes } from '../../utils/vpnRouting';
+import { VpnTargetsFields } from './VpnTargetsFields';
 import { Portal } from './Portal';
 import { Select } from './Select';
 import { toast } from './Toast';
@@ -685,46 +686,14 @@ export function VpnProfileEditor({
                   <div className="vpn-section-heading"><div><h3>公司资源</h3>
                     <p>{form.protocol === 'softether' ? '自动发现虚拟网段；其他资源可补充。' : '连接后自动读取网关授权资源，也可以手动补充。'}
                       不知道网段时，填写一个公司网址或服务器 IP 也可以。</p></div></div>
-                  <div className="vpn-two-columns">
-                    <label className="vpn-field">
-                      <span>自定义域名</span>
-                      <textarea
-                        aria-label="自定义域名"
-                        className="vpn-input font-mono"
-                        rows={5}
-                        placeholder={'dev.example.com\nuat.example.com'}
-                        value={domains}
-                        onChange={(e) => setDomains(e.target.value)}
-                      />
-                      <small>每行一个公司域名或 http(s) 网址，自动提取域名并包含子域名</small>
-                    </label>
-                    <label className="vpn-field">
-                      <span>自定义 IP / 网段</span>
-                      <textarea
-                        aria-label="自定义 IP / 网段"
-                        className="vpn-input font-mono"
-                        rows={5}
-                        placeholder={'10.20.30.40\n10.20.40.0/24'}
-                        value={cidrs}
-                        onChange={(e) => setCidrs(e.target.value)}
-                      />
-                      <small>填写精确目标，避免覆盖整个家庭局域网</small>
-                    </label>
-                  </div>
-                  <label className="vpn-field">
-                    <span>
-                      固定域名解析 <span className="vpn-optional">可选</span>
-                    </span>
-                    <textarea
-                      aria-label="固定域名解析"
-                      className="vpn-input font-mono"
-                      rows={4}
-                      placeholder="dev.example.com 10.20.30.40"
-                      value={hosts}
-                      onChange={(e) => setHosts(e.target.value)}
-                    />
-                    <small>域名与 IP 之间用空格分隔，每行一条</small>
-                  </label>
+                  <VpnTargetsFields
+                    domains={domains}
+                    onDomains={setDomains}
+                    cidrs={cidrs}
+                    onCidrs={setCidrs}
+                    hosts={hosts}
+                    onHosts={setHosts}
+                  />
                   <div className="vpn-notice">
                     <ShieldCheck size={17} />
                     <p>

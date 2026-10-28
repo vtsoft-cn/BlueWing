@@ -7,6 +7,7 @@ import { Portal } from '../components/Portal';
 import { Select } from '../components/Select';
 import { InfoTip } from '../components/InfoTip';
 import { FieldLabel, inputCls, Input } from '../components/ui';
+import { VpnTargetsFields } from '../components/VpnTargetsFields';
 
 interface VpnProfileEditorModalProps {
   profile?: VpnProfile | null;
@@ -72,6 +73,8 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
     extraRoutes: [],
   });
   const [extraRoutesText, setExtraRoutesText] = useState('');
+  const [customDomainsText, setCustomDomainsText] = useState('');
+  const [hostsText, setHostsText] = useState('');
   const [certFetching, setCertFetching] = useState(false);
   const [certMessage, setCertMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [tab, setTab] = useState<'connection' | 'advanced'>('connection');
@@ -80,6 +83,12 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
     if (profile) {
       setFormData({ ...profile });
       setExtraRoutesText((profile.extraRoutes || []).join('\n'));
+      setCustomDomainsText((profile.customDomains || []).join('\n'));
+      setHostsText(
+        Object.entries(profile.hosts || {})
+          .flatMap(([d, ips]) => [d, ...(ips || [])].join(' '))
+          .join('\n'),
+      );
     }
   }, [profile]);
 
@@ -148,6 +157,21 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
       .split(/[\n,;]+/)
       .map((s) => s.trim())
       .filter(Boolean);
+    // 自定义域名:每行一个;自定义网段沿用 extraRoutes 语义(与自动上报合并)
+    const customDomains = customDomainsText
+      .split(/[\n,;]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    // 固定域名解析:"域名 IP [IP...]" 每行一条;首词非域名或无合法 IP 的行跳过
+    const hosts: Record<string, string[]> = {};
+    for (const raw of hostsText.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      const parts = raw.split(/[\s,]+/);
+      const domain = (parts[0] || '').toLowerCase();
+      const ips = parts.slice(1).filter((ip) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || ip.includes(':'));
+      if (domain.includes('.') && ips.length > 0) {
+        hosts[domain] = [...(hosts[domain] || []), ...ips.filter((ip) => !hosts[domain]?.includes(ip))];
+      }
+    }
 
     const final: VpnProfile = {
       ...(formData as VpnProfile),
@@ -156,6 +180,8 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
       server: formData.server || '',
       createdAt: profile?.createdAt || Date.now(),
       extraRoutes,
+      customDomains,
+      hosts: Object.keys(hosts).length > 0 ? hosts : undefined,
       // 历史 .ovpn 档案的 configText 原样保留(引擎优先读它);新配置走手动字段
       configText: formData.configText,
     };
@@ -556,19 +582,20 @@ const VpnProfileEditorPanel: React.FC<VpnProfileEditorModalProps & { lockType?: 
             </section>
 
             <section role="tabpanel" aria-label="高级选项" hidden={tab !== 'advanced'} className="space-y-4">
-            {/* Common: extra routes */}
-            <div>
-              <FieldLabel>
-                {isWireGuard ? '内网网段(WireGuard AllowedIPs,必填)' : '补充内网网段(可选,与自动上报合并)'}
-              </FieldLabel>
-              <textarea
-                rows={2}
-                value={extraRoutesText}
-                onChange={(e) => setExtraRoutesText(e.target.value)}
-                placeholder={'10.1.0.0/16\n172.16.8.0/24'}
-                className={`${inputCls} font-mono text-[11px]`}
-              />
-            </div>
+            {/* 公司资源:与 corporate 编辑器共用 VpnTargetsFields(域名/网段/固定解析),
+                数据面经 VpnSplitConfig 注入(domain_suffix+ip_cidr+predefined DNS) */}
+            <div className="vpn-section-heading"><div><h3>公司资源</h3>
+              <p>{isWireGuard ? '内网网段即 WireGuard AllowedIPs(必填);其他资源可补充。' : '连接后引擎自动上报内网路由，也可以手动补充域名与网段。'}</p></div></div>
+            <VpnTargetsFields
+              domains={customDomainsText}
+              onDomains={setCustomDomainsText}
+              cidrs={extraRoutesText}
+              onCidrs={setExtraRoutesText}
+              hosts={hostsText}
+              onHosts={setHostsText}
+              domainsHint="每行一个公司域名，走此 VPN（包含子域名）"
+              cidrsHint={isWireGuard ? 'WireGuard AllowedIPs，每行一个网段' : '与引擎自动上报的内网路由合并，走此 VPN'}
+            />
             </section>
 
             </form>
