@@ -385,8 +385,8 @@ export const VpnAccess: React.FC<{
     <div className="vpn-surface vpn-access">
       <header className="vpn-page-header">
         <div className="flex items-center gap-3">
-          <div className="vpn-heading-icon">
-            <Network size={23} />
+          <div className="vpn-heading-icon vpn-page-icon">
+            <Network size={26} />
           </div>
           <div>
             <h2>VPN 接入</h2>
