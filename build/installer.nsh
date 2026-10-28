@@ -33,6 +33,7 @@
 !ifndef BUILD_UNINSTALLER
 
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
 
 ; 放开 NSIS 默认的盘符根目录安装禁用(默认直接灰掉安装按钮且无任何提示,用户
 ; 只见"无法安装");改由目录页 LEAVE 钩子 bbRejectRootDir 弹明确提示并留页;
@@ -62,6 +63,36 @@ AllowRootDirInstall true
   ; 直接禁用安装按钮且无说明,此提示告知用户原因与应用名子目录规则
   !define MUI_DIRECTORYPAGE_TEXT_TOP "选择安装位置。不支持盘符根目录(如 C:\),选择任意文件夹后安装程序会自动创建 BlueWing Connect 子目录。"
 !macroend
+
+; 目录页防闪烁:欢迎页(fullwindow)切往目录页时,MUI2 内部会经历"卸载欢迎页
+; 全窗口控件+创建目录页控件"的连续 ShowWindow,目录页各控件在约 300ms 内逐个
+; 首绘(标题先出、头图/目录输入框/安装按钮逐个浮现),即用户所见"安装界面闪
+; 一下"。锁必须挂在目录页 PRE(此时 MUI2 内部的欢迎页卸载风暴已结束、目录页
+; 控件尚未显示):PRE 里 LockWindowUpdate 锁定向导,全部中间呈现被丢弃;SHOW
+; 里解锁,一次性绘制完整页面。注意锁不能挂在欢迎页 LEAVE——LEAVE 锁会干扰
+; NSIS 的切页流程(实测目录页 SHOW 回调不再被调用,向导冻结在欢迎页)。
+; PRE define 由 dist-wrapper 注入到模板目录页消费点旁,并 !undef 掉
+; skipPageIfUpdated 占用的同名 PRE(其"--updated 静默升级跳页"职责由
+; 静默安装模式天然覆盖,手动向导路径无行为差异)。
+Function bbDirPre
+  ; 接管被接替的 skipPageIfUpdated 职责:--updated 静默升级时跳过本页
+  ; (不用 ${isUpdated} 宏:其 StdUtils 插件在本文件展开点尚未引入)
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "--updated" $R1
+  ${IfNot} ${Errors}
+    Abort
+  ${EndIf}
+  ${GetOptions} $R0 "/updated" $R1
+  ${IfNot} ${Errors}
+    Abort
+  ${EndIf}
+  System::Call 'user32::LockWindowUpdate(i $HWNDPARENT)'
+FunctionEnd
+
+; 目录页创建完成、即将显示:解锁,一次性完整绘制
+Function bbDirShow
+  System::Call 'user32::LockWindowUpdate(i 0)'
+FunctionEnd
 
 ; 头图位置由 NSIS UI 资源固定,默认紧贴右缘;此处运行时右缘对称:
 ; 头图(控件 1046)右边距 = 标题(控件 1037)左边距。欢迎页显示时执行一次,

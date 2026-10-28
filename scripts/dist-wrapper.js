@@ -23,11 +23,17 @@ function patchTemplates() {
   const contents = new Map();
   const patches = [
     {
-      name: '目录页拒绝盘符根目录(注入 LEAVE 校验,函数体在 build/installer.nsh)',
+      name: '目录页钩子注入:PRE 防闪烁锁(bbDirPre,含 --updated 跳页)+ SHOW 解锁(bbDirShow)+ LEAVE 校验(bbRejectRootDir),函数体在 build/installer.nsh。钩子行已物理写入 node_modules 模板(本补丁仅作守卫:模板被 npm 重装重置时在此报错,请按 git 历史中 build/installer.nsh 的注释手工恢复三行 define)',
       file: 'assistedInstaller.nsh',
-      find: '!insertmacro MUI_PAGE_DIRECTORY',
+      find:
+        '    !define MUI_PAGE_CUSTOMFUNCTION_PRE bbDirPre\n' +
+        '    !define MUI_PAGE_CUSTOMFUNCTION_SHOW bbDirShow\n' +
+        '    !define MUI_PAGE_CUSTOMFUNCTION_LEAVE bbRejectRootDir\n' +
+        '    !insertmacro MUI_PAGE_DIRECTORY',
       replace:
-        '!define MUI_PAGE_CUSTOMFUNCTION_LEAVE bbRejectRootDir\n' +
+        '    !define MUI_PAGE_CUSTOMFUNCTION_PRE bbDirPre\n' +
+        '    !define MUI_PAGE_CUSTOMFUNCTION_SHOW bbDirShow\n' +
+        '    !define MUI_PAGE_CUSTOMFUNCTION_LEAVE bbRejectRootDir\n' +
         '    !insertmacro MUI_PAGE_DIRECTORY',
     },
     {
@@ -49,7 +55,12 @@ function patchTemplates() {
   ];
   for (const p of patches) {
     const file = path.join(baseDir, p.file);
-    if (!contents.has(p.file)) contents.set(p.file, fsSync.readFileSync(file, 'utf8'));
+    if (!contents.has(p.file)) {
+      // 归一化行尾:模板可能被外部工具以 CRLF 写回,统一 LF 保证锚点匹配
+      const normalized = fsSync.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+      contents.set(p.file, normalized);
+      fsSync.writeFileSync(file, normalized, 'utf8');
+    }
     let src = contents.get(p.file);
     if (src.includes(p.replace)) {
       console.log(`[dist-wrapper] 模板补丁已就位:${p.name}`);
