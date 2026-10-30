@@ -123,6 +123,9 @@ func write(c Connection) error {
 	return nil
 }
 func execute(req Request) ([]Connection, error) {
+	if req.Action == "guard" {
+		return nil, InstallRecovery(req.OwnershipFile, req.ParentPID)
+	}
 	ns, err := names()
 	if err != nil {
 		return nil, err

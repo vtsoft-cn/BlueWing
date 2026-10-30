@@ -28,7 +28,7 @@ execFileSync(
     'build',
     '-buildvcs=false',
     '-trimpath',
-    '-ldflags=-s -w',
+    process.platform === 'win32' ? '-ldflags=-s -w -H=windowsgui' : '-ldflags=-s -w',
     '-o',
     path.join(bin, 'bluewing-vpn-core.exe'),
     './cmd/bluewing-vpn-core',
@@ -107,6 +107,7 @@ const manifest = {
     softether: ['auth/psw', 'softether/radius'],
   },
   udp: false,
+  packetForwarding: { softether: ['tcp', 'udp', 'icmpv4'] },
   verification: {
     easyconnect: 'NOT_RUN_REAL_GATEWAY',
     atrust: 'NOT_RUN_REAL_GATEWAY',

@@ -16,6 +16,7 @@
     "test:vpn:integration": "npx tsx --test src/__tests__/corporate-vpn.integration.test.ts src/__tests__/corporate-vpn-multi.integration.test.ts",
     "test:vpn:watch": "node scripts/vpn-watch-lab.cjs",
     "test:vpn:ui": "node scripts/vpn-access-ui-smoke.cjs",
+    "test:vpn:state-ui": "node scripts/vpn-state-ui-smoke.cjs",
     "test:vpn-core": "node scripts/test-vpn-core.cjs",
     "build:vpn-core": "node scripts/build-vpn-core.cjs",
     "build:vpn-preview": "npm run build:vpn-core && npm run build && node scripts/build-vpn-preview.cjs",

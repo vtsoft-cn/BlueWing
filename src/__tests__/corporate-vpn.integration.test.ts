@@ -25,6 +25,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 test('A company VPN that rejects public traffic leaves CN local and foreign traffic on the proxy', { timeout: 120000 }, async (t) => {
   const cases = [
     { name: 'smart / public VPN denied', mode: 'split', proxy: true, domestic: 'DIRECT', foreign: 'PUBLIC', lan: 'DIRECT', denyPublic: true },
+    { name: 'smart SoftEther / automatic TCP outlet', protocol: 'softether', mode: 'split', proxy: true, domestic: 'VPN', foreign: 'PUBLIC', lan: 'VPN', denyPublic: false },
     { name: 'all VPN / foreign proxy has priority', mode: 'vpn', proxy: true, domestic: 'VPN', foreign: 'PUBLIC', lan: 'VPN', denyPublic: false },
     { name: 'all VPN / no public proxy', mode: 'vpn', proxy: false, domestic: 'VPN', foreign: 'VPN', lan: 'VPN', denyPublic: false },
     { name: 'custom / domestic proxy and foreign direct', mode: 'custom', proxy: true, domestic: 'PUBLIC', foreign: 'DIRECT', lan: 'DIRECT', denyPublic: true,
@@ -64,7 +65,8 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
   const vpnPort = await serve('VPN', true), publicPort = await serve('PUBLIC');
   // Both mock SOCKS outlets use password authentication; no real site is contacted.
   const repo = new ProfileRepository(dir);
-  const p = repo.save({ id: 'cn', name: 'Company only', protocol: 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: '', trafficMode: policyCase.mode, autoDiscoverPrivate: false, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['8.8.8.8/32'] }], hosts: {}, bindInterface: '' });
+  const softether = 'protocol' in policyCase && policyCase.protocol === 'softether';
+  const p = repo.save({ id: 'cn', name: 'Company only', protocol: softether ? 'softether' : 'easyconnect', gateway: { host: 'vpn.example.com', port: 10443 }, username: 'fixture', authMethod: 'auth/psw', loginDomain: softether ? 'fixture-hub' : '', trafficMode: policyCase.mode, autoDiscoverPrivate: softether, customRouting: 'custom' in policyCase ? policyCase.custom : undefined, tls: {}, targets: [{ domains: ['office.company.cn'], cidrs: ['8.8.8.8/32'] }], hosts: {}, bindInterface: '' });
   const stored = JSON.parse(fs.readFileSync(path.join(dir, 'vpn-profiles.json'), 'utf8')); stored.profiles[0].socksPort = vpnPort; stored.profiles[0].dnsPort = await freePort(); fs.writeFileSync(path.join(dir, 'vpn-profiles.json'), JSON.stringify(stored)); repo.reload();
   const policy = new CorporatePolicy(dir); policy.prepare(repo.list()); const runtime = policy.runtime();
   const direct = await serve('DIRECT');
@@ -91,6 +93,8 @@ test('A company VPN that rejects public traffic leaves CN local and foreign traf
   assert.equal((await request(port, 'http://192.168.77.1/')).body, policyCase.lan, log);
   assert.equal((await request(port, 'http://8.8.8.8/')).body, 'VPN', log);
   assert.equal((await request(port, 'http://office.company.cn/')).body, 'VPN', log);
+  assert.equal((await request(port, 'http://223.5.5.5:22/')).body, softether ? 'VPN' : policyCase.domestic, log);
+  assert.equal((await request(port, 'http://223.5.5.5:23879/')).body, policyCase.domestic, log);
   if (policyCase.denyPublic) assert.ok(companyAttempts.every(host => ['8.8.8.8', 'office.company.cn'].includes(host)), 'Public traffic must never enter the company VPN');
   policy.deactivate(repo.list()); let restored = false;
   for (let i = 0; i < 30; i++) { if ((await request(port, 'http://223.5.5.5/')).body === 'DIRECT' && (await request(port, 'http://8.8.8.8/')).body === (policyCase.proxy ? 'PUBLIC' : 'DIRECT')) { restored = true; break; } await sleep(100); }
@@ -147,16 +151,20 @@ test('Automatic private dispatch protects a learned TCP port after a failure and
   let ready = false; for (let i = 0; i < 40; i++) { try { if ((await request(port, 'http://192.168.77.12:22/')).body === 'LOCAL') { ready = true; break; } } catch {} await sleep(100); } assert.ok(ready, log);
   policy.setProbe(p.id, 'active', repo.list());
   let active = false; for (let i = 0; i < 30; i++) { if ((await request(port, 'http://192.168.77.12:22/')).body === 'AUTO') { active = true; break; } await sleep(100); } assert.ok(active, log);
-  assert.equal((await request(port, 'http://223.5.5.5/')).body, 'LOCAL');
+  assert.equal((await request(port, 'http://223.5.5.5/')).body, 'AUTO', 'SoftEther uses the same automatic outlet for public TCP');
   assert.equal((await request(port, 'http://1.1.1.1/')).body, 'PUBLIC');
-  assert.ok(attempted.every(value => value === '192.168.77.12:22'), 'Public destinations entered discovery');
+  assert.ok(attempted.every(value => ['192.168.77.12:22', '223.5.5.5:80'].includes(value)), 'Foreign proxy traffic entered automatic direct/VPN selection');
   policy.learn(p.id, { address: '192.168.77.12', port: 22, network: 'tcp', outlet: 'vpn' }, repo.list());
   policy.deactivate(repo.list(), true);
   let protectedPort = false;
   for (let i = 0; i < 30; i++) { try { protectedPort = !['AUTO', 'LOCAL'].includes((await request(port, 'http://192.168.77.12:22/')).body); } catch { protectedPort = true; } if (protectedPort) break; await sleep(100); }
   assert.ok(protectedPort, log);
   try { assert.notEqual((await request(port, 'http://192.168.77.12:22/')).body, 'LOCAL'); } catch (e) { if (e instanceof assert.AssertionError) throw e; }
-  assert.equal((await request(port, 'http://192.168.77.12:80/')).body, 'LOCAL', 'learned port expanded into whole-host ownership');
+  // The guard and automatic rule-set files are watched independently. Wait for
+  // the automatic scope to deactivate before checking the other port.
+  let otherPortLocal = false;
+  for (let i = 0; i < 30; i++) { if ((await request(port, 'http://192.168.77.12:80/')).body === 'LOCAL') { otherPortLocal = true; break; } await sleep(100); }
+  assert.ok(otherPortLocal, 'learned port expanded into whole-host ownership');
   policy.deactivate(repo.list());
   assert.equal(policy.discovery.targets(repo.get(p.id)).length, 1, 'Disconnect must retain discovery settings');
   let cleared = false; for (let i = 0; i < 30; i++) { try { if ((await request(port, 'http://192.168.77.12:22/')).body === 'LOCAL') { cleared = true; break; } } catch {} await sleep(100); } assert.ok(cleared, log);
@@ -688,8 +696,9 @@ test('A running public proxy installs a newly saved VPN on connect and skips the
   const mixedPort = await freePort(), speedPort = await freePort();
   db.saveSettings({ mixedPort, tunEnabled: false, routingMode: 'rule', clashApiEnabled: true, clashApiPort: await freePort() });
   db.saveRules([]); db.saveAppRules([]);
-  db.saveDns({ mode: 'standard', remoteDns: 'udp://127.0.0.1:9', directDns: 'udp://127.0.0.1:9', enableDnsRouting: true, fakeIpRange: '198.18.0.0/15', servers: [],
-    hosts: [{ id: 'fixture', domain: 'outside.public.example', ip: '198.51.100.23', enabled: true }] });
+  // Hosts entries intentionally force direct routing; this fixture verifies
+  // that an ordinary public destination keeps using the selected public proxy.
+  db.saveDns({ mode: 'standard', remoteDns: 'udp://127.0.0.1:9', directDns: 'udp://127.0.0.1:9', enableDnsRouting: true, fakeIpRange: '198.18.0.0/15', servers: [], hosts: [] });
   db.addNode({ id: 'public-auto', name: 'Selected public node', type: 'http', server: '127.0.0.1', port: proxyPort, groupId: 'test' });
   const repo = new ProfileRepository(dir), native = new VpnCoreProcess(path.resolve('bin/bluewing-vpn-core.exe'));
   const originalSend = native.send.bind(native); let loginCommands = 0, applications = 0;

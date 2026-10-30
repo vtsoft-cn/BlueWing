@@ -24,6 +24,7 @@ type endpoint struct {
 	dns      *dns.Server
 	sem      chan struct{}
 	local    localConnections
+	packet   *packetEndpoint
 }
 
 func (c *controller) configure(configs []endpointConfig) error {
@@ -48,6 +49,19 @@ func (c *controller) configure(configs []endpointConfig) error {
 			return err
 		}
 		ep := &endpoint{config: cfg, listener: listener, sem: make(chan struct{}, 128)}
+		if cfg.Profile.Protocol == "softether" && cfg.PacketPeerKey != "" {
+			ep.packet, err = newPacketEndpoint(cfg.PacketPeerKey, func(b []byte) {
+				if s := c.getSession(cfg.Profile.ID); s != nil && s.allowedPacket(b) {
+					_ = s.stack.InjectPacket(b)
+				}
+			})
+			if err != nil {
+				_ = listener.Close()
+				_ = dnsListener.Close()
+				c.closeEndpoints()
+				return err
+			}
+		}
 		ep.dns = &dns.Server{Listener: dnsListener, Net: "tcp", Handler: dns.HandlerFunc(func(w dns.ResponseWriter, q *dns.Msg) { c.answerDNS(cfg.Profile.ID, w, q) }), ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, MaxTCPQueries: 64}
 		c.endpoints[cfg.Profile.ID] = ep
 		go ep.dns.ActivateAndServe()
@@ -70,6 +84,9 @@ func (c *controller) configure(configs []endpointConfig) error {
 }
 func (c *controller) closeEndpoints() {
 	for _, ep := range c.endpoints {
+		if ep.packet != nil {
+			ep.packet.device.Close()
+		}
 		ep.local.close()
 		_ = ep.listener.Close()
 		_ = ep.dns.Shutdown()
@@ -194,7 +211,7 @@ func (c *controller) serveSOCKS(ep *endpoint, conn net.Conn) {
 	name := normalizeHost(host)
 	if ip == nil {
 		if automatic {
-			ip, e = s.resolvePrivate(ctx, name)
+			ip, e = s.resolvePrivate(ctx, name, port)
 		} else {
 			ip, e = s.lookup(ctx, name)
 		}

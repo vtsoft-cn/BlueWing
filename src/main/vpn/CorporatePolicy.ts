@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, generateKeyPairSync } from 'crypto';
 import {
   VpnProfile,
   VpnResources,
@@ -37,7 +37,8 @@ export function sourceRules(
 }
 export class CorporatePolicy {
   readonly discovery: PrivateRouteDiscovery;
-  private credentials = new Map<string, { user: string; password: string }>();
+  private credentials = new Map<string, { user: string; password: string; packet?: { privateKey: string; publicKey: string } }>();
+  private packetServers = new Map<string, { port: number; serverPublicKey: string; loopbackInterface?: string }>();
   private resources = new Map<string, VpnResources>();
   private protectedTargets = new Map<string, VpnTarget[]>();
   private probes = new Map<string, string>();
@@ -76,6 +77,13 @@ export class CorporatePolicy {
     return !!id && this.guardedIds.has(id);
   }
   isActive(id: string): boolean { return this.activeIds.has(id); }
+  setPacketEndpoint(id: string, value: { port: number; publicKey: string; loopbackInterface?: string }, profiles: VpnProfile[]): void {
+    if (!profiles.some(p => p.id === id && p.protocol === 'softether') || !Number.isInteger(value.port) || value.port < 1 || value.port > 65535 ||
+      typeof value.publicKey !== 'string' || Buffer.from(value.publicKey, 'base64').length !== 32) throw new Error('PACKET_ENDPOINT_INVALID');
+    if (value.loopbackInterface !== undefined && (typeof value.loopbackInterface !== 'string' || value.loopbackInterface.length > 128 || /[\x00-\x1f]/.test(value.loopbackInterface))) throw new Error('PACKET_INTERFACE_INVALID');
+    this.packetServers.set(id, { port: value.port, serverPublicKey: value.publicKey, loopbackInterface: value.loopbackInterface });
+    this.prepare(profiles);
+  }
   setPrivateProxy(proxy: NonNullable<VpnRuntime['privateProxy']>, profiles: VpnProfile[]): void {
     this.privateProxy = proxy;
     this.prepare(profiles);
@@ -155,6 +163,13 @@ export class CorporatePolicy {
         };
         this.credentials.set(profile.id, credentials);
       }
+      if (profile.protocol === 'softether' && !credentials.packet) {
+        const pair = generateKeyPairSync('x25519');
+        credentials.packet = {
+          privateKey: pair.privateKey.export({ format: 'der', type: 'pkcs8' }).subarray(-32).toString('base64'),
+          publicKey: pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64'),
+        };
+      }
       const res = this.resources.get(profile.id);
       const hostTargets = Object.entries({
         ...res?.hosts,
@@ -163,7 +178,7 @@ export class CorporatePolicy {
         domains: [d],
         cidrs: ips.map((ip) => `${ip}/${ip.includes(':') ? 128 : 32}`),
       }));
-      const current = [
+      const current: VpnTarget[] = [
         ...profile.targets,
         ...(res?.targets ?? []),
         ...hostTargets,
@@ -193,11 +208,14 @@ export class CorporatePolicy {
           ? this.discovery.targets(profile) : []));
       this.publish(internetDnsPath, { version: 3, rules:
         internetOwner === profile.id ? [{ domain_regex: ['.*'] }] : [] });
-      this.publish(internetPath, { version: 3, rules:
-        internetOwner === profile.id
+      const nonce = this.probes.get(profile.id);
+      this.publish(internetPath, { version: 3, rules: [
+        ...(internetOwner === profile.id
           ? [{ type: 'logical', mode: 'or', rules: [
             { domain_regex: ['.*'] }, { ip_cidr: ['0.0.0.0/0', '::/0'] },
-          ] }] : [] });
+          ] }] : []),
+        ...(nonce ? [{ domain_suffix: [`${nonce}.${profile.id}.bluewing.invalid`], port: [1] }] : []),
+      ] });
       // Revoke the previous preview's broad domestic outlet even if an older
       // public core is still watching its rule-set during an upgrade.
       const legacyChinaPath = path.join(folder, 'china-active.json');
@@ -213,10 +231,9 @@ export class CorporatePolicy {
           true,
         ),
       );
-      const nonce = this.probes.get(profile.id);
-      this.publish(
-        routePath,
-        sourceRules(
+      const icmpTargets = current.filter(t => !t.guardOnly && !t.network && (!t.ports?.length || t.ports.includes('1:65535')))
+        .map(t => ({ ...t, ports: undefined, network: undefined }));
+      const routeSource = sourceRules(
           this.activeIds.has(profile.id)
             ? [
                 ...current,
@@ -231,8 +248,12 @@ export class CorporatePolicy {
                   : []),
               ]
             : [],
-        ),
-      );
+        );
+      if (this.activeIds.has(profile.id) && credentials.packet && this.packetServers.has(profile.id)) {
+        const packetRules = (sourceRules(icmpTargets).rules as any[]).map(rule => ({ ...rule, network: ['icmp'] }));
+        (routeSource.rules as any[]).push(...packetRules);
+      }
+      this.publish(routePath, routeSource);
       next.push({
         profile,
         socksUser: credentials.user,
@@ -243,6 +264,7 @@ export class CorporatePolicy {
         internetPath,
         internetDnsPath,
         discoveredGuardPath,
+        ...(credentials.packet ? { packet: { ...credentials.packet, ...this.packetServers.get(profile.id) } } : {}),
       });
     }
     atomicJSON(

@@ -4,6 +4,7 @@ import { vpnRouting } from '../../utils/vpnRouting';
 
 function managedRule(rule: any): boolean {
   return (
+    (rule.action === 'reject' && rule.domain_suffix?.length === 1 && rule.domain_suffix[0] === 'bluewing.invalid') ||
     rule.rule_set?.some((tag: string) => tag.startsWith('corp-')) ||
     rule.rules?.some(managedRule) || false
   );
@@ -19,6 +20,7 @@ export function applyCorporateConfig(
     (r: any) => !r.tag?.startsWith('corp-out-') && r.tag !== 'corp-private-out',
 
   );
+  config.endpoints = (config.endpoints || []).filter((e: any) => !e.tag?.startsWith('corp-packet-'));
   config.route.rule_set = (config.route.rule_set || []).filter(
     (r: any) => !r.tag?.startsWith('corp-'),
   );
@@ -37,7 +39,7 @@ export function applyCorporateConfig(
     (r: any) => !r.server?.startsWith('corp-dns-') && !managedRule(r),
   );
   if (!runtime?.profiles.length) return;
-  const managedRules: any[] = [],
+  const managedRules: any[] = [], probes: any[] = [], packetDiscovery: any[] = [], packetDNS: any[] = [],
     dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [], discoveryRules: any[] = [], discoveryGuards: any[] = [];
   const publicProxy = config.outbounds.find((o: any) => o.tag === 'proxy');
   if (runtime.privateProxy) {
@@ -51,6 +53,23 @@ export function applyCorporateConfig(
     : !!publicProxy && publicProxy.type !== 'direct';
   for (const r of runtime.profiles) {
     const id = r.profile.id;
+    const packetTag = r.packet?.port && r.packet.serverPublicKey ? `corp-packet-${id}` : undefined;
+    if (packetTag && r.packet) {
+      config.endpoints.push({ type: 'wireguard', tag: packetTag, system: false, mtu: 1280,
+        bind_interface: r.packet.loopbackInterface, inet4_bind_address: '127.0.0.1',
+        address: ['100.127.255.1/32'], private_key: r.packet.privateKey,
+        peers: [{ address: '127.0.0.1', port: r.packet.port, public_key: r.packet.serverPublicKey, allowed_ips: ['0.0.0.0/0'] }],
+      });
+      // Keep explicit company DNS requests on their requested company server.
+      // The same watched source is included in the connection readiness probe.
+      packetDNS.push({ type: 'logical', mode: 'and', rules: [
+        { rule_set: [`corp-route-${id}`] }, { network: ['udp'], port: [53], ip_version: 4 },
+      ], outbound: packetTag });
+    }
+    probes.push({ type: 'logical', mode: 'and', rules: [
+      { domain_suffix: ['bluewing.invalid'] }, { rule_set: [`corp-route-${id}`] },
+      ...(r.internetPath ? [{ rule_set: [`corp-internet-${id}`] }] : []),
+    ], outbound: `corp-out-${id}` });
     config.outbounds.push({
       type: 'socks',
       tag: `corp-out-${id}`,
@@ -60,6 +79,7 @@ export function applyCorporateConfig(
       username: r.socksUser,
       password: r.socksPassword,
       network: 'tcp',
+      connect_timeout: '15s',
     });
     for (const [kind, file] of [
       ['route', r.routePath],
@@ -86,6 +106,7 @@ export function applyCorporateConfig(
       network: ['tcp'],
       outbound: `corp-out-${id}`,
     });
+    if (packetTag) managedRules.push({ rule_set: [`corp-route-${id}`], network: ['udp', 'icmp'], ip_version: 4, outbound: packetTag });
     // Preserve ownership at this priority even while this company is reconnecting.
     // Never leak an established company's failed target into a lower-priority VPN.
     managedRules.push({ rule_set: [`corp-guard-${id}`], action: 'reject' });
@@ -103,13 +124,38 @@ export function applyCorporateConfig(
       const cn = { type: 'logical', mode: 'or', rules: [
         { rule_set: ['geosite-cn', 'geoip-cn'] }, { domain_suffix: ['cn'] },
       ] };
+      const automaticDirect = r.profile.protocol === 'softether' &&
+        (r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false;
+      if (packetTag && automaticDirect) packetDiscovery.push({
+        ...active({ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'], network: ['udp', 'icmp'] }),
+        outbound: packetTag,
+      });
       const route = (outlet: 'direct' | 'proxy' | 'vpn', condition?: any, fallback = false) => {
         const rules = fallback ? internetFallback : internetRules;
         if (outlet === 'vpn') rules.push(
           { ...active(condition), rules: [...active(condition).rules, { network: ['tcp'] }], outbound: `corp-out-${id}` },
+          ...(packetTag ? [{ ...active(condition), rules: [...active(condition).rules, { network: ['udp', 'icmp'], ip_version: 4 }], outbound: packetTag }] : []),
           { ...active(condition), action: 'reject' },
         );
-        else rules.push({ ...active(condition), outbound: outlet });
+        else {
+          // Apply one network policy to all TCP services, including public
+          // company targets absent from DHCP routes. The native dispatcher
+          // retains a successful local socket or retries the VPN before relay.
+          if (outlet === 'direct' && automaticDirect) rules.push({
+            ...active(condition),
+            rules: [...active(condition).rules, { network: ['tcp'] }, {
+              type: 'logical', mode: 'or', rules: [
+                { domain_regex: ['.*'] },
+                { type: 'logical', mode: 'and', rules: [
+                  { ip_version: 4 },
+                  { ip_cidr: ['0.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '192.0.0.0/24', '192.0.2.0/24', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/3'], invert: true },
+                ] },
+              ],
+            }],
+            outbound: `corp-out-${id}`,
+          });
+          rules.push({ ...active(condition), outbound: outlet });
+        }
       };
       // Keep the app's local endpoints reachable; explicit company rules still
       // precede this layer. Private/company overlaps are decided by those rules.
@@ -166,14 +212,22 @@ export function applyCorporateConfig(
     else if (rule.process_name || rule.process_path) apps.push(rule);
     else ordinary.push(rule);
   }
+  let dnsInserted = false;
+  const setupRules = setup.flatMap(rule => {
+    if (!dnsInserted && rule.action === 'hijack-dns') { dnsInserted = true; return [...packetDNS, rule]; }
+    return [rule];
+  });
   config.route.rules = [
-    ...setup,
+    ...setupRules,
     ...blocked,
     { process_name: [runtime.coreProcessName], outbound: 'direct' },
+    ...probes,
+    { domain_suffix: ['bluewing.invalid'], action: 'reject' },
     ...managedRules,
     ...ordinary,
     ...discoveryRules,
     ...discoveryGuards,
+    ...packetDiscovery,
     ...internetRules,
     ...privateRules,
     ...domestic,

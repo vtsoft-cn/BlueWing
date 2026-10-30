@@ -112,6 +112,7 @@ export interface VpnRuntimeProfile {
   internetPath?: string;
   internetDnsPath?: string;
   discoveredGuardPath?: string;
+  packet?: { privateKey: string; publicKey: string; port?: number; serverPublicKey?: string; loopbackInterface?: string };
 }
 export interface VpnRuntime {
   profiles: VpnRuntimeProfile[];

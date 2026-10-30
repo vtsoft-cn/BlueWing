@@ -391,6 +391,7 @@ app.whenReady().then(async () => {
 
   // Check and clean residual system proxy if core is not active
   const settings = Database.getInstance().getSettings();
+  await SystemProxy.initializeRecovery();
   if (!settings.autoConnectOnLaunch) {
     SystemProxy.checkAndCleanResidual(settings.mixedPort || 2080);
   } else {

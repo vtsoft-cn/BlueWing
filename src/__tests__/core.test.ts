@@ -9,6 +9,8 @@ import { UniversalSubscriptionParser } from '../main/net/UniversalSubscriptionPa
 import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { ProxySelectionService } from '../main/core/ProxySelectionService';
 import { SystemProxy } from '../main/system/SystemProxy';
+import { WinInetProxy } from '../main/system/WinInetProxy';
+import { LogManager } from '../main/log/LogManager';
 import { TakeoverLinkage } from '../main/system/TakeoverLinkage';
 import { TunAdapter } from '../main/system/TunAdapter';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
@@ -752,6 +754,64 @@ describe('SystemProxy.shouldAutoEnableSystemProxy (连接意图保护判定)', (
       false
     );
   });
+});
+
+describe('SystemProxy crash recovery ownership', () => {
+  test('after independent recovery, capture fresh user settings and do not restore stale ownership', async (t) => {
+    const internals = SystemProxy as any;
+    const current = { enabled: true, server: 'user-proxy:8080', connections: [{ name: '', flags: 3, server: 'user-proxy:8080', bypass: '', pac: '' }] };
+    t.mock.method(internals, 'loadOwnership', () => ({ managedByBlueWing: false, managedServer: '127.0.0.1:2080', originalSnapshot: { enabled: false } }));
+    t.mock.method(internals, 'getFullRegistryStatus', async () => current);
+    const saved: any[] = [];
+    t.mock.method(internals, 'saveOwnership', (state: any) => { saved.push(state); return true; });
+    t.mock.method(LogManager, 'getInstance', () => ({ addLog() {} }));
+    const native = t.mock.method(WinInetProxy, 'run', async () => { throw new Error('must not change recovered proxy'); });
+    await SystemProxy.restoreOriginal();
+    assert.equal(native.mock.callCount(), 0);
+    assert.deepEqual(await SystemProxy.captureOriginalSnapshot(), current);
+    assert.deepEqual(saved[0].originalSnapshot, current);
+  });
+
+  test('graceful exit never reinstates the same dead BlueWing proxy', async (t) => {
+    const internals = SystemProxy as any;
+    t.mock.method(internals, 'loadOwnership', () => ({ managedByBlueWing: true, managedServer: '127.0.0.1:2080', originalSnapshot: { enabled: true, server: '127.0.0.1:2080', connections: [{ name: '', flags: 3, server: '127.0.0.1:2080', bypass: '', pac: '' }] } }));
+    t.mock.method(internals, 'saveOwnership', () => true);
+    t.mock.method(WinInetProxy, 'available', () => true);
+    let restored: any;
+    t.mock.method(WinInetProxy, 'run', async (request: any) => { restored = request; return []; });
+    await SystemProxy.restoreOriginal();
+    assert.equal(restored.action, 'restore');
+    assert.equal(restored.managedServer, '127.0.0.1:2080');
+    assert.equal(restored.connections[0].flags, 1);
+    assert.equal(restored.connections[0].server, '');
+  });
+
+  for (const failure of ['none', 'persist', 'guard'] as const) {
+    test(`recovery is registered and durable ownership precedes proxy enable (${failure})`, async (t) => {
+      const events: string[] = [];
+      const internals = SystemProxy as any;
+      const ready = internals.recoveryReady;
+      internals.recoveryReady = false;
+      t.after(() => { internals.recoveryReady = ready; });
+      t.mock.method(WinInetProxy, 'available', () => true);
+      t.mock.method(WinInetProxy, 'run', async (request: any) => {
+        events.push(request.action);
+        if (request.action === 'guard' && failure === 'guard') throw new Error('guard unavailable');
+        return [];
+      });
+      t.mock.method(LogManager, 'getInstance', () => ({ addLog() {} }));
+      t.mock.method(internals, 'getStateFilePath', () => path.join(__dirname, 'test-owned-proxy.json'));
+      t.mock.method(SystemProxy, 'captureOriginalSnapshot', async () => ({ enabled: false }));
+      t.mock.method(internals, 'saveOwnership', (state: any) => {
+        assert.equal(state.managedByBlueWing, true);
+        assert.equal(state.managedServer, '127.0.0.1:2080');
+        events.push('persist');
+        return failure !== 'persist';
+      });
+      assert.equal(await SystemProxy.enable(), failure === 'none');
+      assert.deepEqual(events, failure === 'guard' ? ['guard'] : failure === 'persist' ? ['guard', 'persist'] : ['guard', 'persist', 'enable']);
+    });
+  }
 });
 
 describe('TakeoverLinkage.exclusivityPatch (TUN↔系统代理互斥联动)', () => {

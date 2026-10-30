@@ -18,9 +18,9 @@
       "source": "client/softether"
     }
   ],
-  "sourceSha256": "69b4a49b9bca4004579b9be74f3dad8ea4e362929cbc5cf981a558cf4842a627",
-  "sha256": "c07a14298e9c9bc1b925d74a3251ce8df193e0f4d257c36a31632eebea5f4cb4",
-  "sourceArchiveSha256": "8ed2d7dc72012adcab262461287023e0492469b8148cb11a708e69ee4fc42914",
+  "sourceSha256": "2208f3a93378d5973a7b1be78a6d06bb56f725e23a6de396cc9d4184e5d00b9e",
+  "sha256": "986baeae3ed0c58f2f38376504cd5d7eb8caba6f1a716e567e24f647a98f886d",
+  "sourceArchiveSha256": "186f6f7a4be88bc5e25160f42cc1b8557066cde6da9b1af7c88d11c3695329be",
   "protocols": [
     "easyconnect",
     "atrust",
@@ -45,6 +45,13 @@
     ]
   },
   "udp": false,
+  "packetForwarding": {
+    "softether": [
+      "tcp",
+      "udp",
+      "icmpv4"
+    ]
+  },
   "verification": {
     "easyconnect": "NOT_RUN_REAL_GATEWAY",
     "atrust": "NOT_RUN_REAL_GATEWAY",

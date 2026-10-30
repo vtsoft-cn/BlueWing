@@ -43,7 +43,7 @@ export class PrivateRouteProxy {
   private user = randomBytes(16).toString('hex');
   private password = randomBytes(32).toString('hex');
   private hints = new Map<string, { id: string; epoch: string; expires: number }>();
-  constructor(private candidates: () => PrivateRouteCandidate[], private attemptMs = 3500, private totalMs = 15000,
+  constructor(private candidates: () => PrivateRouteCandidate[], private attemptMs = 11000, private totalMs = 15000,
     private allowSystemRoute?: () => boolean, private observedLocal?: (host: string, port: number) => void) {}
   start(): Promise<{ port: number; user: string; password: string }> {
     if (this.opening) return this.opening;

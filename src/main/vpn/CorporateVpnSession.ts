@@ -39,6 +39,7 @@ export function signature(runtime: VpnRuntime): string {
       customRouting: r.profile.customRouting,
       autoDiscoverPrivate: r.profile.autoDiscoverPrivate !== false,
       priority: r.profile.routingPriority ?? 100,
+      packet: r.packet && { publicKey: r.packet.publicKey, serverPublicKey: r.packet.serverPublicKey, port: r.packet.port, loopbackInterface: r.packet.loopbackInterface },
     })) },
   );
 }
@@ -221,20 +222,26 @@ export class CorporateVpnSession extends EventEmitter {
     const runtime = this.policy.prepare(this.profiles.list());
     if (!runtime.profiles.length) return runtime;
     await this.core.start();
-    const next = signature(runtime);
+    const endpoints = runtime.profiles.filter(r => !(this.scopeId || this.state.profileId) || r.profile.id === (this.scopeId || this.state.profileId));
+    const next = JSON.stringify(endpoints.map(r => ({ id: r.profile.id, port: r.profile.socksPort, dns: r.profile.dnsPort,
+      user: r.socksUser, password: r.socksPassword, packetPeerKey: r.packet?.publicKey })));
     if (this.configured !== next) {
       try {
-        await this.core.request(
+        const configured = await this.core.request(
           'configure',
           {
-            endpoints: runtime.profiles.filter(r => !(this.scopeId || this.state.profileId) || r.profile.id === (this.scopeId || this.state.profileId)).map((r) => ({
+            endpoints: endpoints.map((r) => ({
               profile: r.profile,
               user: r.socksUser,
               password: r.socksPassword,
+              ...(r.packet ? { packetPeerKey: r.packet.publicKey } : {}),
             })),
           },
           10000,
         );
+        for (const packet of configured.data?.packets || []) {
+          if (packet.profileId === (this.scopeId || this.state.profileId)) this.policy.setPacketEndpoint(packet.profileId, packet, this.profiles.list());
+        }
       } catch (e) {
         if (
           allowReassign &&
@@ -250,7 +257,7 @@ export class CorporateVpnSession extends EventEmitter {
       }
       this.configured = next;
     }
-    return runtime;
+    return this.policy.runtime();
   }
   publicCoreStarted(runtime: VpnRuntime): void {
     this.registered = signature(runtime);

@@ -18,6 +18,30 @@ known company resource restrictions stay authoritative. Local LAN sockets are
 owned by their endpoint so a VPN logout does not tear them down. The host stores
 per-gateway observations separately from explicit company ownership rules.
 
+SoftEther smart mode uses the same automatic outlet for all IPv4 TCP services
+selected for direct access, including public company services absent from DHCP
+routes. A failed bound local dial is retried through the VPN. Successful local
+sockets are retained, and public proxy selections stay in the managed layer.
+This does not probe special/FakeIP addresses or broaden providers with
+server-issued resource policies. Public hints remain in the current session;
+no public address is persisted as ownership of a company subnet.
+
+SoftEther now also exposes an authenticated WireGuard packet link bound only to
+loopback. It is an in-memory interface, not a second VPN login or Windows TAP.
+The private gVisor stack forwards IPv4 with connection tracking and masquerade,
+including UDP, ICMP, fragments and reverse NAT. Active unknown-private UDP/ICMP
+rules exist before the first request; no learned IP/port is required. The TCP
+readiness probe waits for both managed resources and packet activation rules.
+Provider setup has a 10s dial budget; the host dispatcher allows 11s per provider
+within its existing total budget rather than truncating a cold first dial at 3.5s.
+
+The WinINet helper also installs per-user, windowless network recovery at login
+and watches its owning app process. A dead, explicitly owned loopback proxy is
+restored even if Electron was killed or Windows restarted before app cleanup.
+Live listeners and external proxy changes are preserved; the original settings
+are restored separately for LAN and RAS connections. No network recovery runs
+on another user's proxy or a non-loopback proxy without application ownership.
+
 SoftEther is implemented in `client/softether`, adapting MIT-licensed govpn wire
 helpers (pinned source and license in that directory) to the existing private
 gVisor stack. It uses bound TLS TCP, DHCP/ARP and lease renewal without an OS
@@ -26,6 +50,6 @@ keep company-only routing isolated from public direct/proxy outlets. See
 `docs/design/softether-access-implementation.md` in the BlueWing root for scope,
 real-gateway acceptance evidence and testing instructions.
 
-TCP company traffic is tunnel-only. Company DNS uses the provider DNS through the userspace stack; no public/system fallback. Local SOCKS requires per-launch random credentials. IPv4 TCP office workloads are implemented; external SOCKS UDP/ICMP and IPv6 tunnel traffic are not advertised as supported. CAS/OAuth/certificate login are not enabled in the product UI. aTrust requires its own real gateway acceptance, independent of EasyConnect.
+Company traffic is tunnel-only. Company DNS uses the provider DNS through the userspace stack; no public/system fallback. Local SOCKS requires per-launch random credentials. SoftEther IPv4 TCP/UDP/ICMP uses the existing TUN and authenticated packet link; external SOCKS UDP for the other providers and IPv6 provider tunnels remain unsupported. CAS/OAuth/certificate login are not enabled in the product UI. aTrust requires its own real gateway acceptance, independent of EasyConnect.
 
 The AGPL source/license materials do not resolve BlueWing's overall distribution licensing decision. The application's release process must resolve the design's pending license decision before publishing a combined installer.

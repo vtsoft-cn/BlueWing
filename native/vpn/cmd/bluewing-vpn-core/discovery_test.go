@@ -31,6 +31,69 @@ func TestPrivateDiscoveryNeverProbesPublicOrSpecialAddresses(t *testing.T) {
 	}
 }
 
+func TestSoftEtherNetworkDiscoveryScopeAndResourceGuards(t *testing.T) {
+	s := &session{p: profile{Protocol: "softether", AutoDiscoverPrivate: true, TrafficMode: "split"}, privateRoutes: &privateRoutePicker{publicTCP: true}}
+	for _, port := range []int{22, 80, 443, 23879} {
+		if automatic, allowed := s.classifyTCP("110.42.238.247", port); !automatic || !allowed {
+			t.Fatal("public company target never reaches automatic routing", port)
+		}
+	}
+	for _, host := range []string{"0.1.2.3", "127.0.0.1", "169.254.1.1", "100.64.0.1", "198.18.0.1", "192.0.2.1", "224.0.0.1", "240.0.0.1", "::1"} {
+		if _, allowed := s.classifyTCP(host, 22); allowed {
+			t.Fatal("special address entered network discovery", host)
+		}
+	}
+	s.p.Protocol = "easyconnect"
+	if _, allowed := s.classifyTCP("110.42.238.247", 22); allowed {
+		t.Fatal("public network discovery escaped SoftEther")
+	}
+	s.p.Protocol = "softether"
+	s.p.Targets = []target{{CIDRs: []string{"110.42.238.247/32"}, Ports: []string{"443"}}}
+	if _, allowed := s.classifyTCP("110.42.238.247", 22); allowed {
+		t.Fatal("explicit company port restriction bypassed")
+	}
+}
+
+func TestSoftEtherNetworkDiscoveryRetainsLongLivedWinningSocket(t *testing.T) {
+	c, ep := fixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	remote, peer := net.Pipe()
+	t.Cleanup(func() { remote.Close(); peer.Close() })
+	go io.Copy(peer, peer)
+	localCalls, vpnCalls := 0, 0
+	picker := &privateRoutePicker{publicTCP: true, local: func(context.Context, string, string) (net.Conn, error) {
+		localCalls++
+		return nil, errors.New("local unreachable")
+	}, vpn: func(context.Context, string, string) (net.Conn, error) {
+		vpnCalls++
+		return remote, nil
+	}}
+	c.active = &session{ctx: ctx, cancel: cancel, p: profile{ID: "fixture", Protocol: "softether", TrafficMode: "split", AutoDiscoverPrivate: true}, privateRoutes: picker, conns: make(map[net.Conn]struct{})}
+	conn := socks(t, ep, ep.config.Password)
+	if _, err := conn.Write([]byte{5, 1, 0, 1, 110, 42, 238, 247, 0, 22}); err != nil {
+		t.Fatal(err)
+	}
+	reply := make([]byte, 10)
+	if _, err := io.ReadFull(conn, reply); err != nil || reply[1] != 0 {
+		t.Fatal("SSH discovery rejected", err, reply)
+	}
+	// Pass the SOCKS authentication/dial deadline, then verify ongoing data on
+	// the original socket instead of silently opening or replaying a connection.
+	time.Sleep(10100 * time.Millisecond)
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := conn.Write([]byte("still-connected")); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, len("still-connected"))
+	if _, err := io.ReadFull(conn, got); err != nil || string(got) != "still-connected" {
+		t.Fatal("established SSH stream expired with dial context", err)
+	}
+	if localCalls != 1 || vpnCalls != 1 {
+		t.Fatal("connection was retried or replayed", localCalls, vpnCalls)
+	}
+}
+
 func TestPrivateDiscoveryReusesLocalSocketAndDoesNotContactVPN(t *testing.T) {
 	a, b := net.Pipe()
 	defer a.Close()

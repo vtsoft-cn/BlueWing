@@ -35,7 +35,7 @@ import (
 const protocolVersion = 1
 const maxFrame = 4 * 1024 * 1024
 
-var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.3-private-discovery"
+var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.5-ip-forwarding"
 
 type target struct {
 	GuardOnly bool     `json:"guardOnly,omitempty"`
@@ -75,9 +75,10 @@ type profile struct {
 	DNSPort       int                 `json:"dnsPort"`
 }
 type endpointConfig struct {
-	Profile  profile `json:"profile"`
-	User     string  `json:"user"`
-	Password string  `json:"password"`
+	Profile       profile `json:"profile"`
+	User          string  `json:"user"`
+	Password      string  `json:"password"`
+	PacketPeerKey string  `json:"packetPeerKey,omitempty"`
 }
 type command struct {
 	V           int              `json:"v"`
@@ -353,7 +354,12 @@ func (c *controller) setup(s *session, password, sessionData string) (res resour
 	if err = s.stack.Prepare(); err != nil {
 		return res, err
 	}
-	s.privateRoutes = &privateRoutePicker{local: s.dialer.DialContext, vpn: func(ctx context.Context, _ string, address string) (net.Conn, error) {
+	if ep := c.endpoints[s.p.ID]; ep != nil && ep.packet != nil {
+		if err = s.stack.EnablePackets(ep.packet.send); err != nil {
+			return res, err
+		}
+	}
+	s.privateRoutes = &privateRoutePicker{publicTCP: s.p.Protocol == "softether", local: s.dialer.DialContext, vpn: func(ctx context.Context, _ string, address string) (net.Conn, error) {
 		host, portText, err := net.SplitHostPort(address)
 		if err != nil {
 			return nil, err
@@ -592,6 +598,16 @@ func prefixLast(p netip.Prefix) netip.Addr {
 }
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "--recover-network" {
+		_ = winproxy.RecoverNetwork(os.Args[2])
+		return
+	}
+	if len(os.Args) == 4 && os.Args[1] == "--watch-network" {
+		if pid, e := strconv.Atoi(os.Args[3]); e == nil && pid > 0 {
+			_ = winproxy.WatchRecovery(os.Args[2], pid)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--system-proxy" {
 		winproxy.Run(os.Stdin, os.Stdout)
 		return
@@ -621,7 +637,7 @@ func main() {
 			if err := c.configure(cmd.Endpoints); err != nil {
 				c.emit(event{Type: "error", ID: cmd.ID, Code: "LOCAL_PORT_IN_USE"})
 			} else {
-				c.emit(event{Type: "endpointsReady", ID: cmd.ID})
+				c.emit(event{Type: "endpointsReady", ID: cmd.ID, Data: map[string]any{"packets": c.packetEndpoints()}})
 			}
 		case "connect":
 			c.connect(cmd)

@@ -20,8 +20,8 @@ export const api = {
     clearDiscoveredTargets: (id: string) => ipcRenderer.invoke('vpn:clearDiscoveredTargets', id),
     onState: (callback: (state: VpnState) => void) => {
       const handler = (_: unknown, state: VpnState) => callback(state);
-      ipcRenderer.on('evpn:state', handler);
-      return () => ipcRenderer.removeListener('evpn:state', handler);
+      ipcRenderer.on('vpn:state', handler);
+      return () => ipcRenderer.removeListener('vpn:state', handler);
     },
   } satisfies CorporateVpnAPI,
   // Window controls

@@ -18,6 +18,8 @@ type Request struct {
 	Bypass        string       `json:"bypass"`
 	Connections   []Connection `json:"connections"`
 	ManagedServer string       `json:"managedServer"`
+	OwnershipFile string       `json:"ownershipFile"`
+	ParentPID     int          `json:"parentPid"`
 }
 type Response struct {
 	OK          bool         `json:"ok"`

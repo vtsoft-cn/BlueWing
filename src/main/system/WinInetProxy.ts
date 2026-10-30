@@ -15,11 +15,13 @@ export class WinInetProxy {
     );
   }
   static run(request: {
-    action: 'query' | 'enable' | 'disable' | 'restore';
+    action: 'query' | 'enable' | 'disable' | 'restore' | 'guard';
     server?: string;
     bypass?: string;
     managedServer?: string;
     connections?: WinInetConnection[];
+    ownershipFile?: string;
+    parentPid?: number;
   }): Promise<WinInetConnection[]> {
     VpnCoreProcess.verifyBinary(VpnCoreProcess.locate());
     return new Promise((resolve, reject) => {

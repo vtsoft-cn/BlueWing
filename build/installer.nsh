@@ -362,6 +362,7 @@ FunctionEnd
 ; 同级遗留的 BlueWingDataUpgrade 数据暂存。
 !macro customUnInstall
   ${IfNot} ${isUpdated}
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "BlueWing Network Recovery"
     ; 清理当前用户的 %APPDATA% 数据;per-machine 卸载处于 all 上下文,
     ; 切 current 后必须恢复,否则后续注册表/快捷方式清理会误指向 HKCU
     ${If} $installMode == "all"

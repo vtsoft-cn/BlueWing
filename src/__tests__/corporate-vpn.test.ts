@@ -193,6 +193,65 @@ test('VPN mode defaults preserve explicit public routes and application exceptio
   assert.ok(rules.findIndex((r: any) => r.process_name?.includes('tool.exe')) < fallback);
 });
 
+test('SoftEther smart mode selects the network outlet for all TCP services while preserving explicit rules', t => {
+  for (const variation of [
+    { protocol: 'softether', trafficMode: 'split', autoDiscoverPrivate: true, expected: true },
+    { protocol: 'softether', trafficMode: 'split', autoDiscoverPrivate: false, expected: false },
+    { protocol: 'softether', trafficMode: 'custom', autoDiscoverPrivate: true, expected: false },
+    { protocol: 'easyconnect', trafficMode: 'split', autoDiscoverPrivate: true, expected: false },
+  ] as const) {
+    const repo = new ProfileRepository(temp(t));
+    const p = repo.save({ ...sample(), ...variation, loginDomain: 'fixture-hub' });
+    const policy = new CorporatePolicy(repo.dir), runtime = policy.prepare(repo.list());
+    const config: any = { inbounds: [], outbounds: [], dns: { servers: [], rules: [] },
+      route: { rule_set: [], rules: [
+        { domain: ['explicit.example'], outbound: 'direct' },
+        { rule_set: ['geoip-cn'], outbound: 'direct' },
+      ] } };
+    applyCorporateConfig(config, runtime);
+    const rules = config.route.rules;
+    const index = rules.findIndex((r: any) => r.outbound === `corp-out-${p.id}` && r.rules?.some((c: any) => c.rules?.some((v: any) => v.rule_set?.includes('geosite-cn'))));
+    assert.equal(index >= 0, variation.expected);
+    if (index < 0) continue;
+    assert.ok(rules.findIndex((r: any) => r.domain?.includes('explicit.example')) < index);
+    assert.ok(index < rules.findIndex((r: any) => r.rule_set?.includes('geoip-cn')));
+    assert.ok(rules[index].rules.some((r: any) => r.rule_set?.includes(`corp-internet-${p.id}`)), 'Discovery must follow the active Internet owner');
+    assert.ok(!JSON.stringify(rules[index]).includes('"port"'), 'Automatic network selection must not depend on a service port');
+    const before = structuredClone(config); applyCorporateConfig(config, runtime); assert.deepEqual(config, before);
+  }
+});
+
+test('SoftEther packet routes are ready for the first unknown private ICMP/UDP packet without a learned subnet', t => {
+  const repo = new ProfileRepository(temp(t));
+  const p = repo.save({ ...sample(), protocol: 'softether', loginDomain: 'VPN', targets: [], hosts: {} });
+  const policy = new CorporatePolicy(repo.dir);
+  const before = policy.prepare(repo.list()).profiles[0].packet!;
+  assert.equal(Buffer.from(before.privateKey, 'base64').length, 32);
+  policy.setPacketEndpoint(p.id, { port: 32001, publicKey: before.publicKey, loopbackInterface: 'fixture-loopback' }, repo.list());
+  policy.update(p.id, { targets: [{ domains: [], cidrs: ['192.168.30.0/24'], ports: ['1:65535'] }], hosts: {}, dnsServers: ['192.168.30.1'] }, repo.list());
+  policy.setProbe(p.id, 'cold-first-packet', repo.list());
+  const runtime = policy.runtime(), r = runtime.profiles[0];
+  const config: any = { inbounds: [], outbounds: [], route: { rule_set: [], rules: [{ action: 'hijack-dns', network: 'udp', port: [53] }, { ip_is_private: true, outbound: 'direct' }] }, dns: { servers: [], rules: [] } };
+  applyCorporateConfig(config, runtime);
+  const endpoint = config.endpoints.find((e: any) => e.tag === `corp-packet-${p.id}`);
+  assert.equal(endpoint.system, false);
+  assert.equal(endpoint.bind_interface, 'fixture-loopback');
+  const discovery = config.route.rules.find((rule: any) => rule.outbound === endpoint.tag && JSON.stringify(rule).includes('192.168.0.0/16'));
+  assert.ok(discovery && JSON.stringify(discovery).includes('icmp') && JSON.stringify(discovery).includes('udp'));
+  assert.ok(config.route.rules.indexOf(discovery) < config.route.rules.findIndex((rule: any) => rule.ip_is_private));
+  assert.deepEqual(policy.discovery.targets(p), [], 'First packet must not require previous observations');
+  const known = JSON.parse(fs.readFileSync(r.routePath, 'utf8')).rules;
+  assert.ok(known.some((rule: any) => rule.network?.includes('icmp') && !rule.port_range), 'Full network resources must allow ICMP without a TCP port');
+  const probe = config.route.rules.find((rule: any) => rule.outbound === `corp-out-${p.id}` && rule.rules?.some((r: any) => r.domain_suffix?.includes('bluewing.invalid')));
+  assert.ok(probe.rules.some((rule: any) => rule.rule_set?.includes(`corp-internet-${p.id}`)), 'Connection readiness must include packet policy activation');
+  const dns = config.route.rules.findIndex((rule: any) => rule.outbound === endpoint.tag && rule.rules?.some((r: any) => r.port?.includes(53)));
+  assert.ok(dns >= 0 && dns < config.route.rules.findIndex((rule: any) => rule.action === 'hijack-dns'));
+  policy.deactivate(repo.list());
+  assert.deepEqual(JSON.parse(fs.readFileSync(r.internetPath!, 'utf8')).rules, []);
+  assert.deepEqual(JSON.parse(fs.readFileSync(r.routePath, 'utf8')).rules, []);
+  assert.ok(!fs.readFileSync(path.join(repo.dir, 'vpn-profiles.json'), 'utf8').includes(before.privateKey), 'Packet keys are per-launch and never user configuration');
+});
+
 test('Preview data directory survives scheduled-task elevation without inherited environment', () => {
   const dir = path.join(os.tmpdir(), "BlueWing 测试 O'Brien");
   const argument = dataDirArgument(dir);

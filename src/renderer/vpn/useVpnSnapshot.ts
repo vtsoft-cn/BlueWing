@@ -23,15 +23,16 @@ export function useVpnSnapshot() {
   }, []);
   useEffect(() => {
     live.current = true;
+    // Subscribe before reading the initial snapshot. Keep the aggregate and
+    // per-profile states together so badges, counts and buttons agree.
+    const off = window.electronAPI.corporateVpn.onState(() => {
+      refresh().catch(() => {});
+    });
     refresh().catch((e) => {
       if (live.current) {
         setLoading(false);
         setError(String(e));
       }
-    });
-    const off = window.electronAPI.corporateVpn.onState((state) => {
-      setSnapshot((current) => ({ ...current, state }));
-      refresh().catch(() => {});
     });
     return () => {
       live.current = false;

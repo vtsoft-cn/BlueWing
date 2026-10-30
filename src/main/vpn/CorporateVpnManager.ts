@@ -36,7 +36,7 @@ export class CorporateVpnManager extends EventEmitter {
     this.privateProxy = new PrivateRouteProxy(() => policy.runtime().profiles
       .filter(r => policy.isActive(r.profile.id) && (r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false)
       .map(r => ({ id: r.profile.id, port: r.profile.socksPort, user: r.socksUser, password: r.socksPassword,
-        generation: this.sessions.get(r.profile.id)?.snapshot().state.generation ?? 0 })), 3500, 15000,
+        generation: this.sessions.get(r.profile.id)?.snapshot().state.generation ?? 0 })), 11000, 15000,
       () => !this.publicCore.settings().tunEnabled,
       (host, port) => {
         let changed = false;

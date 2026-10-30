@@ -18,6 +18,7 @@ const result = spawnSync(
     './client/atrust/...',
     './client/softether/...',
     './underlay',
+    './stack/gvisor',
   ],
   {
     cwd: path.join(root, 'native', 'vpn'),

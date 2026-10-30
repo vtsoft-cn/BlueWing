@@ -24,8 +24,21 @@ export class SystemProxy {
   private static REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
   private static stateFile: string = '';
   private static corporateRouting = false;
+  private static recoveryReady = false;
   public static setCorporateRouting(enabled:boolean):void { this.corporateRouting=enabled; }
   public static corporateBypassList():string { return 'localhost;127.*;[::1]'; }
+  public static async initializeRecovery(): Promise<boolean> {
+    if (this.recoveryReady) return true;
+    if (!WinInetProxy.available()) return false;
+    try {
+      await WinInetProxy.run({ action: 'guard', ownershipFile: this.getStateFilePath(), parentPid: process.pid });
+      this.recoveryReady = true;
+      return true;
+    } catch (error) {
+      LogManager.getInstance().addLog('warn', `网络恢复守护未就绪：${error instanceof Error ? error.message : String(error)}`, 'system');
+      return false;
+    }
+  }
 
   /**
    * 连接意图保护判定:仅当"用户显式发起连接"且系统代理与 TUN 全关时才自动补开
@@ -60,15 +73,23 @@ export class SystemProxy {
     return null;
   }
 
-  private static saveOwnership(state: OwnershipState | null) {
+  private static saveOwnership(state: OwnershipState | null): boolean {
+    let temporary: string | undefined;
     try {
       const p = this.getStateFilePath();
       if (!state) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
       } else {
-        fs.writeFileSync(p, JSON.stringify(state, null, 2), 'utf8');
+        temporary = `${p}.${process.pid}.${Date.now()}.tmp`;
+        fs.writeFileSync(temporary, JSON.stringify(state, null, 2), { encoding: 'utf8', flush: true });
+        fs.renameSync(temporary, p);
       }
-    } catch {}
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (temporary) { try { fs.unlinkSync(temporary); } catch {} }
+    }
   }
 
   /**
@@ -95,7 +116,7 @@ export class SystemProxy {
     const current = await this.getFullRegistryStatus();
     const existing = this.loadOwnership();
 
-    if (!existing) {
+    if (!existing?.managedByBlueWing) {
       this.saveOwnership({
         managedByBlueWing: false,
         originalSnapshot: current,
@@ -107,7 +128,7 @@ export class SystemProxy {
         'system'
       );
     }
-    return existing ? existing.originalSnapshot : current;
+    return existing?.managedByBlueWing ? existing.originalSnapshot : current;
   }
 
   /**
@@ -120,6 +141,10 @@ export class SystemProxy {
     customBypassList?: string
   ): Promise<boolean> {
     try {
+      const recoveryReady = await this.initializeRecovery();
+      if (WinInetProxy.available() && !recoveryReady) {
+        throw new Error('网络恢复守护启动失败，未启用系统代理');
+      }
       const original = await this.captureOriginalSnapshot();
       const proxyServer = `${host}:${port}`;
 
@@ -150,9 +175,14 @@ export class SystemProxy {
       // Non-company LAN still uses its DIRECT rules there.
       if (this.corporateRouting) bypassList = this.corporateBypassList();
 
+      // Persist intent before touching WinINet. A crash between these steps
+      // must still leave enough information for the independent recovery helper.
+      if (!this.saveOwnership({managedByBlueWing:true,managedServer:proxyServer,originalSnapshot:original,updatedAt:Date.now()})) {
+        throw new Error('无法保存网络恢复记录，未启用系统代理');
+      }
+
       if (WinInetProxy.available()) {
         await WinInetProxy.run({action:'enable',server:proxyServer,bypass:bypassList});
-        this.saveOwnership({managedByBlueWing:true,managedServer:proxyServer,originalSnapshot:original,updatedAt:Date.now()});
         LogManager.getInstance().addLog('info',`Windows 连接级系统代理已同步并回读验证 (${proxyServer})`,'system');
         return true;
       }
@@ -161,14 +191,6 @@ export class SystemProxy {
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f']);
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyServer, '/f']);
       await this.execReg(['add', this.REG_KEY, '/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', bypassList, '/f']);
-
-      // Record ownership
-      this.saveOwnership({
-        managedByBlueWing: true,
-        managedServer: proxyServer,
-        originalSnapshot: original,
-        updatedAt: Date.now(),
-      });
 
       // Refresh system WinINet
       await this.refreshWinINet();
@@ -230,8 +252,19 @@ export class SystemProxy {
       await this.disable();
       return;
     }
+    if (!state.managedByBlueWing || !state.managedServer) return;
 
     try {
+      // WinINet ownership is per connection. A changed LAN proxy must not
+      // prevent restoring an independently owned dial-up/VPN connection.
+      if (state.originalSnapshot?.connections && WinInetProxy.available()) {
+        const connections = state.originalSnapshot.connections.map(c =>
+          c.server === state.managedServer && (c.flags & 2) !== 0
+            ? { ...c, flags: (c.flags & ~2) | 1, server: '' } : c);
+        await WinInetProxy.run({ action: 'restore', managedServer: state.managedServer, connections });
+        this.saveOwnership(null);
+        return;
+      }
       // 1. Check ownership: Verify current registry proxy server matches what BlueWing Connect set
       const current = await this.getFullRegistryStatus();
       if (state.managedServer && current.server && current.server !== state.managedServer) {
@@ -246,12 +279,7 @@ export class SystemProxy {
 
       // 2. Restore original snapshot
       const orig = state.originalSnapshot;
-      if (orig?.connections && WinInetProxy.available()) {
-        await WinInetProxy.run({action:'restore',managedServer:state.managedServer,connections:orig.connections});
-        this.saveOwnership(null);
-        return;
-      }
-      if (orig && orig.enabled) {
+      if (orig && orig.enabled && orig.server !== state.managedServer) {
         await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f']);
         if (orig.server) {
           await this.execReg(['add', this.REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', orig.server, '/f']);
@@ -285,6 +313,7 @@ export class SystemProxy {
    */
   public static async checkAndCleanResidual(expectedPort: number = 2080): Promise<boolean> {
     try {
+      await this.initializeRecovery();
       const current = await this.getFullRegistryStatus();
       if (current.enabled && current.server && current.server.includes(`127.0.0.1:${expectedPort}`)) {
         LogManager.getInstance().addLog(

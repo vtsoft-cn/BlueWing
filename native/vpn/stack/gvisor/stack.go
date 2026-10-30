@@ -19,6 +19,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 )
@@ -33,6 +34,8 @@ type Stack struct {
 	endpoint *Endpoint
 	ipMu     sync.Mutex
 	ip       tcpip.Address
+	packets  *packetLink
+	sources  map[tcpip.Address]bool
 }
 
 const NICID tcpip.NICID = 1
@@ -157,7 +160,7 @@ func NewStack(client clientpkg.Client) (*Stack, error) {
 
 	s.gvisorStack = stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
-		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
+		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4},
 		HandleLocal:        true,
 	})
 
@@ -165,7 +168,7 @@ func NewStack(client clientpkg.Client) (*Stack, error) {
 		client: client,
 	}
 
-	tcpipErr := s.gvisorStack.CreateNIC(NICID, s.endpoint)
+	tcpipErr := s.gvisorStack.CreateNICWithOptions(NICID, s.endpoint, stack.NICOptions{Name: "bluewing-vpn"})
 	if tcpipErr != nil {
 		return nil, errors.New(tcpipErr.String())
 	}
@@ -173,6 +176,10 @@ func NewStack(client clientpkg.Client) (*Stack, error) {
 	ip, err := client.IP()
 	if err != nil {
 		return nil, err
+	}
+	ip = ip.To4()
+	if ip == nil {
+		return nil, errors.New("VPN address is not IPv4")
 	}
 
 	addr := tcpip.AddrFromSlice(ip)

@@ -623,7 +623,7 @@ export function VpnProfileEditor({
                       <h3>选择流量如何连接</h3>
                       <p>
                         仅保存到「{form.name || '当前接入'}」，其他公司的配置独立。
-                        自动读取服务器资源，也可按访问自动识别缺少的私网目标。
+                        自动读取服务器资源，也可按实际访问自动选择可用网络出口。
                       </p>
                     </div>
                   </div>
@@ -634,7 +634,7 @@ export function VpnProfileEditor({
                       : form.trafficMode === 'custom'
                         ? '按下方设置分配出口。公司目标始终优先走 VPN，访问失败时不会回退公网。'
                         : '公司目标通过 VPN；国内公网使用本机网络，国外网站使用已开启的公网代理。公司 VPN 无需具备公网访问权限。'}
-                      {' '}当前 VPN 隧道支持 IPv4 TCP；未开启代理时，智能分流的普通公网使用本机网络。</p>
+                      {' '}{form.protocol === 'softether' ? '开启 TUN 后支持 IPv4 TCP、UDP 和 ping；未开启代理时，智能分流的普通公网使用本机网络。' : '当前 VPN 隧道支持 IPv4 TCP；未开启代理时，智能分流的普通公网使用本机网络。'}</p>
                   </div>
                   <div className="vpn-mode-options" role="group" aria-label="分流模式">
                     {vpnTrafficModes.map(mode => (
@@ -656,13 +656,18 @@ export function VpnProfileEditor({
                   {(form.trafficMode || 'split') === 'split' && (
                     <div className="vpn-auto-discovery">
                       <label>
-                        <input type="checkbox" aria-label="自动识别私网目标"
+                        <input type="checkbox" aria-label={form.protocol === 'softether' ? '自动选择可用出口' : '自动识别私网目标'}
                           checked={form.autoDiscoverPrivate !== false}
                           onChange={e => setForm({ ...form, autoDiscoverPrivate: e.target.checked })}/>
-                        <strong>自动识别私网目标</strong><span className="vpn-mode-recommended">默认</span>
+                        <strong>{form.protocol === 'softether' ? '自动选择可用出口' : '自动识别私网目标'}</strong><span className="vpn-mode-recommended">默认</span>
                       </label>
-                      <p>只在访问未知私网 IP 或已解析为私网的域名时判断路径。本机可达就直连；多个接入开启此功能时，按优先级尝试已连接的 VPN。首次访问可能需要几秒，不影响普通公网。</p>
-                      <p>只记住验证过的 IP、端口和 TCP 协议；重新连接后重新判断。公网公司地址、特殊域名和同地址冲突请在下方明确配置。</p>
+                      {form.protocol === 'softether' ? <>
+                        <p>公司资源走 VPN；其余选择直连的 TCP 连接先尝试本机，不可达时尝试当前 VPN。所有端口使用相同逻辑，已开启的国外代理仍优先。</p>
+                        <p>开启 TUN 后，私网 UDP 和 ping 从第一次请求就进入 VPN，无需预先学习；本机局域网仍按系统路由访问。TCP 在同一次连接中完成出口选择，建立后持续使用同一出口。</p>
+                      </> : <>
+                        <p>只在访问未知私网 IP 或已解析为私网的域名时判断路径。本机可达就直连；多个接入开启此功能时，按优先级尝试已连接的 VPN。首次访问可能需要几秒，不影响普通公网。</p>
+                        <p>只记住验证过的 IP、端口和 TCP 协议；重新连接后重新判断。公网公司地址、特殊域名和同地址冲突请在下方明确配置。</p>
+                      </>}
                     </div>
                   )}
                   {form.trafficMode === 'custom' && (

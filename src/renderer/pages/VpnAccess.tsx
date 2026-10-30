@@ -978,7 +978,9 @@ export const VpnAccess: React.FC<{
                 </div>
                 <div className="vpn-discovery-note"><ShieldCheck size={15} /><p>
                   {(selected.profile.trafficMode || 'split') === 'split' && selected.profile.autoDiscoverPrivate !== false
-                    ? '自动识别已开启：未知私网目标先验证本机路径，再按优先级尝试已连接的 VPN。公网公司地址与特殊域名可手动补充。'
+                    ? selected.profile.protocol === 'softether'
+                      ? '自动选择已开启：TCP 在同一次连接中选择出口；开启 TUN 后，私网 UDP 和 ping 首次请求即可经当前 VPN 转发，无需预先访问。'
+                      : '自动识别已开启：未知私网目标先验证本机路径，再按优先级尝试已连接的 VPN。公网公司地址与特殊域名可手动补充。'
                     : selected.profile.protocol === 'softether' ? 'SoftEther 自动发现部分网络，公司其他资源可手动补充。'
                     : resources?.targets.length ? `已读取 ${resources.targets.length} 条网关资源；手动补充规则优先。`
                     : '连接后自动读取公司资源；只知道业务网址或服务器 IP，也可以手动添加。'}
@@ -1252,8 +1254,9 @@ export const VpnAccess: React.FC<{
                         <h4>让更多应用自动分流</h4>
                         <p>
                           浏览器可使用系统代理；无参数 curl、SSH
-                          等软件需在首页开启 TUN。当前支持 IPv4 TCP，ping
-                          不作为连通性判断依据。
+                          等软件需在首页开启 TUN。{selected.profile.protocol === 'softether'
+                            ? 'SoftEther 支持 IPv4 TCP、UDP 和 ping，首次访问无需预先学习目标。'
+                            : '当前支持 IPv4 TCP，ping 不作为连通性判断依据。'}
                         </p>
                       </section>
                     </div>

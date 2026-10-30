@@ -111,7 +111,7 @@ test('Editing an inactive profile and resolving its port collision preserves act
   assert.equal(f.manager.snapshot().states!.alpha.state, 'connected');
   assert.equal(f.manager.snapshot().defaultProfileId, 'beta');
   assert.equal(f.policy.runtime().profiles[0].profile.id, 'beta');
-  for (const r of f.policy.runtime().profiles) assert.equal(rules(r.internetPath!).length > 0, r.profile.id === 'beta');
+  for (const r of f.policy.runtime().profiles) assert.equal(rules(r.internetPath!).some((rule: any) => rule.type === 'logical'), r.profile.id === 'beta');
   assert.deepEqual(rules(f.policy.runtime().privateProxy!.rulePath), [], 'A lower-priority discovery policy overrode the explicit default VPN mode');
 });
 
@@ -137,14 +137,14 @@ test('A scoped readiness probe survives a shared-core rebuild and validates the 
   assert.equal(pid, 11);
 });
 
-async function peer(t: any, accepts: boolean, received: string[]) {
+async function peer(t: any, accepts: boolean, received: string[], handshakeDelay = 0) {
   const sockets = new Set<net.Socket>();
   const server = net.createServer(socket => {
     sockets.add(socket); socket.on('error', () => {}); socket.on('close', () => sockets.delete(socket));
     let stage = 0, buffer = Buffer.alloc(0);
     socket.on('data', data => {
       buffer = Buffer.concat([buffer, data]);
-      if (stage === 0 && buffer.length >= 2 + buffer[1]) { buffer = buffer.subarray(2 + buffer[1]); socket.write(Buffer.from([5, 2])); stage = 1; }
+      if (stage === 0 && buffer.length >= 2 + buffer[1]) { buffer = buffer.subarray(2 + buffer[1]); if (handshakeDelay) setTimeout(() => { if (!socket.destroyed) socket.write(Buffer.from([5, 2])); }, handshakeDelay); else socket.write(Buffer.from([5, 2])); stage = 1; }
       if (stage === 1 && buffer.length >= 3 + buffer[1]) { const size = 3 + buffer[1] + buffer[2 + buffer[1]]; if (buffer.length < size) return; buffer = buffer.subarray(size); socket.write(Buffer.from([1, 0])); stage = 2; }
       if (stage === 2 && buffer.length >= 10) { buffer = buffer.subarray(10); socket.write(Buffer.from([5, accepts ? 0 : 4, 0, 1, 0, 0, 0, 0, 0, 0])); stage = accepts ? 3 : 4; if (!accepts) socket.end(); }
       if (stage === 3 && buffer.length) { received.push(buffer.toString()); socket.end('HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nWINNER'); stage = 4; }
@@ -177,4 +177,15 @@ test('Unknown-private fallback sends pipelined business bytes only to the winnin
   assert.deepEqual(first, []); assert.equal(second.length, 1); assert.equal(second[0].match(/GET \/once/g)?.length, 1);
   assert.notEqual((await through(endpoint, '1.1.1.1')).reply, 0); assert.equal(second.length, 1);
   candidates = []; assert.notEqual((await through(endpoint)).reply, 0);
+});
+
+test('The first private TCP request survives a cold provider handshake and sends its payload once', { timeout: 8000 }, async t => {
+  const received: string[] = [], port = await peer(t, true, received, 3700);
+  const proxy = new PrivateRouteProxy(() => [{ id: 'cold', generation: 1, port, user: 'fixture', password: 'fixture' }]);
+  const endpoint = await proxy.start(); t.after(() => proxy.stop());
+  const result = await through(endpoint, '192.168.110.45');
+  assert.equal(result.reply, 0);
+  assert.ok(result.body.endsWith('WINNER'));
+  assert.equal(received.length, 1);
+  assert.equal(received[0].match(/GET \/once/g)?.length, 1);
 });
