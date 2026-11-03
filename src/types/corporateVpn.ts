@@ -101,6 +101,7 @@ export interface VpnSnapshot {
   passwordSaved?: Record<string, boolean>;
   diagnostics?: Record<string, { exists: boolean; path: string; mode: string; error?: string }>;
   discoveredTargets?: Record<string, VpnTarget[]>;
+  warnings?: string[];
 }
 export interface VpnRuntimeProfile {
   profile: VpnProfile;
@@ -112,8 +113,9 @@ export interface VpnRuntimeProfile {
   internetPath?: string;
   internetDnsPath?: string;
   discoveredGuardPath?: string;
-  packet?: { privateKey: string; publicKey: string; port?: number; serverPublicKey?: string; loopbackInterface?: string };
+  packet?: VpnPacketLink & { icmp?: VpnPacketLink };
 }
+export interface VpnPacketLink { privateKey: string; publicKey: string; port?: number; serverPublicKey?: string; loopbackInterface?: string }
 export interface VpnRuntime {
   profiles: VpnRuntimeProfile[];
   coreProcessName: string;

@@ -16,6 +16,7 @@ import { VpnCoreEvent, VpnCoreProcess } from './VpnCoreProcess';
 import { physicalInterface } from './PhysicalInterface';
 import { gatewayTrust } from './GatewayTrust';
 import { VpnDiagnostics } from './VpnDiagnostics';
+import { profileIdentity, credentialKey } from './ProfileIdentity';
 
 export interface PublicCore {
   running(): boolean;
@@ -33,13 +34,15 @@ export function signature(runtime: VpnRuntime): string {
   return JSON.stringify(
     { privateProxyPort: runtime.privateProxy?.port, profiles: runtime.profiles.map((r) => ({
       id: r.profile.id,
+      identity: profileIdentity(r.profile),
       port: r.profile.socksPort,
       dns: r.profile.dnsPort,
       trafficMode: r.profile.trafficMode || 'split',
       customRouting: r.profile.customRouting,
       autoDiscoverPrivate: r.profile.autoDiscoverPrivate !== false,
       priority: r.profile.routingPriority ?? 100,
-      packet: r.packet && { publicKey: r.packet.publicKey, serverPublicKey: r.packet.serverPublicKey, port: r.packet.port, loopbackInterface: r.packet.loopbackInterface },
+      packet: r.packet && { publicKey: r.packet.publicKey, serverPublicKey: r.packet.serverPublicKey, port: r.packet.port, loopbackInterface: r.packet.loopbackInterface,
+        icmp: r.packet.icmp && { publicKey: r.packet.icmp.publicKey, serverPublicKey: r.packet.icmp.serverPublicKey, port: r.packet.icmp.port } },
     })) },
   );
 }
@@ -56,6 +59,7 @@ export class CorporateVpnSession extends EventEmitter {
   private retries = 0;
   private sessionWasReady = false;
   private reconnectTimer?: NodeJS.Timeout;
+  private intentRevision = 0;
   constructor(
     readonly profiles: ProfileRepository,
     readonly policy: CorporatePolicy,
@@ -82,11 +86,12 @@ export class CorporateVpnSession extends EventEmitter {
       )
         this.fail('CORE_EXITED');
     });
-    core.on('fault', (code) =>
+    core.on('fault', (code) => {
+      if (this.disposing || ['idle', 'failed', 'reconnect_wait'].includes(this.state.state)) return;
       this.fail(
         code === 'CORE_PIPE_CLOSED' ? 'CORE_EXITED' : 'CORE_PROTOCOL_INVALID',
-      ),
-    );
+      );
+    });
   }
   private change(next: Partial<VpnState>): void {
     this.state = { ...this.state, ...next };
@@ -95,6 +100,7 @@ export class CorporateVpnSession extends EventEmitter {
   snapshot(): VpnSnapshot {
     return {
       profiles: this.profiles.list(),
+      warnings: [...this.policy.cacheWarnings, ...this.vault.migrationWarnings(this.profiles.list())],
       state: {
         ...structuredClone(this.state),
         trafficProtected: this.policy.isProtected(this.state.profileId),
@@ -212,8 +218,8 @@ export class CorporateVpnSession extends EventEmitter {
     this.policy.prepare(this.profiles.list());
     this.emit('state', this.snapshot().state);
   }
-  private credentialKey(p: VpnProfile, kind: string): string {
-    return `${p.id}:${kind}:${p.protocol}:${p.gateway.host}:${p.gateway.port}:${p.username}:${p.loginDomain}:${p.authMethod}`;
+  private credentialKey(p: VpnProfile, kind: 'password' | 'session'): string {
+    return credentialKey(p, kind);
   }
   async prepareRuntime(
     allowReassign = false,
@@ -223,8 +229,8 @@ export class CorporateVpnSession extends EventEmitter {
     if (!runtime.profiles.length) return runtime;
     await this.core.start();
     const endpoints = runtime.profiles.filter(r => !(this.scopeId || this.state.profileId) || r.profile.id === (this.scopeId || this.state.profileId));
-    const next = JSON.stringify(endpoints.map(r => ({ id: r.profile.id, port: r.profile.socksPort, dns: r.profile.dnsPort,
-      user: r.socksUser, password: r.socksPassword, packetPeerKey: r.packet?.publicKey })));
+    const next = JSON.stringify(endpoints.map(r => ({ id: r.profile.id, identity: profileIdentity(r.profile), port: r.profile.socksPort, dns: r.profile.dnsPort,
+      user: r.socksUser, password: r.socksPassword, packetPeerKey: r.packet?.publicKey, icmpPeerKey: r.packet?.icmp?.publicKey })));
     if (this.configured !== next) {
       try {
         const configured = await this.core.request(
@@ -234,7 +240,7 @@ export class CorporateVpnSession extends EventEmitter {
               profile: r.profile,
               user: r.socksUser,
               password: r.socksPassword,
-              ...(r.packet ? { packetPeerKey: r.packet.publicKey } : {}),
+              ...(r.packet ? { packetPeerKey: r.packet.publicKey, icmpPeerKey: r.packet.icmp?.publicKey } : {}),
             })),
           },
           10000,
@@ -263,22 +269,35 @@ export class CorporateVpnSession extends EventEmitter {
     this.registered = signature(runtime);
     this.emit('state', this.snapshot().state);
   }
-  publicCoreStopped(): void {
+  publicCoreStopped(unexpected = false): void {
     this.registered = '';
     // A failed routing startup is reported by the awaiting connect operation.
     // Explicit public-core stops cancel the VPN intent in handleCoreStop first.
     if (this.state.state === 'starting' && this.state.preparingRouting) return;
+    if (unexpected) {
+      if (['idle', 'failed'].includes(this.state.state)) return;
+      const stopped = this.disconnect(true), generation = this.state.generation;
+      stopped.then(() => {
+        if (this.state.generation !== generation) return;
+        this.desired = undefined;
+        this.change({ state: 'failed', error: 'PUBLIC_CORE_CHANGED' });
+      }).catch(() => {});
+      return;
+    }
     this.disconnect().catch(() => {});
   }
-  async connect(id: string, password: string): Promise<void> {
-    return this.connectInternal(id, password, false);
+  async connect(id: string, password: string, permitted: () => boolean = () => true): Promise<void> {
+    const revision = this.intentRevision;
+    return this.connectInternal(id, password, false, () => revision === this.intentRevision && permitted());
   }
   private async connectInternal(
     id: string,
     password: string,
     retry: boolean,
+    permitted: () => boolean = () => true,
   ): Promise<void> {
     return this.exclusive(async () => {
+      if (this.disposing || !permitted()) return;
       if (typeof password !== 'string' || password.length > 4096)
         throw new Error('密码格式不正确');
       if (!['idle', 'failed', 'reconnect_wait'].includes(this.state.state))
@@ -304,11 +323,11 @@ export class CorporateVpnSession extends EventEmitter {
         resources: undefined,
         preparingRouting: needsRouting,
       });
-      const isCurrent = () => this.state.generation === generation && this.state.state === 'starting';
+      const isCurrent = () => this.state.generation === generation && this.state.state === 'starting' && permitted();
       try {
         const key = this.credentialKey(p, 'password');
         const secret = password || (p.rememberPassword ? this.vault.get(key) : undefined) || '';
-        if (!secret && p.authMethod !== 'auth/smsCheckCode') throw new Error('请输入密码');
+        if (!secret && p.authMethod !== 'auth/smsCheckCode') throw new Error(this.vault.needsReentry(p) ? 'CREDENTIAL_REENTRY_REQUIRED' : '请输入密码');
         this.policy.begin(p.id, this.profiles.list());
         await this.prepareRuntime(true);
         if (!isCurrent()) return;
@@ -325,18 +344,10 @@ export class CorporateVpnSession extends EventEmitter {
         await this.prepareRuntime();
         if (this.publicCore.settings().tunEnabled && !p.bindInterface)
           p.bindInterface = await physicalInterface();
-        if (
-          this.state.generation !== generation ||
-          this.state.state !== 'starting'
-        )
-          return;
+        if (!isCurrent()) return;
         if (!this.publicCore.running()) throw new Error('PUBLIC_CORE_CHANGED');
         p = await this.trustedProfile(p, generation);
-        if (
-          this.state.generation !== generation ||
-          this.state.state !== 'starting'
-        )
-          return;
+        if (!isCurrent()) return;
         this.diagnostics.input(id, 'password', secret);
         this.desired = { id, password: secret };
         if (p.rememberPassword && password) this.vault.set(key, password);
@@ -360,6 +371,7 @@ export class CorporateVpnSession extends EventEmitter {
     });
   }
   async disconnect(preserveIntent = false): Promise<void> {
+    this.intentRevision++;
     this.clearConnectionTimeout();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (!preserveIntent) {
@@ -368,16 +380,19 @@ export class CorporateVpnSession extends EventEmitter {
       this.sessionWasReady = false;
     }
     const generation = this.state.generation + 1;
-    if (this.core.isRunning()) this.core.send('disconnect', { generation });
-    this.policy.deactivate(this.profiles.list(), preserveIntent, this.scopeId || this.state.profileId);
-    this.change({
+    try {
+      this.policy.deactivate(this.profiles.list(), preserveIntent, this.scopeId || this.state.profileId);
+    } finally {
+      this.change({
       state: 'idle',
       generation,
       challenge: undefined,
       error: undefined,
       errorDetail: undefined,
       preparingRouting: false,
-    });
+      });
+      this.notifyDisconnect(generation);
+    }
   }
   async discover(id: string): Promise<VpnAuthMethod[]> {
     return this.exclusive(async () => {
@@ -519,12 +534,15 @@ export class CorporateVpnSession extends EventEmitter {
   }
   private fail(error: string, errorDetail?: VpnState['errorDetail']): void {
     this.clearConnectionTimeout();
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
     const generation = this.state.generation + 1;
-    if (this.core.isRunning()) this.core.send('disconnect', { generation });
     const keepGuard = this.sessionWasReady || (!!this.desired && ['CORE_EXITED', 'VPN_TRANSPORT_DOWN', 'GATEWAY_UNREACHABLE'].includes(error));
-    this.policy.deactivate(this.profiles.list(), keepGuard, this.scopeId || this.state.profileId);
+    try { this.policy.deactivate(this.profiles.list(), keepGuard, this.scopeId || this.state.profileId); }
+    catch { error = 'POLICY_APPLY_FAILED'; }
     if (this.state.profileId) this.diagnostics.write(this.state.profileId, { event: 'connection-error', generation: this.state.generation, code: error, ...errorDetail });
     this.change({ state: 'failed', generation, error, errorDetail, challenge: undefined, preparingRouting: false });
+    this.notifyDisconnect(generation);
     if (
       this.desired &&
       !this.disposing &&
@@ -539,7 +557,7 @@ export class CorporateVpnSession extends EventEmitter {
       this.change({ state: 'reconnect_wait' });
       this.reconnectTimer = setTimeout(() => {
         if (this.desired === intent && this.state.generation === generation)
-          this.connectInternal(intent.id, intent.password, true).catch(() => {
+          this.connectInternal(intent.id, intent.password, true, () => this.desired === intent).catch(() => {
             if (
               this.desired?.id === intent.id &&
               ['idle', 'reconnect_wait'].includes(this.state.state)
@@ -549,12 +567,17 @@ export class CorporateVpnSession extends EventEmitter {
       }, delay);
     } else this.desired = undefined;
   }
+  private notifyDisconnect(generation: number): void {
+    // Local revocation must finish even after the child pipe has closed.
+    try { if (this.core.isRunning()) this.core.send('disconnect', { generation }); } catch { /* Child exit/EOF also closes its owned resources. */ }
+  }
   private async event(e: VpnCoreEvent): Promise<void> {
     if (
       e.generation !== this.state.generation ||
       e.profileId !== this.state.profileId
     )
       return;
+    if (this.disposing || ['idle', 'failed', 'reconnect_wait', 'stopping'].includes(this.state.state)) return;
     if (e.type === 'diagnostic') {
       if (e.data && typeof e.data === 'object') this.diagnostics.trace(e.profileId!, e.data);
     } else if (e.type === 'privateRouteObserved') {
@@ -616,6 +639,7 @@ export class CorporateVpnSession extends EventEmitter {
         revision,
       });
     } else if (e.type === 'tunnelReady') {
+      if (!['authenticating', 'applying_policy'].includes(this.state.state)) return;
       this.sessionWasReady = true;
       this.change({ state: 'applying_policy' });
       const generation = e.generation,

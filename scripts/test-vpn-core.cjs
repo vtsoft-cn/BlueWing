@@ -13,6 +13,7 @@ const result = spawnSync(
     ...process.argv.slice(2),
     './cmd/bluewing-vpn-core',
     './internal/bluewing',
+    './internal/ipv4frag',
     './internal/winproxy',
     './client/easyconnect/...',
     './client/atrust/...',

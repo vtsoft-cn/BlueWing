@@ -19,12 +19,13 @@ import (
 )
 
 type endpoint struct {
-	config   endpointConfig
-	listener net.Listener
-	dns      *dns.Server
-	sem      chan struct{}
-	local    localConnections
-	packet   *packetEndpoint
+	config     endpointConfig
+	listener   net.Listener
+	dns        *dns.Server
+	sem        chan struct{}
+	local      localConnections
+	packet     *packetEndpoint
+	icmpPacket *packetEndpoint
 }
 
 func (c *controller) configure(configs []endpointConfig) error {
@@ -50,12 +51,21 @@ func (c *controller) configure(configs []endpointConfig) error {
 		}
 		ep := &endpoint{config: cfg, listener: listener, sem: make(chan struct{}, 128)}
 		if cfg.Profile.Protocol == "softether" && cfg.PacketPeerKey != "" {
-			ep.packet, err = newPacketEndpoint(cfg.PacketPeerKey, func(b []byte) {
-				if s := c.getSession(cfg.Profile.ID); s != nil && s.allowedPacket(b) {
-					_ = s.stack.InjectPacket(b)
+			inject := func(b []byte) {
+				if s := c.getSession(cfg.Profile.ID); s != nil {
+					if packet := s.preparePacket(b); packet != nil {
+						_ = s.stack.InjectPacket(packet)
+					}
 				}
-			})
+			}
+			ep.packet, err = newPacketEndpoint(cfg.PacketPeerKey, inject)
+			if err == nil && cfg.ICMPPeerKey != "" {
+				ep.icmpPacket, err = newPacketEndpoint(cfg.ICMPPeerKey, inject)
+			}
 			if err != nil {
+				if ep.packet != nil {
+					ep.packet.device.Close()
+				}
 				_ = listener.Close()
 				_ = dnsListener.Close()
 				c.closeEndpoints()
@@ -84,6 +94,9 @@ func (c *controller) configure(configs []endpointConfig) error {
 }
 func (c *controller) closeEndpoints() {
 	for _, ep := range c.endpoints {
+		if ep.icmpPacket != nil {
+			ep.icmpPacket.device.Close()
+		}
 		if ep.packet != nil {
 			ep.packet.device.Close()
 		}
@@ -407,18 +420,35 @@ func (s *session) exchange(ctx context.Context, q *dns.Msg) (*dns.Msg, error) {
 		if ip.To4() == nil {
 			continue
 		}
-		conn, e := s.stack.DialUDP(ctx, &net.UDPAddr{IP: ip, Port: 53})
-		if e != nil {
-			continue
-		}
-		_ = conn.SetDeadline(time.Now().Add(4 * time.Second))
-		answer, _, e := (&dns.Client{Timeout: 4 * time.Second}).ExchangeWithConnContext(ctx, q, &dns.Conn{Conn: conn})
-		_ = conn.Close()
+		answer, e := exchangeDNSQuestion(ctx, q, func(ctx context.Context, network string) (net.Conn, error) {
+			if network == "udp" {
+				return s.stack.DialUDP(ctx, &net.UDPAddr{IP: ip, Port: 53})
+			}
+			return s.stack.DialTCP(ctx, &net.TCPAddr{IP: ip, Port: 53})
+		})
 		if e == nil && (answer.Rcode == dns.RcodeSuccess || answer.Rcode == dns.RcodeNameError) {
 			return answer, nil
 		}
 	}
 	return nil, errors.New("CORPORATE_DNS_FAILED")
+}
+func exchangeDNSQuestion(ctx context.Context, q *dns.Msg, dial func(context.Context, string) (net.Conn, error)) (*dns.Msg, error) {
+	for _, network := range []string{"udp", "tcp"} {
+		conn, err := dial(ctx, network)
+		if err != nil {
+			return nil, err
+		}
+		_ = conn.SetDeadline(time.Now().Add(4 * time.Second))
+		answer, _, err := (&dns.Client{Timeout: 4 * time.Second}).ExchangeWithConnContext(ctx, q, &dns.Conn{Conn: conn})
+		_ = conn.Close()
+		if err != nil {
+			return nil, err
+		}
+		if !answer.Truncated {
+			return answer, nil
+		}
+	}
+	return nil, errors.New("CORPORATE_DNS_TRUNCATED")
 }
 func (c *controller) answerDNS(id string, w dns.ResponseWriter, q *dns.Msg) {
 	answer := new(dns.Msg)
@@ -436,16 +466,11 @@ func (c *controller) answerDNS(id string, w dns.ResponseWriter, q *dns.Msg) {
 		_ = w.WriteMsg(answer)
 		return
 	}
-	if question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA {
-		answer.Rcode = dns.RcodeSuccess
-		_ = w.WriteMsg(answer)
-		return
-	}
 	ips, found := s.p.Hosts[name]
 	if !found {
 		ips, found = s.resources.Hosts[name]
 	}
-	if found {
+	if found && (question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA) {
 		answer.Rcode = dns.RcodeSuccess
 		for _, value := range ips {
 			ip := net.ParseIP(value)
@@ -465,20 +490,11 @@ func (c *controller) answerDNS(id string, w dns.ResponseWriter, q *dns.Msg) {
 		}
 	}
 	if answer.Rcode == dns.RcodeSuccess {
-		s.leaseMu.Lock()
 		for _, rr := range answer.Answer {
 			if a, ok := rr.(*dns.A); ok {
-				s.leases[a.A.String()] = dnsLease{domain: name, expires: time.Now().Add(time.Duration(a.Hdr.Ttl) * time.Second)}
+				s.rememberDNSLease(a.A.String(), name, time.Duration(a.Hdr.Ttl)*time.Second, time.Now())
 			}
 		}
-		if len(s.leases) > 8192 {
-			for ip, lease := range s.leases {
-				if lease.expires.Before(time.Now()) {
-					delete(s.leases, ip)
-				}
-			}
-		}
-		s.leaseMu.Unlock()
 	}
 	_ = w.WriteMsg(answer)
 }

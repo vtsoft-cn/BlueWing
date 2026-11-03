@@ -246,7 +246,7 @@ export class OpenVpnEngine implements VpnEngine {
   }
 
   private async handleConnected(ctx: VpnEngineContext): Promise<void> {
-    if (this.connectedNotified) return;
+    if (this.stopped || this.connectedNotified) return;
     this.connectedNotified = true;
 
     // 适配器就绪略晚于 "Initialization Sequence Completed",短暂轮询
@@ -271,6 +271,7 @@ export class OpenVpnEngine implements VpnEngine {
     }
 
     const network = await WindowsNetQuery.getAdapterNetwork(adapter.interfaceIndex);
+    if (this.stopped) return;
     const push = this.pushed;
     // 路由优先取 PUSH_REPLY 解析(--route-nopull 下 OS 表没有);DNS 兜底查适配器;
     // 直连子网(含 VPN 网关/DNS)补回内网段

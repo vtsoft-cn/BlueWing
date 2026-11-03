@@ -11,6 +11,7 @@ import {
 import { atomicJSON, validateResources, targets } from './ProfileRepository';
 import { PrivateRouteDiscovery } from './PrivateRouteDiscovery';
 import { orderedVpnProfiles } from '../../utils/vpnRouting';
+import { profileIdentity } from './ProfileIdentity';
 
 export function sourceRules(
   targets: VpnTarget[],
@@ -37,10 +38,14 @@ export function sourceRules(
 }
 export class CorporatePolicy {
   readonly discovery: PrivateRouteDiscovery;
-  private credentials = new Map<string, { user: string; password: string; packet?: { privateKey: string; publicKey: string } }>();
-  private packetServers = new Map<string, { port: number; serverPublicKey: string; loopbackInterface?: string }>();
+  readonly cacheWarnings: string[] = [];
+  private credentials = new Map<string, { user: string; password: string; packet?: { privateKey: string; publicKey: string; icmp?: { privateKey: string; publicKey: string } } }>();
+  private packetServers = new Map<string, { port: number; serverPublicKey: string; loopbackInterface?: string; icmp?: { port: number; serverPublicKey: string } }>();
   private resources = new Map<string, VpnResources>();
   private protectedTargets = new Map<string, VpnTarget[]>();
+  private resourceIdentities = new Map<string, string>();
+  private guardIdentities = new Map<string, string>();
+  private runtimeIdentities = new Map<string, string>();
   private probes = new Map<string, string>();
   private activeIds = new Set<string>();
   private guardedIds = new Set<string>();
@@ -51,21 +56,36 @@ export class CorporatePolicy {
   };
   constructor(readonly dir: string) {
     this.discovery = new PrivateRouteDiscovery(dir);
-    const known = path.join(dir, 'vpn-runtime', 'known-targets.json');
-    if (fs.existsSync(known)) {
-      for (const [id, value] of Object.entries(
-        JSON.parse(fs.readFileSync(known, 'utf8')),
-      ))
-        if (/^[a-zA-Z0-9-]{1,64}$/.test(id))
-          this.protectedTargets.set(id, targets(value));
+    this.protectedTargets = this.loadCache('known-targets.json', targets, this.guardIdentities);
+    this.resources = this.loadCache('resources.json', validateResources, this.resourceIdentities);
+  }
+  private loadCache<T>(name: string, validate: (input: unknown) => T, identities: Map<string, string>): Map<string, T> {
+    const file = path.join(this.dir, 'vpn-runtime', name), result = new Map<string, T>();
+    if (!fs.existsSync(file)) return result;
+    let invalid = false;
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid cache');
+      for (const [id, value] of Object.entries(data)) {
+        try {
+          if (!/^[a-zA-Z0-9-]{1,64}$/.test(id)) throw new Error('invalid cache id');
+          const bound = value as any;
+          if (bound && typeof bound === 'object' && 'identity' in bound && 'value' in bound) {
+            if (typeof bound.identity !== 'string' || !/^[a-f0-9]{64}$/.test(bound.identity)) throw new Error('invalid identity');
+            result.set(id, validate(bound.value));
+            identities.set(id, bound.identity);
+          } else result.set(id, validate(value)); // Legacy cache: bind once to its existing profile.
+        } catch { invalid = true; }
+      }
+    } catch { invalid = true; }
+    if (invalid) {
+      // Retain healthy entries and isolate the damaged derived file. Explicit
+      // profile rules and any healthy guard cache still protect company targets.
+      try { fs.renameSync(file, `${file}.invalid-${Date.now()}-${randomBytes(4).toString('hex')}`); } catch { /* Report the failure without blocking unrelated internet. */ }
+      const warning = '上次保存的部分 VPN 网络信息无法读取。公网连接可继续使用，连接 VPN 后将重新获取资源；有效的公司保护规则已保留。';
+      if (!this.cacheWarnings.includes(warning)) this.cacheWarnings.push(warning);
     }
-    const file = path.join(dir, 'vpn-runtime', 'resources.json');
-    if (fs.existsSync(file)) {
-      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-      for (const [id, value] of Object.entries(data))
-        if (/^[a-zA-Z0-9-]{1,64}$/.test(id))
-          this.resources.set(id, validateResources(value));
-    }
+    return result;
   }
   runtime(): VpnRuntime {
     return structuredClone(this.current);
@@ -77,11 +97,13 @@ export class CorporatePolicy {
     return !!id && this.guardedIds.has(id);
   }
   isActive(id: string): boolean { return this.activeIds.has(id); }
-  setPacketEndpoint(id: string, value: { port: number; publicKey: string; loopbackInterface?: string }, profiles: VpnProfile[]): void {
+  setPacketEndpoint(id: string, value: { port: number; publicKey: string; loopbackInterface?: string; icmp?: { port: number; publicKey: string } }, profiles: VpnProfile[]): void {
     if (!profiles.some(p => p.id === id && p.protocol === 'softether') || !Number.isInteger(value.port) || value.port < 1 || value.port > 65535 ||
       typeof value.publicKey !== 'string' || Buffer.from(value.publicKey, 'base64').length !== 32) throw new Error('PACKET_ENDPOINT_INVALID');
     if (value.loopbackInterface !== undefined && (typeof value.loopbackInterface !== 'string' || value.loopbackInterface.length > 128 || /[\x00-\x1f]/.test(value.loopbackInterface))) throw new Error('PACKET_INTERFACE_INVALID');
-    this.packetServers.set(id, { port: value.port, serverPublicKey: value.publicKey, loopbackInterface: value.loopbackInterface });
+    if (value.icmp && (!Number.isInteger(value.icmp.port) || value.icmp.port < 1 || value.icmp.port > 65535 || typeof value.icmp.publicKey !== 'string' || Buffer.from(value.icmp.publicKey, 'base64').length !== 32)) throw new Error('PACKET_ENDPOINT_INVALID');
+    this.packetServers.set(id, { port: value.port, serverPublicKey: value.publicKey, loopbackInterface: value.loopbackInterface,
+      ...(value.icmp ? { icmp: { port: value.icmp.port, serverPublicKey: value.icmp.publicKey } } : {}) });
     this.prepare(profiles);
   }
   setPrivateProxy(proxy: NonNullable<VpnRuntime['privateProxy']>, profiles: VpnProfile[]): void {
@@ -123,6 +145,7 @@ export class CorporatePolicy {
     this.prepare(profiles);
   }
   update(id: string, input: unknown, profiles: VpnProfile[]): string {
+    this.synchronizeIdentities(profiles);
     const value = validateResources(input);
     const old = this.resources.get(id);
     this.resources.set(id, value);
@@ -130,7 +153,7 @@ export class CorporatePolicy {
       this.prepare(profiles);
       atomicJSON(
         path.join(this.dir, 'vpn-runtime', 'resources.json'),
-        Object.fromEntries(this.resources),
+        this.boundCache(this.resources, this.resourceIdentities),
       );
     } catch (e) {
       if (old) this.resources.set(id, old);
@@ -143,8 +166,11 @@ export class CorporatePolicy {
       .slice(0, 16);
   }
   prepare(profiles: VpnProfile[]): VpnRuntime {
+    this.synchronizeIdentities(profiles);
     const next: VpnRuntimeProfile[] = [];
     const ids = new Set(profiles.map(p => p.id));
+    for (const map of [this.resources, this.protectedTargets, this.credentials, this.packetServers, this.resourceIdentities, this.guardIdentities, this.runtimeIdentities])
+      for (const id of map.keys()) if (!ids.has(id)) map.delete(id);
     for (const id of this.guardedIds) if (!ids.has(id)) this.guardedIds.delete(id);
     for (const id of this.activeIds) if (!ids.has(id)) this.activeIds.delete(id);
     // A running core may still watch a removed profile until its next reload.
@@ -166,6 +192,13 @@ export class CorporatePolicy {
       if (profile.protocol === 'softether' && !credentials.packet) {
         const pair = generateKeyPairSync('x25519');
         credentials.packet = {
+          privateKey: pair.privateKey.export({ format: 'der', type: 'pkcs8' }).subarray(-32).toString('base64'),
+          publicKey: pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64'),
+        };
+      }
+      if (profile.protocol === 'softether' && credentials.packet && !credentials.packet.icmp) {
+        const pair = generateKeyPairSync('x25519');
+        credentials.packet.icmp = {
           privateKey: pair.privateKey.export({ format: 'der', type: 'pkcs8' }).subarray(-32).toString('base64'),
           publicKey: pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64'),
         };
@@ -196,6 +229,7 @@ export class CorporatePolicy {
       if (all.length > 4096)
         throw new Error('公司目标保护集合超过上限，请先审查资源配置');
       this.protectedTargets.set(profile.id, all);
+      this.guardIdentities.set(profile.id, profileIdentity(profile));
       const folder = path.join(this.dir, 'vpn-runtime', profile.id);
       const routePath = path.join(folder, 'route.json'),
         guardPath = path.join(folder, 'guard.json'),
@@ -249,7 +283,7 @@ export class CorporatePolicy {
               ]
             : [],
         );
-      if (this.activeIds.has(profile.id) && credentials.packet && this.packetServers.has(profile.id)) {
+      if (this.activeIds.has(profile.id) && profile.protocol === 'softether' && credentials.packet && this.packetServers.has(profile.id)) {
         const packetRules = (sourceRules(icmpTargets).rules as any[]).map(rule => ({ ...rule, network: ['icmp'] }));
         (routeSource.rules as any[]).push(...packetRules);
       }
@@ -264,18 +298,38 @@ export class CorporatePolicy {
         internetPath,
         internetDnsPath,
         discoveredGuardPath,
-        ...(credentials.packet ? { packet: { ...credentials.packet, ...this.packetServers.get(profile.id) } } : {}),
+        ...(profile.protocol === 'softether' && credentials.packet ? { packet: {
+          ...credentials.packet, ...this.packetServers.get(profile.id),
+          icmp: credentials.packet.icmp && { ...credentials.packet.icmp, ...this.packetServers.get(profile.id)?.icmp,
+            loopbackInterface: this.packetServers.get(profile.id)?.loopbackInterface },
+        } } : {}),
       });
     }
     atomicJSON(
       path.join(this.dir, 'vpn-runtime', 'known-targets.json'),
-      Object.fromEntries(this.protectedTargets),
+      this.boundCache(this.protectedTargets, this.guardIdentities),
     );
     if (this.privateProxy) this.publish(this.privateProxy.rulePath, { version: 3, rules:
       (ordered.find(p => p.id === internetOwner)?.trafficMode || 'split') === 'split' && next.some(r => this.activeIds.has(r.profile.id) && (r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false)
         ? [{ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'], network: ['tcp'] }] : [] });
     this.current = { profiles: next, coreProcessName: 'bluewing-vpn-core.exe', ...(this.privateProxy ? { privateProxy: this.privateProxy } : {}) };
     return this.runtime();
+  }
+  private boundCache<T>(values: Map<string, T>, identities: Map<string, string>): Record<string, unknown> {
+    return Object.fromEntries([...values].map(([id, value]) => [id, { identity: identities.get(id) || this.runtimeIdentities.get(id), value }]));
+  }
+  private synchronizeIdentities(profiles: VpnProfile[]): void {
+    for (const profile of profiles) {
+      const id = profile.id, identity = profileIdentity(profile);
+      if (this.runtimeIdentities.has(id) && this.runtimeIdentities.get(id) !== identity) {
+        this.credentials.delete(id); this.packetServers.delete(id);
+        this.resources.delete(id); this.protectedTargets.delete(id);
+        this.activeIds.delete(id); this.guardedIds.delete(id); this.probes.delete(id);
+      }
+      if (this.resourceIdentities.has(id) && this.resourceIdentities.get(id) !== identity) this.resources.delete(id);
+      if (this.guardIdentities.has(id) && this.guardIdentities.get(id) !== identity) this.protectedTargets.delete(id);
+      this.resourceIdentities.set(id, identity); this.guardIdentities.set(id, identity); this.runtimeIdentities.set(id, identity);
+    }
   }
   private publish(file: string, value: Record<string, unknown>): void {
     // Generate only validated source schemas; never edit the watched destination in place.

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import { LogManager } from '../log/LogManager';
 import { Database } from '../db/Database';
 import { AppSettings } from '../../types';
@@ -18,6 +19,9 @@ interface OwnershipState {
   managedServer?: string;
   originalSnapshot: ProxySnapshot;
   updatedAt: number;
+  ownerPid?: number;
+  managedServers?: string[];
+  transactionId?: string;
 }
 
 export class SystemProxy {
@@ -25,6 +29,12 @@ export class SystemProxy {
   private static stateFile: string = '';
   private static corporateRouting = false;
   private static recoveryReady = false;
+  private static mutation: Promise<unknown> = Promise.resolve();
+  private static exclusive<T>(job: () => Promise<T>): Promise<T> {
+    const next = this.mutation.then(job, job);
+    this.mutation = next.catch(() => {});
+    return next;
+  }
   public static setCorporateRouting(enabled:boolean):void { this.corporateRouting=enabled; }
   public static corporateBypassList():string { return 'localhost;127.*;[::1]'; }
   public static async initializeRecovery(): Promise<boolean> {
@@ -128,7 +138,24 @@ export class SystemProxy {
         'system'
       );
     }
-    return existing?.managedByBlueWing ? existing.originalSnapshot : current;
+    if (existing?.managedByBlueWing) {
+      const owned = new Set([existing.managedServer, ...(existing.managedServers || [])]);
+      const original = structuredClone(existing.originalSnapshot);
+      if (original.connections && current.connections) {
+        const connections = new Map(original.connections.map(c => [c.name, c]));
+        for (const c of current.connections) {
+          if (!owned.has(c.server) || (c.flags & 2) === 0) {
+            connections.set(c.name, c);
+            if (c.name === '') Object.assign(original, { enabled: (c.flags & 2) !== 0, server: c.server, override: c.bypass });
+          }
+        }
+        original.connections = [...connections.values()];
+      } else if (!owned.has(current.server)) {
+        return current;
+      }
+      return original;
+    }
+    return current;
   }
 
   /**
@@ -138,132 +165,127 @@ export class SystemProxy {
     host: string = '127.0.0.1',
     port: number = 2080,
     bypassLan: boolean = true,
-    customBypassList?: string
+    customBypassList?: string,
+    isCurrent: () => boolean = () => true,
   ): Promise<boolean> {
-    try {
-      const recoveryReady = await this.initializeRecovery();
-      if (WinInetProxy.available() && !recoveryReady) {
-        throw new Error('网络恢复守护启动失败，未启用系统代理');
-      }
-      const original = await this.captureOriginalSnapshot();
-      const proxyServer = `${host}:${port}`;
+    return this.exclusive(async () => {
+      let transition: OwnershipState | undefined, previous: OwnershipState | null = null;
+      try {
+        if (!isCurrent()) return false;
+        const recoveryReady = await this.initializeRecovery();
+        if ((process.platform === 'win32' || WinInetProxy.available()) && !recoveryReady) {
+          throw new Error('网络恢复守护启动失败，未启用系统代理');
+        }
+        previous = this.loadOwnership();
+        const original = await this.captureOriginalSnapshot();
+        const proxyServer = `${host}:${port}`;
+        const servers = [...new Set([...(previous?.managedByBlueWing ? [previous.managedServer, ...(previous.managedServers || [])] : []), proxyServer].filter((s): s is string => !!s))];
+        if (servers.length > 32) throw new Error('待恢复的代理端口过多，请先停止连接以恢复系统网络');
+        // A previous BlueWing port must never become the user's "original" proxy.
+        if (original.server && servers.includes(original.server)) { original.enabled = false; original.server = undefined; }
+        original.connections = original.connections?.map(c => servers.includes(c.server)
+          ? { ...c, flags: (c.flags & ~2) | 1, server: '' } : c);
 
-      let bypassList = bypassLan
-        ? '<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*'
-        : '<local>;localhost;127.*';
+        let bypassList = bypassLan
+          ? '<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*'
+          : '<local>;localhost;127.*';
 
-      if (customBypassList && customBypassList.trim()) {
-        const customParts = customBypassList
-          .split(/[\r\n,;，；]+/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-        // Windows 绕过匹配中 *.example.com 只覆盖子域名,自动补裸域保证整站直连
-        for (const part of [...customParts]) {
-          if (part.startsWith('*.')) {
-            const bare = part.slice(2);
-            if (bare && !customParts.includes(bare)) {
-              customParts.push(bare);
+        if (customBypassList && customBypassList.trim()) {
+          const customParts = customBypassList
+            .split(/[\r\n,;，；]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          // Windows 绕过匹配中 *.example.com 只覆盖子域名,自动补裸域保证整站直连
+          for (const part of [...customParts]) {
+            if (part.startsWith('*.')) {
+              const bare = part.slice(2);
+              if (bare && !customParts.includes(bare)) {
+                customParts.push(bare);
+              }
             }
           }
+          if (customParts.length > 0) {
+            bypassList = `${bypassList};${customParts.join(';')}`;
+          }
         }
-        if (customParts.length > 0) {
-          bypassList = `${bypassList};${customParts.join(';')}`;
+
+        // Company domains, including single-label hosts and private IPs, must enter sing-box.
+        // Non-company LAN still uses its DIRECT rules there.
+        if (this.corporateRouting) bypassList = this.corporateBypassList();
+        if (!isCurrent()) return false;
+
+        // Persist intent before touching WinINet. A crash between these steps
+        // must still leave enough information for the independent recovery helper.
+        const intent: OwnershipState = {managedByBlueWing:true,managedServer:proxyServer,managedServers:servers,originalSnapshot:original,updatedAt:Date.now(),ownerPid:process.pid,transactionId:randomUUID()};
+        if (!this.saveOwnership(intent)) {
+          throw new Error('无法保存网络恢复记录，未启用系统代理');
         }
-      }
+        transition = intent;
 
-      // Company domains, including single-label hosts and private IPs, must enter sing-box.
-      // Non-company LAN still uses its DIRECT rules there.
-      if (this.corporateRouting) bypassList = this.corporateBypassList();
+        if (WinInetProxy.available()) {
+          await WinInetProxy.run({action:'enable',server:proxyServer,bypass:bypassList});
+          // WinINet verified every connection. Retire the old addresses only
+          // after that confirmation; a failed commit still leaves both owned.
+          if (this.loadOwnership()?.transactionId === intent.transactionId)
+            this.saveOwnership({ ...intent, managedServers: [proxyServer], updatedAt: Date.now() });
+          LogManager.getInstance().addLog('info',`Windows 连接级系统代理已同步并回读验证 (${proxyServer})`,'system');
+          return true;
+        }
 
-      // Persist intent before touching WinINet. A crash between these steps
-      // must still leave enough information for the independent recovery helper.
-      if (!this.saveOwnership({managedByBlueWing:true,managedServer:proxyServer,originalSnapshot:original,updatedAt:Date.now()})) {
-        throw new Error('无法保存网络恢复记录，未启用系统代理');
-      }
+        // Safe parameterized registry updates (No shell injection possible)
+        await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f']);
+        await this.execReg(['add', this.REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyServer, '/f']);
+        await this.execReg(['add', this.REG_KEY, '/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', bypassList, '/f']);
 
-      if (WinInetProxy.available()) {
-        await WinInetProxy.run({action:'enable',server:proxyServer,bypass:bypassList});
-        LogManager.getInstance().addLog('info',`Windows 连接级系统代理已同步并回读验证 (${proxyServer})`,'system');
+        // Refresh system WinINet
+        await this.refreshWinINet();
+        LogManager.getInstance().addLog(
+          'info',
+          `Windows 系统代理已开启 (服务器: ${proxyServer})`,
+          'system'
+        );
         return true;
+      } catch (e: any) {
+        if (transition && this.loadOwnership()?.transactionId === transition.transactionId) {
+          this.saveOwnership({ ...transition, managedServer: previous?.managedByBlueWing ? previous.managedServer : transition.managedServer, updatedAt: Date.now() });
+        }
+        LogManager.getInstance().addLog('error', `开启系统代理失败: ${e.message}`, 'system');
+        return false;
       }
-
-      // Safe parameterized registry updates (No shell injection possible)
-      await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f']);
-      await this.execReg(['add', this.REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyServer, '/f']);
-      await this.execReg(['add', this.REG_KEY, '/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', bypassList, '/f']);
-
-      // Refresh system WinINet
-      await this.refreshWinINet();
-      LogManager.getInstance().addLog(
-        'info',
-        `Windows 系统代理已开启 (服务器: ${proxyServer})`,
-        'system'
-      );
-      return true;
-    } catch (e: any) {
-      LogManager.getInstance().addLog('error', `开启系统代理失败: ${e.message}`, 'system');
-      return false;
-    }
+    });
   }
 
   /**
    * Disable Windows system proxy safely
    */
   public static async disable(): Promise<boolean> {
-    try {
-      if (WinInetProxy.available()) {
-        const ownership=this.loadOwnership();
-        if(ownership?.managedServer)await WinInetProxy.run({action:'disable',managedServer:ownership.managedServer});
-        if(ownership){ownership.managedByBlueWing=false;this.saveOwnership(ownership);}
-        return true;
-      }
-      await this.execReg(['add', this.REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '0', '/f']);
-
-      // 清除死回环地址:仅当 ProxyServer 是本应用写入的受管服务器时删除,
-      // 不触碰用户自有代理配置;避免禁用后注册表残留 127.0.0.1:<port> 死值
-      const state = this.loadOwnership();
-      if (state?.managedServer) {
-        const current = await this.getFullRegistryStatus();
-        if (current.server === state.managedServer) {
-          await this.execReg(['delete', this.REG_KEY, '/v', 'ProxyServer', '/f']);
-        }
-      }
-      await this.refreshWinINet();
-
-      if (state) {
-        state.managedByBlueWing = false;
-        this.saveOwnership(state);
-      }
-
-      LogManager.getInstance().addLog('info', 'Windows 系统代理已关闭', 'system');
-      return true;
-    } catch (e: any) {
-      LogManager.getInstance().addLog('error', `关闭系统代理失败: ${e.message}`, 'system');
-      return false;
-    }
+    // Turning BlueWing off releases its takeover and restores the user's
+    // snapshot. Do not discard ownership before that restoration succeeds.
+    return this.restoreOriginal();
   }
 
   /**
    * Restore user's original proxy configuration upon quitting BlueWing Connect with ownership verification
    */
-  public static async restoreOriginal(): Promise<void> {
+  public static async restoreOriginal(): Promise<boolean> {
+    return this.exclusive(() => this.restoreOwned());
+  }
+  private static async restoreOwned(): Promise<boolean> {
     const state = this.loadOwnership();
-    if (!state) {
-      await this.disable();
-      return;
-    }
-    if (!state.managedByBlueWing || !state.managedServer) return;
+    if (!state?.managedByBlueWing || !state.managedServer) return true;
 
     try {
       // WinINet ownership is per connection. A changed LAN proxy must not
       // prevent restoring an independently owned dial-up/VPN connection.
-      if (state.originalSnapshot?.connections && WinInetProxy.available()) {
-        const connections = state.originalSnapshot.connections.map(c =>
-          c.server === state.managedServer && (c.flags & 2) !== 0
+      if (WinInetProxy.available()) {
+        const snapshot = state.originalSnapshot;
+        const owned = new Set([state.managedServer, ...(state.managedServers || [])]);
+        const connections = (snapshot?.connections || [{ name: '', flags: snapshot?.enabled ? 3 : 1, server: snapshot?.server || '', bypass: snapshot?.override || '', pac: '' }]).map(c =>
+          owned.has(c.server) && (c.flags & 2) !== 0
             ? { ...c, flags: (c.flags & ~2) | 1, server: '' } : c);
-        await WinInetProxy.run({ action: 'restore', managedServer: state.managedServer, connections });
+        await WinInetProxy.run({ action: 'restore', managedServer: state.managedServer, managedServers: state.managedServers, connections });
         this.saveOwnership(null);
-        return;
+        return true;
       }
       // 1. Check ownership: Verify current registry proxy server matches what BlueWing Connect set
       const current = await this.getFullRegistryStatus();
@@ -274,7 +296,7 @@ export class SystemProxy {
           'system'
         );
         this.saveOwnership(null);
-        return;
+        return true;
       }
 
       // 2. Restore original snapshot
@@ -303,9 +325,26 @@ export class SystemProxy {
 
       await this.refreshWinINet();
       this.saveOwnership(null);
+      return true;
     } catch (e: any) {
       LogManager.getInstance().addLog('warn', `恢复系统原始代理失败: ${e.message}`, 'system');
+      return false;
     }
+  }
+
+  /** Recheck listener and ownership in the native helper; never revert a new core. */
+  public static async recoverIfUnavailable(): Promise<boolean> {
+    return this.exclusive(async () => {
+      try {
+        if (WinInetProxy.available()) {
+          await WinInetProxy.run({ action: 'recover', ownershipFile: this.getStateFilePath() });
+        }
+        return true;
+      } catch (error) {
+        LogManager.getInstance().addLog('warn', `网络自动恢复失败：${error instanceof Error ? error.message : String(error)}`, 'system');
+        return false;
+      }
+    });
   }
 
   /**
@@ -314,16 +353,9 @@ export class SystemProxy {
   public static async checkAndCleanResidual(expectedPort: number = 2080): Promise<boolean> {
     try {
       await this.initializeRecovery();
-      const current = await this.getFullRegistryStatus();
-      if (current.enabled && current.server && current.server.includes(`127.0.0.1:${expectedPort}`)) {
-        LogManager.getInstance().addLog(
-          'warn',
-          `检测到上次异常退出残留的 青翼连接 系统代理配置 (127.0.0.1:${expectedPort})，正在自动安全重置...`,
-          'system'
-        );
-        await this.restoreOriginal();
-        return true;
-      }
+      const owned = this.loadOwnership()?.managedByBlueWing === true;
+      await this.recoverIfUnavailable();
+      return owned && this.loadOwnership()?.managedByBlueWing !== true;
     } catch {}
     return false;
   }

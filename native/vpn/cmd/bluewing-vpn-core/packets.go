@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"sync"
+	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -33,6 +34,22 @@ type packetTUN struct {
 	events chan tun.Event
 	once   sync.Once
 	inject func([]byte)
+}
+
+// A sing-tun ICMP return path dispatches by the transport identifier. Send one
+// complete datagram so continuation fragments cannot be misread as ICMP headers.
+// This assembly belongs to one VPN stack/session, not the reusable endpoint.
+func (ep *endpoint) returnPackets() func([]byte) {
+	var icmpReplies packetFragments
+	return func(b []byte) {
+		if len(b) > 9 && b[9] == 1 && ep.icmpPacket != nil {
+			if packet := icmpReplies.Accept(b, time.Now()); packet != nil {
+				ep.icmpPacket.send(packet)
+			}
+		} else {
+			ep.packet.send(b)
+		}
+	}
 }
 
 func (t *packetTUN) File() *os.File           { return nil }
@@ -214,7 +231,7 @@ func (s *session) allowedPacket(b []byte) bool {
 	// Full-network resources also authorize ICMP and IPv4 fragments. Port-only
 	// company restrictions remain authoritative and cannot be bypassed here.
 	for _, t := range append(append([]target{}, s.p.Targets...), s.resources.Targets...) {
-		if t.GuardOnly || t.Network != "" {
+		if t.GuardOnly || (t.Network != "" && t.Network != network) {
 			continue
 		}
 		full := len(t.Ports) == 0
@@ -225,7 +242,7 @@ func (s *session) allowedPacket(b []byte) bool {
 			continue
 		}
 		t.Ports = nil
-		if targetMatch(t, ip.String(), 0, "", false) {
+		if targetMatch(t, ip.String(), 0, network, false) {
 			return true
 		}
 	}
@@ -245,7 +262,11 @@ func (c *controller) packetEndpoints() []map[string]any {
 	}
 	for id, ep := range c.endpoints {
 		if ep.packet != nil {
-			result = append(result, map[string]any{"profileId": id, "port": ep.packet.port, "publicKey": ep.packet.publicKey, "loopbackInterface": loopback})
+			value := map[string]any{"profileId": id, "port": ep.packet.port, "publicKey": ep.packet.publicKey, "loopbackInterface": loopback}
+			if ep.icmpPacket != nil {
+				value["icmp"] = map[string]any{"port": ep.icmpPacket.port, "publicKey": ep.icmpPacket.publicKey}
+			}
+			result = append(result, value)
 		}
 	}
 	return result

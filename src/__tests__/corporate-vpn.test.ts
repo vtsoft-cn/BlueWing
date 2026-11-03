@@ -59,6 +59,38 @@ function temp(t: any) {
   return dir;
 }
 
+test('damaged resource caches are isolated independently and healthy company guards survive', t => {
+  const dir = temp(t), repo = new ProfileRepository(dir);
+  const p = repo.save(sample());
+  const folder = path.join(dir, 'vpn-runtime'); fs.mkdirSync(folder, { recursive: true });
+  const protectedTarget = { domains: ['retained.corp.example'], cidrs: ['10.66.0.0/16'] };
+  fs.writeFileSync(path.join(folder, 'known-targets.json'), '\uFEFF' + JSON.stringify({ [p.id]: [protectedTarget] }));
+  fs.writeFileSync(path.join(folder, 'resources.json'), '{');
+  const policy = new CorporatePolicy(dir);
+  assert.equal(policy.cacheWarnings.length, 1);
+  assert.ok(fs.readdirSync(folder).some(file => file.startsWith('resources.json.invalid-')));
+  policy.begin(p.id, repo.list());
+  assert.ok(fs.readFileSync(policy.runtime().profiles[0].guardPath, 'utf8').includes('10.66.0.0/16'));
+  policy.update(p.id, { targets: [protectedTarget], hosts: {}, dnsServers: ['10.66.0.53'] }, repo.list());
+  const restarted = new CorporatePolicy(dir);
+  assert.equal(restarted.cacheWarnings.length, 0);
+  assert.equal(restarted.getResources(p.id)?.dnsServers[0], '10.66.0.53');
+});
+
+test('one invalid cache entry does not discard another company resources or break ordinary startup', t => {
+  const dir = temp(t), repo = new ProfileRepository(dir), p = repo.save(sample());
+  const folder = path.join(dir, 'vpn-runtime'); fs.mkdirSync(folder, { recursive: true });
+  const valid = { targets: [{ domains: ['kept.corp.example'], cidrs: ['10.22.0.0/16'] }], hosts: {}, dnsServers: ['10.22.0.53'] };
+  fs.writeFileSync(path.join(folder, 'known-targets.json'), '[]');
+  fs.writeFileSync(path.join(folder, 'resources.json'), JSON.stringify({ [p.id]: valid, broken: { targets: [{}] } }));
+  const policy = new CorporatePolicy(dir);
+  assert.equal(policy.cacheWarnings.length, 1, 'Recovery notices should be deduplicated');
+  assert.deepEqual(policy.getResources(p.id)?.dnsServers, ['10.22.0.53']);
+  policy.prepare(repo.list());
+  assert.equal(policy.runtime().profiles.length, 1);
+  assert.equal(policy.getResources('broken'), undefined);
+});
+
 test('Automatic private discovery defaults on, preserves opt-out and never accepts public scope', t => {
   const repo = new ProfileRepository(temp(t));
   const p = repo.save(sample());
@@ -227,7 +259,7 @@ test('SoftEther packet routes are ready for the first unknown private ICMP/UDP p
   const policy = new CorporatePolicy(repo.dir);
   const before = policy.prepare(repo.list()).profiles[0].packet!;
   assert.equal(Buffer.from(before.privateKey, 'base64').length, 32);
-  policy.setPacketEndpoint(p.id, { port: 32001, publicKey: before.publicKey, loopbackInterface: 'fixture-loopback' }, repo.list());
+  policy.setPacketEndpoint(p.id, { port: 32001, publicKey: before.publicKey, loopbackInterface: 'fixture-loopback', icmp: { port: 32002, publicKey: before.icmp!.publicKey } }, repo.list());
   policy.update(p.id, { targets: [{ domains: [], cidrs: ['192.168.30.0/24'], ports: ['1:65535'] }], hosts: {}, dnsServers: ['192.168.30.1'] }, repo.list());
   policy.setProbe(p.id, 'cold-first-packet', repo.list());
   const runtime = policy.runtime(), r = runtime.profiles[0];
@@ -236,9 +268,15 @@ test('SoftEther packet routes are ready for the first unknown private ICMP/UDP p
   const endpoint = config.endpoints.find((e: any) => e.tag === `corp-packet-${p.id}`);
   assert.equal(endpoint.system, false);
   assert.equal(endpoint.bind_interface, 'fixture-loopback');
-  const discovery = config.route.rules.find((rule: any) => rule.outbound === endpoint.tag && JSON.stringify(rule).includes('192.168.0.0/16'));
-  assert.ok(discovery && JSON.stringify(discovery).includes('icmp') && JSON.stringify(discovery).includes('udp'));
-  assert.ok(config.route.rules.indexOf(discovery) < config.route.rules.findIndex((rule: any) => rule.ip_is_private));
+  const icmp = config.endpoints.find((e: any) => e.tag === `corp-packet-icmp-${p.id}`);
+  assert.deepEqual(icmp.address, ['0.0.0.0/32'], 'A concrete address makes sing-tun synthesize ICMP replies');
+  assert.notEqual(icmp.private_key, endpoint.private_key, 'Independent return paths must not share a roaming peer');
+  assert.notEqual(icmp.peers[0].port, endpoint.peers[0].port);
+  for (const [network, ep] of [['udp', endpoint], ['icmp', icmp]] as const) {
+    const discovery = config.route.rules.find((rule: any) => rule.outbound === ep.tag && JSON.stringify(rule).includes('192.168.0.0/16'));
+    assert.ok(discovery && JSON.stringify(discovery).includes(network));
+    assert.ok(config.route.rules.indexOf(discovery) < config.route.rules.findIndex((rule: any) => rule.ip_is_private));
+  }
   assert.deepEqual(policy.discovery.targets(p), [], 'First packet must not require previous observations');
   const known = JSON.parse(fs.readFileSync(r.routePath, 'utf8')).rules;
   assert.ok(known.some((rule: any) => rule.network?.includes('icmp') && !rule.port_range), 'Full network resources must allow ICMP without a TCP port');

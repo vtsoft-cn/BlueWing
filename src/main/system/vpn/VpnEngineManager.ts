@@ -56,6 +56,7 @@ export class VpnEngineManager extends EventEmitter {
   private custodyTimer: NodeJS.Timeout | null = null;
   private watchdogTimer: NodeJS.Timeout | null = null;
   private switching = false;
+  private generation = 0;
 
   /** 由主进程注入的运行环境判定(避免反向依赖 index.ts / SingBoxManager) */
   private envProbe: () => { coreRunning: boolean; tunActive: boolean; isAdmin: boolean } = () => ({
@@ -94,7 +95,7 @@ export class VpnEngineManager extends EventEmitter {
    *  用户自定义域名(customDomains)并入 domainSuffixes(domain_suffix 语义
    *  即后缀匹配,与 corporate 自定义域名行为一致);hosts 原样透传 */
   public getSplitConfig(): VpnSplitConfig | null {
-    if (!this.runtime || this.runtime.state !== 'connected') return null;
+    if (!this.runtime || !['connected', 'enabled'].includes(this.runtime.state)) return null;
     const db = Database.getInstance();
     const profile = db.getVpnProfiles().find((p) => p.id === this.runtime?.profileId);
     const customDomains = Array.isArray(profile?.customDomains) ? profile!.customDomains!.filter(Boolean) : [];
@@ -137,13 +138,15 @@ export class VpnEngineManager extends EventEmitter {
     }
 
     this.switching = true;
+    const generation = ++this.generation;
+    const isCurrent = () => generation === this.generation;
     try {
       if (this.runtime && this.runtime.state !== 'disconnected') {
-        await this.disconnectInternal('切换 VPN 档案');
+        await this.disconnectInternal('切换 VPN 档案', false, false);
       }
+      if (!isCurrent()) return false;
 
-      // WireGuard:sing-box 原生隧道,无引擎进程——校验后直接置为已连接,
-      // 由主进程重载核心注入 vpn-wg endpoint 与分流规则(隧道随核心建立)
+      // An enabled configuration does not attest endpoint readiness or handshake.
       if (profile.type === 'wireguard') {
         const missing: string[] = [];
         if (!profile.server) missing.push('服务器地址');
@@ -172,12 +175,12 @@ export class VpnEngineManager extends EventEmitter {
         this.setRuntime({
           profileId: profile.id,
           profileName: profile.name,
-          state: 'connected',
+          state: 'enabled',
           routes: wgRoutes,
           dnsServers: profile.corpDns ? [profile.corpDns] : [],
           domainSuffixes: profile.dnsSuffix ? [profile.dnsSuffix] : [],
           since: Date.now(),
-          message: '内网流量经 WireGuard 隧道,其余流量走代理节点',
+          message: 'WireGuard 配置已启用；核心运行时承载流量，尚未验证对端握手。',
         });
         db.upsertVpnProfile({ ...profile, lastConnected: Date.now() });
         LogManager.getInstance().addLog(
@@ -190,8 +193,9 @@ export class VpnEngineManager extends EventEmitter {
 
       // softether 等别名类型解析为实际兼容端点后再分派引擎(凭据/补充网段原样继承)
       const engineProfile = effectiveEngineProfile(profile);
-      this.engine = this.createEngine(engineProfile);
-      if (!this.engine) {
+      const engine = this.createEngine(engineProfile);
+      this.engine = engine;
+      if (!engine) {
         LogManager.getInstance().addLog('error', `不支持的 VPN 类型: ${profile.type}`, 'system');
         return false;
       }
@@ -214,7 +218,7 @@ export class VpnEngineManager extends EventEmitter {
         profile: engineProfile,
         mfaCode: extra?.mfaCode,
         onConnected: () => {
-          if (this.profileId !== profile.id) return;
+          if (!isCurrent() || this.engine !== engine) return;
           this.setRuntime({
             ...(this.runtime as VpnRuntimeInfo),
             state: 'connected',
@@ -226,18 +230,18 @@ export class VpnEngineManager extends EventEmitter {
           this.startCustodyMonitor();
         },
         onNetworkInfo: (info: EngineNetworkInfo) => {
-          if (this.profileId !== profile.id) return;
+          if (!isCurrent() || this.engine !== engine) return;
           this.applyNetworkInfo(profile, info);
         },
         onError: (message) => {
-          if (this.profileId !== profile.id) return;
+          if (!isCurrent() || this.engine !== engine) return;
           this.setRuntime({ ...(this.runtime as VpnRuntimeInfo), state: 'error', message });
           LogManager.getInstance().addLog('error', `VPN 连接失败: ${message}`, 'system');
           this.clearWatchdog();
           void this.disconnectInternal('连接失败清理', true);
         },
         onEngineExit: (message) => {
-          if (this.profileId !== profile.id) return;
+          if (!isCurrent() || this.engine !== engine) return;
           LogManager.getInstance().addLog('warn', `VPN 连接中断: ${message}`, 'system');
           this.setRuntime({
             ...(this.runtime as VpnRuntimeInfo),
@@ -245,16 +249,26 @@ export class VpnEngineManager extends EventEmitter {
             message: `连接中断: ${message}`,
           });
           this.engine = null;
+          this.generation++;
+          this.clearWatchdog();
           this.stopCustodyMonitor();
         },
         onLog: (level, message) => {
+          if (!isCurrent()) return;
           LogManager.getInstance().addLog(level, `[VPN] ${message}`, 'system');
         },
       };
 
       this.armWatchdog();
-      await this.engine.start(ctx);
-      return true;
+      try { await engine.start(ctx); }
+      catch (error) {
+        if (isCurrent()) {
+          this.setRuntime({ ...this.runtime!, state: 'error', message: error instanceof Error ? error.message : 'VPN 引擎启动失败' });
+          await this.disconnectInternal('引擎启动失败', true);
+        }
+        return false;
+      }
+      return isCurrent();
     } finally {
       this.switching = false;
     }
@@ -268,7 +282,9 @@ export class VpnEngineManager extends EventEmitter {
    * preserveError:连接失败/超时路径的清理不把 error 态改写成 disconnected——
    * 否则用户永远看不到失败原因,页面直接回到"未连接"。
    */
-  private async disconnectInternal(reason: string, preserveError = false): Promise<void> {
+  private async disconnectInternal(reason: string, preserveError = false, invalidate = true): Promise<void> {
+    if (invalidate) this.generation++;
+    this.profileId = '';
     this.clearWatchdog();
     this.stopCustodyMonitor();
     const engine = this.engine;
@@ -368,6 +384,7 @@ export class VpnEngineManager extends EventEmitter {
   }
 
   private async runCustodyPass(assumeInstalledRoutes: boolean): Promise<void> {
+    const generation = this.generation;
     if (!assumeInstalledRoutes) return; // openvpn(--route-nopull)从未装过 OS 路由
     if (this.custodyDisabledReason) return;
     const rt = this.runtime;
@@ -387,11 +404,13 @@ export class VpnEngineManager extends EventEmitter {
 
     try {
       const adapter = await WindowsNetQuery.findAdapterByName(rt.adapterName);
-      if (!adapter) return;
+      if (!adapter || generation !== this.generation) return;
       const network = await WindowsNetQuery.getAdapterNetwork(adapter.interfaceIndex);
+      if (generation !== this.generation) return;
       const { corp } = classifyAdapterRoutes(network.routes, network.connectedPrefix);
       if (corp.length === 0) return; // 路由已移交/本就未装
       const res = await WindowsNetQuery.handOverRoutes(adapter.interfaceIndex, corp, rt.dnsServers);
+      if (generation !== this.generation) return;
       if (res.failed > 0 && res.removed === 0) {
         this.custodyDisabledReason = 'remove-failed';
         LogManager.getInstance().addLog('warn', '内网路由移交失败,保持系统路由直通(不影响可用性)', 'system');

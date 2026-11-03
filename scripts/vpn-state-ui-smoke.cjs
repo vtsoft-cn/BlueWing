@@ -35,9 +35,10 @@ app.disableHardwareAcceleration();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const profile = {id:'fixture',name:'状态同步回归',protocol:'softether',gateway:{host:'vpn.example.com',port:5555},username:'fixture',authMethod:'auth/psw',loginDomain:'VPN',rememberPassword:true,rememberSession:false,tls:{},targets:[],hosts:{},bindInterface:'',socksPort:21080,dnsPort:21081};
 let state = {state:'idle',profileId:profile.id,generation:0,coreAvailable:true,requiresCoreRebuild:false};
+let warnings = [];
 let window, connectCalls = 0, disconnectCalls = 0, holdCount = 0;
 const held = [];
-const snapshot = () => ({profiles:[profile],state,states:{[profile.id]:state},defaultProfileId:state.state==='connected'?profile.id:undefined,encryptionAvailable:true,passwordSaved:{[profile.id]:true}});
+const snapshot = () => ({profiles:[profile],state,states:{[profile.id]:state},defaultProfileId:state.state==='connected'?profile.id:undefined,encryptionAvailable:true,passwordSaved:{[profile.id]:true},warnings});
 function change(next) {
   state = {...state, ...next};
   window.webContents.send('vpn:state', state);
@@ -73,6 +74,10 @@ app.whenReady().then(async () => {
   const connected = 'document.querySelector(".vpn-access")?.innerText.includes("VPN 隧道已连接") && document.querySelector(".vpn-multi-summary strong")?.textContent==="1"';
   await window.loadFile(path.join(__dirname, 'index.html'));
   await wait(hasButton('连接 VPN'));
+  warnings = ['上次保存的部分 VPN 网络信息无法读取，公网连接可继续使用。']; change({});
+  await wait('document.querySelector(".vpn-notice.warning")?.innerText.includes("公网连接可继续使用")');
+  assert.equal(await js(hasButton('连接 VPN')), true, 'A cache notice blocked VPN login');
+  warnings = []; change({});
   await clickButton('连接 VPN');
   await wait('document.querySelector(".vpn-access")?.innerText.includes("正在认证")');
   assert.equal(await js(hasButton('连接 VPN')), false);
@@ -111,8 +116,11 @@ app.whenReady().then(async () => {
   await wait(hasButton('连接 VPN'));
   await wait('document.querySelector(".vpn-multi-summary strong")?.textContent==="0"');
   assert.equal(disconnectCalls, 1);
+  change({state:'failed',error:'PUBLIC_CORE_CHANGED',trafficProtected:true});
+  await wait('document.querySelector(".vpn-access")?.innerText.includes("已知公司资源仍保持保护")');
+  assert.equal(await js(hasButton('连接 VPN')), true);
   assert.deepEqual(errors, []);
-  console.log('PASS: real preload + React: connection status, counts, disconnect, page switching, event isolation, stale snapshots');
+  console.log('PASS: real preload + React: connection status, counts, disconnect, page switching, event isolation, stale snapshots, cache notices, interrupted core');
 }).then(() => app.quit()).catch(error => { console.error(error.stack); app.exit(1); });
 `.replace('__PRELOAD__', JSON.stringify(preload)));
 const child = spawn(binary, [path.join(out, 'main.cjs')], { cwd: root, windowsHide: true, stdio: 'inherit' });

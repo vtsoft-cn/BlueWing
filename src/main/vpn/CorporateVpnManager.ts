@@ -9,6 +9,7 @@ import { CorporateVpnSession, PublicCore, signature } from './CorporateVpnSessio
 import { PrivateRouteProxy } from './PrivateRouteProxy';
 import { VpnDiagnostics } from './VpnDiagnostics';
 import { orderedVpnProfiles } from '../../utils/vpnRouting';
+import { profileIdentity, credentialKey } from './ProfileIdentity';
 
 /** One native process per profile: upstream TLS/auth globals never cross companies. */
 export class CorporateVpnManager extends EventEmitter {
@@ -21,6 +22,9 @@ export class CorporateVpnManager extends EventEmitter {
   private mutation: Promise<unknown> = Promise.resolve();
   private privateProxy: PrivateRouteProxy;
   private disposing = false;
+  private intentEpoch = 0;
+  private profileEpochs = new Map<string, number>();
+  private sessionIdentities = new Map<string, string>();
   constructor(
     readonly profiles: ProfileRepository,
     readonly policy: CorporatePolicy,
@@ -58,6 +62,7 @@ export class CorporateVpnManager extends EventEmitter {
       this.seedUsed = true;
       session = new CorporateVpnSession(this.profiles, this.policy, this.vault, core, this.publicCore, this.retryDelays, id);
       this.sessions.set(id, session);
+      this.sessionIdentities.set(id, profileIdentity(this.profiles.get(id)));
       session.on('state', () => this.changed());
       if (this.registeredRuntime) session.publicCoreStarted(this.registeredRuntime);
     }
@@ -84,9 +89,10 @@ export class CorporateVpnManager extends EventEmitter {
     return {
       profiles, states, defaultProfileId: profiles.find(p => this.policy.isActive(p.id))?.id,
       state: { ...aggregate, requiresCoreRebuild, coreAvailable: this.core.available() }, encryptionAvailable: this.vault.available(),
-      passwordSaved: Object.fromEntries(profiles.map(p => [p.id, p.rememberPassword && this.vault.has(`${p.id}:password:${p.protocol}:${p.gateway.host}:${p.gateway.port}:${p.username}:${p.loginDomain}:${p.authMethod}`)])),
+      passwordSaved: Object.fromEntries(profiles.map(p => [p.id, p.rememberPassword && this.vault.has(credentialKey(p, 'password'))])),
       diagnostics: Object.fromEntries(profiles.map(p => [p.id, this.diagnostics.info(p)])),
       discoveredTargets: Object.fromEntries(profiles.map(p => [p.id, this.policy.discovery.targets(p)])),
+      warnings: [...this.policy.cacheWarnings, ...this.vault.migrationWarnings(profiles)],
     };
   }
   async prepareRuntime(_allowReassign = false): Promise<VpnRuntime> {
@@ -103,15 +109,23 @@ export class CorporateVpnManager extends EventEmitter {
     for (const session of this.sessions.values()) session.publicCoreStarted(runtime);
     this.changed();
   }
-  publicCoreStopped(): void {
+  publicCoreStopped(unexpected = false): void {
     this.registered = ''; this.registeredRuntime = undefined;
-    for (const session of this.sessions.values()) session.publicCoreStopped();
+    for (const session of this.sessions.values()) session.publicCoreStopped(unexpected);
     this.changed();
   }
   async connect(id: string, password: string): Promise<void> {
-    return this.exclusive(async () => { if (this.disposing) throw new Error('VPN_MANAGER_STOPPING'); await this.prepareRuntime(); await this.session(id).connect(id, password); });
+    const epoch = this.intentEpoch, profileEpoch = this.profileEpochs.get(id) || 0;
+    const current = () => !this.disposing && epoch === this.intentEpoch && profileEpoch === (this.profileEpochs.get(id) || 0);
+    return this.exclusive(async () => {
+      if (!current()) return;
+      await this.prepareRuntime();
+      if (current()) await this.session(id).connect(id, password, current);
+    });
   }
   async disconnect(id?: string): Promise<void> {
+    if (id) this.profileEpochs.set(id, (this.profileEpochs.get(id) || 0) + 1);
+    else this.intentEpoch++;
     if (id) {
       this.profiles.get(id);
       const session = this.sessions.get(id);
@@ -127,18 +141,22 @@ export class CorporateVpnManager extends EventEmitter {
     return this.exclusive(async () => {
       const id = (input as VpnProfile)?.id; this.requireEditable(id);
       const result = await (id && this.sessions.get(id) || this.editorSession()).save(input);
+      if (id && this.sessions.has(id)) this.sessionIdentities.set(id, profileIdentity(result.profile));
       this.changed(); return { ...result, requiresCoreRebuild: signature(this.policy.runtime()) !== this.registered };
     });
   }
   async remove(id: string): Promise<void> {
     return this.exclusive(async () => {
       this.requireEditable(id); await this.editorSession().remove(id);
-      const session = this.sessions.get(id); this.sessions.delete(id); await session?.dispose(); this.changed();
+      const session = this.sessions.get(id); this.sessions.delete(id); this.sessionIdentities.delete(id); await session?.dispose(); this.changed();
     });
   }
   reloadProfiles(): void {
     this.profiles.reload(); const ids = new Set(this.profiles.list().map(p => p.id));
-    for (const [id, session] of this.sessions) if (!ids.has(id)) { this.sessions.delete(id); session.dispose().catch(() => {}); }
+    for (const [id, session] of this.sessions) if (!ids.has(id) || this.sessionIdentities.get(id) !== profileIdentity(this.profiles.get(id))) {
+      this.profileEpochs.set(id, (this.profileEpochs.get(id) || 0) + 1);
+      this.sessions.delete(id); this.sessionIdentities.delete(id); session.dispose().catch(() => {});
+    }
     this.policy.prepare(this.profiles.list()); this.changed();
   }
   async discover(id: string) { this.requireEditable(id); return this.session(id).discover(id); }

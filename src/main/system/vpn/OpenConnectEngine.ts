@@ -196,6 +196,7 @@ export class OpenConnectEngine implements VpnEngine {
     }
 
     const network = await WindowsNetQuery.getAdapterNetwork(adapter.interfaceIndex);
+    if (this.stopped) return;
     const { corp, fullTunnel } = classifyAdapterRoutes(network.routes, network.connectedPrefix);
     // 直连子网(含 VPN 网关/DNS)补回内网段供分流(classify 为 custody 安全已剔除)
     const routes = corp.concat(network.connectedPrefix && !corp.includes(network.connectedPrefix) ? [network.connectedPrefix] : []);

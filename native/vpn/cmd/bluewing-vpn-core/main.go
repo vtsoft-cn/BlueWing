@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"container/list"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -35,7 +36,7 @@ import (
 const protocolVersion = 1
 const maxFrame = 4 * 1024 * 1024
 
-var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.5-ip-forwarding"
+var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.9-network-audit"
 
 type target struct {
 	GuardOnly bool     `json:"guardOnly,omitempty"`
@@ -79,6 +80,7 @@ type endpointConfig struct {
 	User          string  `json:"user"`
 	Password      string  `json:"password"`
 	PacketPeerKey string  `json:"packetPeerKey,omitempty"`
+	ICMPPeerKey   string  `json:"icmpPeerKey,omitempty"`
 }
 type command struct {
 	V           int              `json:"v"`
@@ -119,13 +121,16 @@ type session struct {
 	domainResources client.DomainResources
 	leaseMu         sync.RWMutex
 	leases          map[string]dnsLease
+	leaseOrder      list.List
 	connsMu         sync.Mutex
 	conns           map[net.Conn]struct{}
 	privateRoutes   *privateRoutePicker
+	fragments       packetFragments
 }
 type dnsLease struct {
 	domain  string
 	expires time.Time
+	order   *list.Element
 }
 type controller struct {
 	outMu      sync.Mutex
@@ -355,7 +360,7 @@ func (c *controller) setup(s *session, password, sessionData string) (res resour
 		return res, err
 	}
 	if ep := c.endpoints[s.p.ID]; ep != nil && ep.packet != nil {
-		if err = s.stack.EnablePackets(ep.packet.send); err != nil {
+		if err = s.stack.EnablePackets(ep.returnPackets()); err != nil {
 			return res, err
 		}
 	}
@@ -598,6 +603,12 @@ func prefixLast(p netip.Prefix) netip.Addr {
 }
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "--release-network" {
+		if err := winproxy.ReleaseNetwork(os.Args[2]); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "--recover-network" {
 		_ = winproxy.RecoverNetwork(os.Args[2])
 		return

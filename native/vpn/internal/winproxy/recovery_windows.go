@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -39,11 +40,11 @@ func InstallRecovery(file string, pid int) error {
 func WatchRecovery(file string, pid int) error {
 	handle, e := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
 	if e == nil {
-		_, e = windows.WaitForSingleObject(handle, windows.INFINITE)
-		_ = windows.CloseHandle(handle)
-		if e != nil {
-			return e
-		}
+		defer windows.CloseHandle(handle)
+		return watchRecovery(func(interval time.Duration) (bool, error) {
+			status, err := windows.WaitForSingleObject(handle, uint32(interval/time.Millisecond))
+			return status == windows.WAIT_OBJECT_0, err
+		}, func(done bool) error { return recoverOwnedNetwork(file, pid, done) })
 	}
-	return RecoverNetwork(file)
+	return recoverOwnedNetwork(file, pid, true)
 }

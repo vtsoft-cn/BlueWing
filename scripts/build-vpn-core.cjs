@@ -53,12 +53,15 @@ const sourceSha256 = createHash('sha256')
   .update(JSON.stringify(sourceFiles))
   .digest('hex');
 // Include the exact maintained fork, module locks and license beside the binary.
+const sourceArchive = path.join(bin, 'vpn-core-sources.zip');
+const archiveTemp = path.join(bin, `vpn-core-sources-${process.pid}.zip`);
+try {
 execFileSync(
   'tar.exe',
   [
     '-a',
     '-cf',
-    path.join(bin, 'vpn-core-sources.zip'),
+    archiveTemp,
     '--exclude=*.exe',
     '--exclude=.cache',
     '-C',
@@ -67,6 +70,8 @@ execFileSync(
   ],
   { windowsHide: true, stdio: 'inherit' },
 );
+fs.renameSync(archiveTemp, sourceArchive);
+} finally { if (fs.existsSync(archiveTemp)) fs.unlinkSync(archiveTemp); }
 fs.copyFileSync(
   path.join(source, 'LICENSE'),
   path.join(bin, 'VPN-CORE-LICENSE-AGPL-3.0.txt'),
@@ -78,6 +83,7 @@ fs.copyFileSync(
 const manifest = {
   schemaVersion: 1,
   name: 'bluewing-vpn-core',
+  revision: '5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.9-network-audit',
   controlProtocol: 1,
   upstream: {
     repository: 'https://github.com/Mythologyli/zju-connect',
@@ -117,10 +123,12 @@ const manifest = {
   license: 'AGPL-3.0',
   releaseLicenseDecision: 'PENDING',
 };
-fs.writeFileSync(
-  path.join(bin, 'vpn-core-manifest.json'),
-  JSON.stringify(manifest, null, 2),
-);
+const manifestFile = path.join(bin, 'vpn-core-manifest.json');
+const manifestTemp = `${manifestFile}.${process.pid}.tmp`;
+try {
+  fs.writeFileSync(manifestTemp, JSON.stringify(manifest, null, 2));
+  fs.renameSync(manifestTemp, manifestFile);
+} finally { if (fs.existsSync(manifestTemp)) fs.unlinkSync(manifestTemp); }
 console.log(
   JSON.stringify(
     {

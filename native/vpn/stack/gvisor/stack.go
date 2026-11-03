@@ -7,11 +7,13 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	clientpkg "github.com/mythologyli/zju-connect/client"
 	"github.com/mythologyli/zju-connect/client/easyconnect"
 	"github.com/mythologyli/zju-connect/internal/hook_func"
 	"github.com/mythologyli/zju-connect/internal/ippool"
+	"github.com/mythologyli/zju-connect/internal/ipv4frag"
 	"github.com/mythologyli/zju-connect/internal/zcdns"
 	"github.com/mythologyli/zju-connect/log"
 	"gvisor.dev/gvisor/pkg/buffer"
@@ -251,6 +253,7 @@ func (s *Stack) Run() {
 	}
 	// Read from VPN server and send to gVisor stack
 	buf := make([]byte, maxInboundPacketSize)
+	var fragments ipv4frag.Reassembler
 	for {
 		n, err := s.endpoint.l3Conn.Read(buf)
 		if err != nil {
@@ -263,7 +266,14 @@ func (s *Stack) Run() {
 		log.DebugPrintf("Recv: read %d bytes", n)
 		log.DebugDumpHex(buf[:n])
 
-		packetBuffer := makeInboundPacketBuffer(buf, n)
+		// NAT's prerouting hook runs before gVisor's local fragment assembly.
+		// Reassemble provider replies here so conntrack sees their transport
+		// headers and can reverse NAT before deciding local delivery/forwarding.
+		packet := fragments.Accept(buf[:n], time.Now())
+		if packet == nil {
+			continue
+		}
+		packetBuffer := makeInboundPacketBuffer(packet, len(packet))
 		s.endpoint.dispatcher.DeliverNetworkPacket(header.IPv4ProtocolNumber, packetBuffer)
 		packetBuffer.DecRef()
 	}

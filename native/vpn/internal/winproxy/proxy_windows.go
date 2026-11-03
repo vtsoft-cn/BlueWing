@@ -123,6 +123,9 @@ func write(c Connection) error {
 	return nil
 }
 func execute(req Request) ([]Connection, error) {
+	if req.Action == "recover" {
+		return nil, RecoverNetwork(req.OwnershipFile)
+	}
 	if req.Action == "guard" {
 		return nil, InstallRecovery(req.OwnershipFile, req.ParentPID)
 	}
@@ -157,12 +160,9 @@ func execute(req Request) ([]Connection, error) {
 			}
 		}
 	case "restore":
-		for _, desired := range req.Connections {
-			for _, v := range before {
-				if v.Name == desired.Name && (v.Server == req.ManagedServer || req.ManagedServer == "") {
-					changes = append(changes, desired)
-				}
-			}
+		changes, err = restoreConnections(before, req)
+		if err != nil {
+			return nil, err
 		}
 	default:
 		return nil, errors.New("unsupported action")

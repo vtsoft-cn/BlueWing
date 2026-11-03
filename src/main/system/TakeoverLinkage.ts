@@ -55,18 +55,25 @@ export class TakeoverLinkage {
    * 自动开启系统代理,兑现"安全回退系统代理模式"的承诺,避免连接空转无出口。
    * 返回是否发生了设置变更(调用方据此广播 settings:changed)。
    */
-  public static async ensureProxyWhenTunStripped(): Promise<boolean> {
+  public static async ensureProxyWhenTunStripped(isCurrent: () => boolean = () => true): Promise<boolean> {
+    if (!isCurrent()) return false;
     const db = Database.getInstance();
     const settings = db.getSettings();
     if (!settings.tunEnabled || settings.systemProxyEnabled) return false;
 
     db.saveSettings({ systemProxyEnabled: true });
-    await SystemProxy.enable(
+    const enabled = await SystemProxy.enable(
       '127.0.0.1',
       settings.mixedPort,
       settings.systemProxyBypassLan,
-      settings.customBypassList
+      settings.customBypassList,
+      isCurrent
     );
+    if (!enabled) {
+      db.saveSettings({ systemProxyEnabled: false });
+      LogManager.getInstance().addLog('error', 'TUN 未生效，系统代理恢复保护也未就绪，请检查网络恢复日志', 'system');
+      return false;
+    }
     LogManager.getInstance().addLog(
       'warn',
       'TUN 因权限不足未生效,已自动开启系统代理兜底(以管理员身份重启后可用 TUN)',

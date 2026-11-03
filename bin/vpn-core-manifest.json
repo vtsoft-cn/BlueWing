@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "bluewing-vpn-core",
+  "revision": "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.9-network-audit",
   "controlProtocol": 1,
   "upstream": {
     "repository": "https://github.com/Mythologyli/zju-connect",
@@ -18,9 +19,9 @@
       "source": "client/softether"
     }
   ],
-  "sourceSha256": "2208f3a93378d5973a7b1be78a6d06bb56f725e23a6de396cc9d4184e5d00b9e",
-  "sha256": "986baeae3ed0c58f2f38376504cd5d7eb8caba6f1a716e567e24f647a98f886d",
-  "sourceArchiveSha256": "186f6f7a4be88bc5e25160f42cc1b8557066cde6da9b1af7c88d11c3695329be",
+  "sourceSha256": "f42f7e2af6ef2b913df35eb662a965a5bb0d408069a2b7abd352740682a67eb3",
+  "sha256": "eb54871aaa356afe57e298618984c723736ca22cb175c1e51d644b961be7778f",
+  "sourceArchiveSha256": "1308eeac3b54a656e1dfc0e5cef968f8aaed625358583dd9633ca60ece6c5bcf",
   "protocols": [
     "easyconnect",
     "atrust",

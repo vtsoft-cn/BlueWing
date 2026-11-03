@@ -39,7 +39,7 @@ export function applyCorporateConfig(
     (r: any) => !r.server?.startsWith('corp-dns-') && !managedRule(r),
   );
   if (!runtime?.profiles.length) return;
-  const managedRules: any[] = [], probes: any[] = [], packetDiscovery: any[] = [], packetDNS: any[] = [],
+  const managedRules: any[] = [], probes: any[] = [], packetDiscovery: any[] = [], companyDNS: any[] = [],
     dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [], discoveryRules: any[] = [], discoveryGuards: any[] = [];
   const publicProxy = config.outbounds.find((o: any) => o.tag === 'proxy');
   if (runtime.privateProxy) {
@@ -54,18 +54,35 @@ export function applyCorporateConfig(
   for (const r of runtime.profiles) {
     const id = r.profile.id;
     const packetTag = r.packet?.port && r.packet.serverPublicKey ? `corp-packet-${id}` : undefined;
+    const icmpTag = r.packet?.icmp?.port && r.packet.icmp.serverPublicKey ? `corp-packet-icmp-${id}` : undefined;
     if (packetTag && r.packet) {
       config.endpoints.push({ type: 'wireguard', tag: packetTag, system: false, mtu: 1280,
         bind_interface: r.packet.loopbackInterface, inet4_bind_address: '127.0.0.1',
         address: ['100.127.255.1/32'], private_key: r.packet.privateKey,
         peers: [{ address: '127.0.0.1', port: r.packet.port, public_key: r.packet.serverPublicKey, allowed_ips: ['0.0.0.0/0'] }],
       });
-      // Keep explicit company DNS requests on their requested company server.
-      // The same watched source is included in the connection readiness probe.
-      packetDNS.push({ type: 'logical', mode: 'and', rules: [
-        { rule_set: [`corp-route-${id}`] }, { network: ['udp'], port: [53], ip_version: 4 },
-      ], outbound: packetTag });
     }
+    if (icmpTag && r.packet?.icmp) {
+      // sing-tun forwards real ICMP only to a port with an unspecified address.
+      // Use an independent authenticated peer so UDP sockets keep a valid source
+      // and cannot race ICMP return-path ownership or WireGuard peer roaming.
+      config.endpoints.push({ type: 'wireguard', tag: icmpTag, system: false, mtu: 1280,
+        bind_interface: r.packet.icmp.loopbackInterface, inet4_bind_address: '127.0.0.1',
+        address: ['0.0.0.0/32'], private_key: r.packet.icmp.privateKey,
+        peers: [{ address: '127.0.0.1', port: r.packet.icmp.port, public_key: r.packet.icmp.serverPublicKey, allowed_ips: ['0.0.0.0/0'] }],
+      });
+    }
+    // DNS follows the same per-company allow -> guard -> next-company order
+    // as ordinary traffic. Both TCP and UDP precede global DNS interception.
+    companyDNS.push({ type: 'logical', mode: 'and', rules: [
+      { rule_set: [`corp-route-${id}`] }, { network: ['tcp'], port: [53] },
+    ], outbound: `corp-out-${id}` });
+    if (packetTag) companyDNS.push({ type: 'logical', mode: 'and', rules: [
+      { rule_set: [`corp-route-${id}`] }, { network: ['udp'], port: [53], ip_version: 4 },
+    ], outbound: packetTag });
+    companyDNS.push({ type: 'logical', mode: 'and', rules: [
+      { rule_set: [`corp-guard-${id}`] }, { network: ['tcp', 'udp'], port: [53] },
+    ], action: 'reject' });
     probes.push({ type: 'logical', mode: 'and', rules: [
       { domain_suffix: ['bluewing.invalid'] }, { rule_set: [`corp-route-${id}`] },
       ...(r.internetPath ? [{ rule_set: [`corp-internet-${id}`] }] : []),
@@ -106,7 +123,8 @@ export function applyCorporateConfig(
       network: ['tcp'],
       outbound: `corp-out-${id}`,
     });
-    if (packetTag) managedRules.push({ rule_set: [`corp-route-${id}`], network: ['udp', 'icmp'], ip_version: 4, outbound: packetTag });
+    if (packetTag) managedRules.push({ rule_set: [`corp-route-${id}`], network: ['udp'], ip_version: 4, outbound: packetTag });
+    if (icmpTag) managedRules.push({ rule_set: [`corp-route-${id}`], network: ['icmp'], ip_version: 4, outbound: icmpTag });
     // Preserve ownership at this priority even while this company is reconnecting.
     // Never leak an established company's failed target into a lower-priority VPN.
     managedRules.push({ rule_set: [`corp-guard-${id}`], action: 'reject' });
@@ -126,15 +144,15 @@ export function applyCorporateConfig(
       ] };
       const automaticDirect = r.profile.protocol === 'softether' &&
         (r.profile.trafficMode || 'split') === 'split' && r.profile.autoDiscoverPrivate !== false;
-      if (packetTag && automaticDirect) packetDiscovery.push({
-        ...active({ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'], network: ['udp', 'icmp'] }),
-        outbound: packetTag,
+      if (automaticDirect) for (const [network, tag] of [['udp', packetTag], ['icmp', icmpTag]]) if (tag) packetDiscovery.push({
+        ...active({ ip_cidr: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'], network: [network] }), outbound: tag,
       });
       const route = (outlet: 'direct' | 'proxy' | 'vpn', condition?: any, fallback = false) => {
         const rules = fallback ? internetFallback : internetRules;
         if (outlet === 'vpn') rules.push(
           { ...active(condition), rules: [...active(condition).rules, { network: ['tcp'] }], outbound: `corp-out-${id}` },
-          ...(packetTag ? [{ ...active(condition), rules: [...active(condition).rules, { network: ['udp', 'icmp'], ip_version: 4 }], outbound: packetTag }] : []),
+          ...(packetTag ? [{ ...active(condition), rules: [...active(condition).rules, { network: ['udp'], ip_version: 4 }], outbound: packetTag }] : []),
+          ...(icmpTag ? [{ ...active(condition), rules: [...active(condition).rules, { network: ['icmp'], ip_version: 4 }], outbound: icmpTag }] : []),
           { ...active(condition), action: 'reject' },
         );
         else {
@@ -212,17 +230,14 @@ export function applyCorporateConfig(
     else if (rule.process_name || rule.process_path) apps.push(rule);
     else ordinary.push(rule);
   }
-  let dnsInserted = false;
-  const setupRules = setup.flatMap(rule => {
-    if (!dnsInserted && rule.action === 'hijack-dns') { dnsInserted = true; return [...packetDNS, rule]; }
-    return [rule];
-  });
   config.route.rules = [
-    ...setupRules,
+    ...setup.filter(rule => rule.action !== 'hijack-dns'),
     ...blocked,
     { process_name: [runtime.coreProcessName], outbound: 'direct' },
     ...probes,
     { domain_suffix: ['bluewing.invalid'], action: 'reject' },
+    ...companyDNS,
+    ...setup.filter(rule => rule.action === 'hijack-dns'),
     ...managedRules,
     ...ordinary,
     ...discoveryRules,

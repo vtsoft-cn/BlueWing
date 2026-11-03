@@ -30,6 +30,26 @@
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP_STRETCH AspectFitHeight
 !define MUI_HEADERIMAGE_BITMAP_STRETCH AspectFitHeight
 
+; One ownership-aware implementation is used by installation and uninstallation.
+!include "LogicLib.nsh"
+!macro bbMaintainNetwork DIRECTORY
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\bluewing-network-maintenance.ps1 "${PROJECT_DIR}\build\network-maintenance.ps1"
+  File /oname=$PLUGINSDIR\bluewing-network-recovery.exe "${PROJECT_DIR}\bin\bluewing-vpn-core.exe"
+  ReadEnvStr $R7 "APPDATA"
+  nsExec::ExecToLog `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$PLUGINSDIR\bluewing-network-maintenance.ps1" -InstallDir "${DIRECTORY}" -RecoveryHelper "$PLUGINSDIR\bluewing-network-recovery.exe" -UserDataDir "$R7\BlueWingConnect"`
+  Pop $R9
+  ${If} $R9 != 0
+    MessageBox MB_OK|MB_ICONSTOP "无法安全关闭 BlueWing 或恢复其网络接管。已保留网络恢复记录和用户数据，请关闭程序后重试。" /SD IDOK
+    Abort
+  ${EndIf}
+!macroend
+
+; Replaces electron-builder's image-name / directory-prefix fallback, too.
+!macro customCheckAppRunning
+  !insertmacro bbMaintainNetwork "$INSTDIR"
+!macroend
+
 !ifndef BUILD_UNINSTALLER
 
 !include "LogicLib.nsh"
@@ -145,65 +165,10 @@ FunctionEnd
 Var /GLOBAL bbDataOldDir   ; 检测到的旧安装目录
 Var /GLOBAL bbDataStash    ; data/ 暂存位置(旧安装目录同级)
 
-; 结束运行中的 青翼连接 与 sing-box。优先让运行实例优雅退出(还原系统代理、
-; 停止核心后自行退出,见主进程 second-instance 对 --bb-shutdown 的处理):
-; 信号经一次性计划任务以登录用户身份直接拉起
-; "<旧目录>BlueWing Connect.exe --bb-shutdown"——避免提权安装器直接启动时
-; 子进程继承管理员完整性、与普通用户实例的单实例握手失败。轮询等待最多 6 秒;
-; 超时未退才回退温和/强制 taskkill,并在强杀后清理特征值残留系统代理兜底。
-; 必须先探测确有运行实例,否则信号任务会凭空把应用启动起来。
+; Graceful exit, exact-path shutdown, then owned LAN/RAS restoration.
 Function bbCloseRunningApp
   ${If} $bbDataOldDir != ""
-  ${AndIf} ${FileExists} "$bbDataOldDir\BlueWing Connect.exe"
-    nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "IMAGENAME eq BlueWing Connect.exe" /FO csv | "$SYSDIR\find.exe" "BlueWing Connect.exe"`
-    Pop $R0
-    ${If} $R0 == 0
-      ; 提权安装器(本进程 high integrity)直接启动信号进程会以管理员完整性运行,
-      ; 与普通用户运行实例的单实例握手失败,信号送不到、实例被强杀、系统代理残留
-      ; (实测)。改为一次性计划任务以登录用户(中等完整性)身份直接拉起
-      ; "<旧目录>BlueWing Connect.exe --bb-shutdown":该路径不创建任何窗口
-      ; (show:false 且单实例握手前即退出),无需任何脚本载体——曾用 $PLUGINSDIR
-      ; 的 VBS 经 wscript 无窗拉起,但"wscript+临时目录脚本"组合会被杀软/攻击面
-      ; 防护拦截(实测报"加载脚本失败: 拒绝访问"),任务即用即删。
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /create /tn "BlueWingUpgradeShutdown" /tr "\"$bbDataOldDir\BlueWing Connect.exe\" --bb-shutdown" /sc once /st 23:59 /f`
-      Pop $R9
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /run /tn "BlueWingUpgradeShutdown"`
-      Pop $R9
-      StrCpy $R1 0
-      bbGracefulWait:
-      Sleep 500
-      nsExec::Exec `"$SYSDIR\cmd.exe" /c tasklist /FI "IMAGENAME eq BlueWing Connect.exe" /FO csv | "$SYSDIR\find.exe" "BlueWing Connect.exe"`
-      Pop $R0
-      ${If} $R0 != 0
-        nsExec::Exec `"$SYSDIR\cmd.exe" /c schtasks /delete /tn "BlueWingUpgradeShutdown" /f`
-        Return
-      ${EndIf}
-      IntOp $R1 $R1 + 1
-      ${If} $R1 < 12
-        Goto bbGracefulWait
-      ${EndIf}
-    ${EndIf}
-  ${EndIf}
-  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "BlueWing Connect.exe"`
-  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /im "sing-box.exe"`
-  Sleep 300
-  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "BlueWing Connect.exe"`
-  nsExec::Exec `"$SYSDIR\cmd.exe" /c taskkill /f /im "sing-box.exe"`
-  Sleep 300
-  ; 强杀兜底:实例可能带着系统代理退出。仅当代理服务器精确等于本应用特征值
-  ; (127.0.0.1:2080)时禁用并清空,不触碰用户自有代理;WinINet 广播刷新使
-  ; 所有进程立即生效。应用下次启动的残留自愈机制保持不变。
-  ClearErrors
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyServer
-  ${IfNot} ${Errors}
-  ${AndIf} $R0 == "127.0.0.1:2080"
-    ReadRegDWORD $R1 HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyEnable
-    ${If} $R1 == 1
-      WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyEnable 0
-      DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyServer
-      System::Call 'wininet::InternetSetOption(p0, i39, p0, i0)i'
-      System::Call 'wininet::InternetSetOption(p0, i95, p0, i0)i'
-    ${EndIf}
+    !insertmacro bbMaintainNetwork "$bbDataOldDir"
   ${EndIf}
 FunctionEnd
 
@@ -362,26 +327,11 @@ FunctionEnd
 ; 同级遗留的 BlueWingDataUpgrade 数据暂存。
 !macro customUnInstall
   ${IfNot} ${isUpdated}
+    ; Restore before deleting the guard or its ownership data.
+    !insertmacro bbMaintainNetwork "$INSTDIR"
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "BlueWing Network Recovery"
-    ; 清理当前用户的 %APPDATA% 数据;per-machine 卸载处于 all 上下文,
-    ; 切 current 后必须恢复,否则后续注册表/快捷方式清理会误指向 HKCU
     ${If} $installMode == "all"
       SetShellVarContext current
-    ${EndIf}
-    ; 系统代理残留清理:提权卸载器强杀运行实例时(完整性差异致优雅信号不可达),
-    ; 实例带着已开启的系统代理退出,卸载后网络即断。仅当代理服务器精确等于本应用
-    ; 特征值(127.0.0.1:2080)时禁用并清空,不触碰用户自有代理;WinINet 广播刷新。
-    ClearErrors
-    ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyServer
-    ${IfNot} ${Errors}
-    ${AndIf} $R0 == "127.0.0.1:2080"
-      ReadRegDWORD $R1 HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyEnable
-      ${If} $R1 == 1
-        WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyEnable 0
-        DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Internet Settings" ProxyServer
-        System::Call 'wininet::InternetSetOption(p0, i39, p0, i0)i'
-        System::Call 'wininet::InternetSetOption(p0, i95, p0, i0)i'
-      ${EndIf}
     ${EndIf}
     RMDir /r "$APPDATA\BlueWingConnect"
     RMDir /r "$INSTDIR\..\BlueWingDataUpgrade"

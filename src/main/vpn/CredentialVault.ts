@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { atomicJSON } from './ProfileRepository';
+import { VpnProfile } from '../../types/corporateVpn';
+import { credentialKey, legacyCredentialKey } from './ProfileIdentity';
 
 export interface EncryptionProvider {
   isEncryptionAvailable(): boolean;
@@ -57,6 +59,13 @@ export class CredentialVault {
     return (
       typeof this.data[key] === 'string' && this.data[key].startsWith('dpapi:')
     );
+  }
+  needsReentry(p: VpnProfile): boolean {
+    return p.rememberPassword && !this.has(credentialKey(p, 'password')) && this.has(legacyCredentialKey(p, 'password'));
+  }
+  migrationWarnings(profiles: VpnProfile[]): string[] {
+    return profiles.some(p => this.needsReentry(p))
+      ? ['VPN 凭据已升级身份隔离。旧格式记录仍加密保留，请重新输入一次密码以绑定当前网关和账号。'] : [];
   }
   remove(prefix: string): void {
     const next = { ...this.data };

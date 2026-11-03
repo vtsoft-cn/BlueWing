@@ -360,7 +360,7 @@ export interface VpnProfile {
   lastConnected?: number;
 }
 
-export type VpnConnectionState = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error';
+export type VpnConnectionState = 'disconnected' | 'connecting' | 'enabled' | 'connected' | 'disconnecting' | 'error';
 
 /** VPN 连接运行态(单连接模型:同一时刻只连一个) */
 export interface VpnRuntimeInfo {

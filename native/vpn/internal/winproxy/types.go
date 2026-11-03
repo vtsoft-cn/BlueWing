@@ -13,13 +13,14 @@ type Connection struct {
 	PAC    string `json:"pac"`
 }
 type Request struct {
-	Action        string       `json:"action"`
-	Server        string       `json:"server"`
-	Bypass        string       `json:"bypass"`
-	Connections   []Connection `json:"connections"`
-	ManagedServer string       `json:"managedServer"`
-	OwnershipFile string       `json:"ownershipFile"`
-	ParentPID     int          `json:"parentPid"`
+	Action         string       `json:"action"`
+	Server         string       `json:"server"`
+	Bypass         string       `json:"bypass"`
+	Connections    []Connection `json:"connections"`
+	ManagedServer  string       `json:"managedServer"`
+	ManagedServers []string     `json:"managedServers,omitempty"`
+	OwnershipFile  string       `json:"ownershipFile"`
+	ParentPID      int          `json:"parentPid"`
 }
 type Response struct {
 	OK          bool         `json:"ok"`

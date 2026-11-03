@@ -4,6 +4,8 @@ go 1.25.6
 
 replace inet.af/netaddr => github.com/inetaf/netaddr v0.0.0-20230525184311-b8eac61e914a
 
+replace golang.zx2c4.com/wireguard => ./third_party/wireguard
+
 require (
 	github.com/beevik/etree v1.6.0
 	github.com/containers/winquit v1.1.0

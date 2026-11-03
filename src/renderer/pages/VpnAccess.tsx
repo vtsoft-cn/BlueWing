@@ -67,6 +67,7 @@ const labels: Record<VpnState['state'], string> = {
   reconnect_wait: '等待重试',
 };
 const errorLabels: Record<string, string> = {
+  CREDENTIAL_REENTRY_REQUIRED: 'VPN 凭据已升级身份隔离，请重新输入一次密码。旧格式记录仍加密保留，不会用于其他网关或账号。',
   TLS_CERT_CHANGED:
     '网关证书与之前记录的不一致，已停止发送登录信息。请检查网关地址，并确认是否更换过证书。',
   TLS_CERT_EXPIRED: '网关证书已过期，请检查系统时间或联系网关管理员更新证书。',
@@ -82,6 +83,7 @@ const errorLabels: Record<string, string> = {
   AUTH_METHOD_UNSUPPORTED:
     '当前认证方式尚不支持，请编辑配置并选择已支持的方式。',
   CORE_EXITED: 'VPN 组件已退出，已知接入资源保持保护，请重新连接。',
+  PUBLIC_CORE_CHANGED: '本地分流服务已中断，已知公司资源仍保持保护。服务恢复后请重新连接 VPN。',
   POLICY_APPLY_FAILED: '隧道已就绪，但尚未确认分流生效，请检查日志后重新连接。',
   VPN_TRANSPORT_DOWN: 'VPN 隧道已断开，请重新连接。',
   AUTH_FAILED: '账号或密码验证失败，请核对密码与认证方式。',
@@ -183,6 +185,7 @@ export const VpnAccess: React.FC<{
   };
   const engineBadge = (state?: string): { text: string; tone: string } => {
     switch (state) {
+      case 'enabled': return { text: '已启用', tone: 'vpn-badge-warn' };
       case 'connecting': return { text: '连接中', tone: 'vpn-badge-warn' };
       case 'connected': return { text: '已连接', tone: 'vpn-badge-ok' };
       case 'disconnecting': return { text: '断开中', tone: '' };
@@ -409,6 +412,10 @@ export const VpnAccess: React.FC<{
           {defaultProfile && <small>默认策略：{defaultProfile.name} · 优先级 {defaultProfile.routingPriority ?? 100}</small>}</span>
         {runningCount > 0 && <button className="vpn-text-button" disabled={busy} onClick={() => run(async () => { await window.electronAPI.corporateVpn.disconnect(); await refresh(); })}>断开全部</button>}
       </div>}
+      {!!snapshot.warnings?.length && <div className="vpn-notice warning" role="status">
+        <ShieldCheck size={18} />
+        <div>{snapshot.warnings.map(warning => <p key={warning}>{warning}</p>)}</div>
+      </div>}
       {loadError && (
         <div className="vpn-notice danger" role="alert">
           <p>{loadError}</p>
@@ -582,7 +589,7 @@ export const VpnAccess: React.FC<{
                         {(() => {
                           const rt = engineStateFor(selected.engine.id);
                           const st = rt?.state || 'disconnected';
-                          const map: Record<string, string> = { connected: '已连接', connecting: '连接中', error: '失败', disconnecting: '断开中' };
+                          const map: Record<string, string> = { enabled: '已启用', connected: '已连接', connecting: '连接中', error: '失败', disconnecting: '断开中' };
                           return st !== 'disconnected' ? (
                             <span className={`vpn-state-badge ${st === 'connected' ? 'ok' : st === 'error' ? 'bad' : 'warn'}`}>{map[st]}</span>
                           ) : null;
@@ -607,6 +614,11 @@ export const VpnAccess: React.FC<{
                   </div>
                 </header>
                 <div className="vpn-connection-body">
+                  {(engineStateFor(selected.engine.id)?.state === 'enabled') && (
+                    <div className="vpn-notice" role="status">
+                      {coreState === 'running' ? 'WireGuard 配置已启用，尚未验证对端握手。' : 'WireGuard 配置已启用，等待代理核心启动后生效。'}
+                    </div>
+                  )}
                   {(engineStateFor(selected.engine.id)?.state === 'error') && (
                     <div className="vpn-notice danger" role="alert">
                       {engineStateFor(selected.engine.id)!.message}
@@ -616,7 +628,7 @@ export const VpnAccess: React.FC<{
                     {(() => {
                       const rt = engineStateFor(selected.engine.id);
                       const st = rt?.state || 'disconnected';
-                      return st === 'connected' || st === 'connecting' ? (
+                      return ['connected', 'connecting', 'enabled'].includes(st) ? (
                         <button
                           className="vpn-button primary"
                           disabled={st === 'connecting'}

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, screen, shell } from 'electron';
+import { ConnectionIntent } from './core/ConnectionIntent';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
@@ -14,6 +15,7 @@ import { ConfigGenerator } from './core/ConfigGenerator';
 import { ProxySelectionService } from './core/ProxySelectionService';
 import { RuleSetUpdater } from './core/RuleSetUpdater';
 import { SystemProxy } from './system/SystemProxy';
+import { ProxyLifecycle } from './system/ProxyLifecycle';
 import { TakeoverLinkage } from './system/TakeoverLinkage';
 import { TunAdapter } from './system/TunAdapter';
 import { ElevatedRelaunch } from './system/ElevatedRelaunch';
@@ -35,6 +37,7 @@ import { OpenVpnEngine, derToPem } from './system/vpn/OpenVpnEngine';
 import { OpenConnectEngine } from './system/vpn/OpenConnectEngine';
 import tls from 'tls';
 
+const coreConnectionIntent = new ConnectionIntent();
 let mainWindow: BrowserWindow | null = null;
 let trafficTimer: NodeJS.Timeout | null = null;
 let startTime: number = 0;
@@ -413,8 +416,7 @@ app.on('before-quit', async (e) => {
     }
     try {
       Database.getInstance().flush();
-      await existingCorporateVpn()?.dispose();
-      await VpnEngineManager.getInstance().shutdown();
+      await Promise.allSettled([existingCorporateVpn()?.dispose(), VpnEngineManager.getInstance().shutdown()]);
       await handleCoreStop();
       await SystemProxy.restoreOriginal();
       await LogManager.getInstance().destroy();
@@ -464,17 +466,21 @@ function fetchClashConnections(
 }
 
 async function handleCoreStop(): Promise<boolean> {
-  await existingCorporateVpn()?.disconnect();
+  const finishStopping = coreConnectionIntent.beginStop();
+  cancelTunAutoRecovery('停止核心');
+  try {
   const core = SingBoxManager.getInstance();
-  const settings = Database.getInstance().getSettings();
-  await core.stop();
-  if (settings.systemProxyEnabled) {
-    await SystemProxy.disable();
-    LogManager.getInstance().addLog('info', 'Windows 系统代理已关闭', 'system');
+  await proxyLifecycle.stop();
+  try {
+    await existingCorporateVpn()?.disconnect();
+  } finally {
+    await core.stop();
+    await SystemProxy.recoverIfUnavailable();
   }
   LogManager.getInstance().addLog('info', '代理核心引擎已停止连接', 'core');
   TrayManager.getInstance().updateMenu();
   return true;
+  } finally { finishStopping(); }
 }
 
 /**
@@ -625,7 +631,9 @@ function scheduleTunFatalRetry(): void {
 }
 
 async function handleCoreStart(options?: { userInitiated?: boolean; shouldContinue?: () => boolean }): Promise<boolean> {
+  if (coreConnectionIntent.isStopping) return false;
   if (options?.shouldContinue && !options.shouldContinue()) return false;
+  const isCurrent = coreConnectionIntent.begin(options?.shouldContinue);
   const db = Database.getInstance();
   const core = SingBoxManager.getInstance();
   const settings = db.getSettings();
@@ -677,7 +685,7 @@ async function handleCoreStart(options?: { userInitiated?: boolean; shouldContin
   }
 
   const corporateRuntime = await getCorporateVpn().prepareRuntime(true);
-  if (options?.shouldContinue && !options.shouldContinue()) return false;
+  if (!isCurrent()) return false;
   SystemProxy.setCorporateRouting(corporateRuntime.profiles.length > 0);
   const config = ConfigGenerator.generate(
     activeNodeId,
@@ -692,9 +700,9 @@ async function handleCoreStart(options?: { userInitiated?: boolean; shouldContin
   );
 
   LogManager.getInstance().addLog('info', '正在启动 Sing-box 核心代理引擎...', 'app');
-  let started = await core.start(config);
+  let started = await core.start(config, isCurrent);
   if (!started) {
-    if (options?.shouldContinue && !options.shouldContinue()) return false;
+    if (!isCurrent()) return false;
     // 规则源下载被间歇性重置等瞬时故障:自动重试一次,避免用户手动反复点击
     LogManager.getInstance().addLog('warn', '核心首次启动失败,2 秒后自动重试一次...', 'core');
     // TUN 网卡冲突(幽灵设备,特征见 SingBoxManager.consumeTunAdapterFatal):
@@ -709,30 +717,26 @@ async function handleCoreStart(options?: { userInitiated?: boolean; shouldContin
       );
     }
     await new Promise((r) => setTimeout(r, 2000));
-    if (options?.shouldContinue && !options.shouldContinue()) return false;
-    started = await core.start(config);
+    if (!isCurrent()) return false;
+    started = await core.start(config, isCurrent);
   }
+  if (!isCurrent()) return false;
   if (started) {
     getCorporateVpn().publicCoreStarted(corporateRuntime);
-    LogManager.getInstance().addLog('info', '代理核心引擎已就绪并接管网络流量', 'core');
+    LogManager.getInstance().addLog('info', '代理核心引擎已就绪', 'core');
     // TUN 早期崩溃自动重连的判定基准(见 stateChange 订阅);config 经权限剥除
     // 后就地变更,此处读到的是真实生效的入站
     lastCoreStartOkAt = Date.now();
     lastCoreStartHadTun =
       Array.isArray(config.inbounds) && config.inbounds.some((i: any) => i.type === 'tun');
     tunFatalRetryCount = 0;
-    if (settings.systemProxyEnabled) {
-      await SystemProxy.enable(
-        '127.0.0.1',
-        settings.mixedPort,
-        settings.systemProxyBypassLan,
-        settings.customBypassList
-      );
-      LogManager.getInstance().addLog('info', `Windows 系统代理已开启 (127.0.0.1:${settings.mixedPort})`, 'system');
+    if (!(await proxyLifecycle.settled())) {
+      LogManager.getInstance().addLog('warn', '核心已启动，但系统代理同步未完成，请查看网络恢复日志', 'system');
     }
+    if (!isCurrent()) return false;
     // 保护性兜底:配置含 TUN 但因非管理员权限被剥除,且系统代理为关——自动开启
     // 系统代理,兑现"已安全回退为系统代理模式"的日志承诺,避免连接空转无出口
-    if (core.wasTunStrippedLastStart() && (await TakeoverLinkage.ensureProxyWhenTunStripped())) {
+    if (core.wasTunStrippedLastStart() && (await TakeoverLinkage.ensureProxyWhenTunStripped(isCurrent))) {
       broadcastSettingsChanged();
     }
   } else {
@@ -765,7 +769,7 @@ let vpnReloadTimer: NodeJS.Timeout | null = null;
 VpnEngineManager.getInstance().on('state', (info: VpnRuntimeInfo) => {
   mainWindow?.webContents.send('evpn:state', info);
   const sig =
-    info.state === 'connected'
+    ['connected', 'enabled'].includes(info.state)
       ? [info.adapterName || '', ...[...info.routes].sort(), ...info.dnsServers, ...info.domainSuffixes].join('|')
       : '';
   if (sig === vpnNetworkSignature) return;
@@ -1053,9 +1057,22 @@ SingBoxManager.getInstance().setConfigEnricher(async config=>{
   SystemProxy.setCorporateRouting(runtime.profiles.length>0);
   applyCorporateConfig(config,runtime);
 });
-SingBoxManager.getInstance().on('configured',()=>getCorporateVpn().publicCoreStarted(getCorporateVpn().policy.runtime()));
+const proxyLifecycle = new ProxyLifecycle({
+  running: () => SingBoxManager.getInstance().getState() === 'running',
+  pid: () => SingBoxManager.getInstance().getPid(),
+}, () => Database.getInstance().getSettings());
+SingBoxManager.getInstance().on('configured', config => {
+  getCorporateVpn().publicCoreStarted(getCorporateVpn().policy.runtime());
+  proxyLifecycle.configured(config).catch(() => {});
+});
 SingBoxManager.getInstance().on('stateChange', (state) => {
-  if (['stopped','crashed','error'].includes(state)) existingCorporateVpn()?.publicCoreStopped();
+  if (['stopped','crashed','error'].includes(state)) {
+    // Explicit stops already disconnected above; every other terminal state
+    // must retain company guards, including an unexpected exit with code 0.
+    existingCorporateVpn()?.publicCoreStopped(true);
+    proxyLifecycle.unavailable().catch(() => {});
+  }
+  if (state === 'stopping') proxyLifecycle.invalidate();
   mainWindow?.webContents.send('core:stateChange', state);
   if (state === 'crashed') {
     // TUN 模式启动初期(30s 内)异常退出:多为网卡设备/路由的清理竞态,
@@ -1574,12 +1591,7 @@ ipcMain.handle('settings:save', async (_, s) => {
     if (!currentSettings.systemProxyEnabled) {
       await SystemProxy.disable();
     } else if (core.getState() === 'running') {
-      await SystemProxy.enable(
-        '127.0.0.1',
-        currentSettings.mixedPort,
-        currentSettings.systemProxyBypassLan,
-        currentSettings.customBypassList
-      );
+      await proxyLifecycle.configured(JSON.parse(core.getLiveConfig()));
     } else {
       // 核心未运行时打开系统代理开关:自动拉起核心,确保开关真实生效而不是只改设置
       await handleCoreStart();

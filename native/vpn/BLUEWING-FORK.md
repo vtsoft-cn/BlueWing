@@ -36,11 +36,38 @@ Provider setup has a 10s dial budget; the host dispatcher allows 11s per provide
 within its existing total budget rather than truncating a cold first dial at 3.5s.
 
 The WinINet helper also installs per-user, windowless network recovery at login
-and watches its owning app process. A dead, explicitly owned loopback proxy is
-restored even if Electron was killed or Windows restarted before app cleanup.
-Live listeners and external proxy changes are preserved; the original settings
-are restored separately for LAN and RAS connections. No network recovery runs
-on another user's proxy or a non-loopback proxy without application ownership.
+and watches its owning app process. It also checks every five seconds while
+Electron is alive, so a routing child crash cannot leave a dead system proxy.
+The host immediately requests the same recovery on routing-core exit. On owner
+exit, a matching owner PID also releases a proxy served by an orphaned child;
+a newer instance's record and live listener are preserved. Restoration is scoped
+per connection, retains original PAC settings, and releases new RAS entries
+absent from the original snapshot. Failed restores retain ownership for retry.
+No recovery runs on another user's proxy or an unowned/non-loopback proxy.
+
+Proxy port transitions persist both old and new loopback addresses until all
+WinINet connections confirm the new value. Recovery checks the actual address
+of each LAN/RAS connection; a live new port cannot hide an abandoned old port.
+
+Company DNS forwards all record types, including SRV/TXT, and retries truncated
+UDP answers over TCP to the same company resolver. No system/public fallback is
+introduced. IPv4 fragments are reassembled with per-tunnel, per-direction
+memory/time/overlap limits before port authorization and before provider reply
+NAT. This is necessary because gVisor prerouting NAT precedes local reassembly.
+
+ICMP uses a separate authenticated peer with an unspecified sing-box port
+address. A concrete address makes sing-tun's gVisor ICMP forwarder answer echo
+locally instead of forwarding. UDP retains its own concrete source address and
+return path. Both peers reuse one provider login and one gVisor stack, and do
+not create system adapters. The maintained MIT WireGuard source in
+third_party/wireguard increases the Windows in-memory message buffer; see its
+BLUEWING-PATCH.md. First real ICMP and UDP replies have been observed through
+sing-box and this provider; a 2048-byte echo also passes the native provider
+chain. The separately maintained routing core now fixes Windows buffering,
+locally generated IPv4 fragment IDs/flags and reassembled header checksums.
+The isolated actual-sing-box/provider packet chain passes 8192-byte ICMP and
+3072-byte UDP in both directions, including eight interleaved UDP datagrams.
+See native/routing/BLUEWING-FORK.md and the root audit fix record.
 
 SoftEther is implemented in `client/softether`, adapting MIT-licensed govpn wire
 helpers (pinned source and license in that directory) to the existing private

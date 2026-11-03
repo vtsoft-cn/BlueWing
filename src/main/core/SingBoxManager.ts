@@ -276,8 +276,9 @@ export class SingBoxManager extends EventEmitter {
   /**
    * Thread-safe Start with Port & API Readiness Probing
    */
-  public async start(config: Record<string, any>): Promise<boolean> {
+  public async start(config: Record<string, any>, isCurrent: () => boolean = () => true): Promise<boolean> {
     return this.runWithMutex(async () => {
+      if (!isCurrent()) return false;
       if (this.state === 'running' || this.state === 'starting') {
         await this.stopInternal(true);
       }
@@ -287,6 +288,7 @@ export class SingBoxManager extends EventEmitter {
       try {
         // Safety Check: If TUN mode is in config but not elevated, gracefully remove it to prevent fatal crash
         await this.configEnricher?.(config);
+        if (!isCurrent()) { this.setState('stopped'); return false; }
         const admin = this.isAdmin();
         this.tunStrippedLastStart = false;
         this.tunFatalSeen = false;
@@ -309,6 +311,7 @@ export class SingBoxManager extends EventEmitter {
 
         // Check config syntax before launching
         const validation = await this.validate(config);
+        if (!isCurrent()) { this.setState('stopped'); return false; }
         if (!validation.valid) {
           this.log('error', `配置校验失败: ${validation.error}`, 'core');
           this.setState('error');
@@ -408,6 +411,7 @@ export class SingBoxManager extends EventEmitter {
         // five seconds. Keep the same child alive instead of killing a healthy
         // startup and presenting an avoidable automatic reconnect.
         const isReady = await this.waitForReady(mixedPort, clashPort, 20_000, tunName);
+        if (!isCurrent()) { await this.stopInternal(); return false; }
         if (isReady && this.process && !this.process.killed) {
           this.setState('running');
           this.emit('configured',config);

@@ -184,6 +184,7 @@ export class RasVpnEngine implements VpnEngine {
     // 4) 上报网络事实:直连子网(含 VPN 网关/DNS)计入内网段供分流;
     //    classify 内部已把直连子网从"可移交路由"中剔除(custody 安全),此处补回
     const network = await WindowsNetQuery.getAdapterNetwork(adapter.interfaceIndex);
+    if (this.stopped) return;
     const { corp, fullTunnel } = classifyAdapterRoutes(network.routes, network.connectedPrefix);
     const routes = corp.concat(network.connectedPrefix && !corp.includes(network.connectedPrefix) ? [network.connectedPrefix] : []);
     ctx.onLog(

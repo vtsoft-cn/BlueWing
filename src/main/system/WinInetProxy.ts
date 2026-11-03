@@ -15,10 +15,11 @@ export class WinInetProxy {
     );
   }
   static run(request: {
-    action: 'query' | 'enable' | 'disable' | 'restore' | 'guard';
+    action: 'query' | 'enable' | 'disable' | 'restore' | 'guard' | 'recover';
     server?: string;
     bypass?: string;
     managedServer?: string;
+    managedServers?: string[];
     connections?: WinInetConnection[];
     ownershipFile?: string;
     parentPid?: number;

@@ -19,7 +19,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const listen = (server: net.Server) => new Promise<number>(resolve => server.listen(0, '127.0.0.1', () => resolve((server.address() as net.AddressInfo).port)));
 async function freePort() { const server = net.createServer(); const port = await listen(server); await new Promise<void>(resolve => server.close(() => resolve())); return port; }
 function request(port: number, url: string): Promise<string> {
-  return new Promise((resolve, reject) => { const r = http.get({ host: '127.0.0.1', port, path: url, headers: { Host: new URL(url).host }, agent: false }, response => { let b = ''; response.on('data', c => b += c); response.on('end', () => resolve(b)); response.on('error', reject); }); r.setTimeout(5000, () => r.destroy(new Error('request timeout'))); r.on('error', reject); });
+  return new Promise((resolve, reject) => { const r = http.get({ host: '127.0.0.1', port, path: url, headers: { Host: new URL(url).host }, agent: false }, response => { let b = ''; response.on('data', c => b += c); response.on('end', () => resolve(b)); response.on('error', reject); }); r.setTimeout(5000, () => r.destroy(new Error('request timeout'))); r.on('error', error => reject(new Error(`${url}: ${error.message}`, { cause: error }))); });
 }
 
 test('Two company sessions with real routing preserve priority, peer connectivity and public outlets', { timeout: 60000 }, async t => {
@@ -109,7 +109,16 @@ test('Two company sessions with real routing preserve priority, peer connectivit
   const alphaGeneration = manager.snapshot().states!.alpha.generation;
   cores.get('alpha')!.emit('event', { v: 1, type: 'error', code: 'VPN_TRANSPORT_DOWN', profileId: 'alpha', generation: alphaGeneration });
   await sleep(500); // Allow the core's watched source files to revoke alpha's routes.
-  assert.equal(await request(mixedPort, 'http://10.99.0.1/'), '', 'A failed higher-priority company leaked its overlapping resource into beta');
+  const attemptsBeforeGuard = attempts.length;
+  let blockedBody = '';
+  try { blockedBody = await request(mixedPort, 'http://10.99.0.1/'); }
+  catch (error) {
+    // A deliberate rejection may arrive as EOF or a TCP reset on Windows.
+    // Timeouts and other request errors are still failures.
+    assert.equal((error as any).cause?.code || (error as any).code, 'ECONNRESET');
+  }
+  assert.equal(blockedBody, '', 'A failed higher-priority company leaked its overlapping resource into beta');
+  assert.deepEqual(attempts.slice(attemptsBeforeGuard), [], 'A protected resource was dialed through another outlet');
   assert.equal(await request(mixedPort, 'http://10.80.1.1/'), 'BETA');
   await manager.disconnect('alpha');
   let moved = false; for (let i = 0; i < 30; i++) { try { if ((await request(mixedPort, 'http://10.99.0.1/')) === 'BETA') { moved = true; break; } } catch {} await sleep(100); } assert.ok(moved, log);

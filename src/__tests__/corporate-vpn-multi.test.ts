@@ -64,6 +64,25 @@ test('Two profiles own separate native endpoints, states and independently revoc
   assert.equal(f.manager.snapshot().states!.beta.state, 'idle');
 });
 
+test('unexpected public core exit retains each company guard until explicit disconnect or reconnect', async t => {
+  const f = await fixture(t);
+  for (const id of ['alpha', 'beta']) { await f.manager.connect(id, 'fixture'); await f.ready(id); }
+  f.manager.publicCoreStopped(true);
+  await settle();
+  for (const id of ['alpha', 'beta']) {
+    assert.equal(f.manager.snapshot().states![id].state, 'failed');
+    assert.equal(f.manager.snapshot().states![id].error, 'PUBLIC_CORE_CHANGED');
+    assert.equal(f.policy.isProtected(id), true);
+    assert.equal(f.policy.isActive(id), false);
+  }
+  await f.manager.disconnect('alpha');
+  assert.equal(f.policy.isProtected('alpha'), false);
+  assert.equal(f.policy.isProtected('beta'), true);
+  f.manager.publicCoreStarted(await f.manager.prepareRuntime());
+  await f.manager.connect('beta', 'fixture'); await f.ready('beta');
+  assert.equal(f.manager.snapshot().states!.beta.state, 'connected');
+});
+
 test('Simultaneous MFA is bound to profile and generation; cancelling one does not cancel the other', async t => {
   const f = await fixture(t);
   for (const id of ['alpha', 'beta']) {

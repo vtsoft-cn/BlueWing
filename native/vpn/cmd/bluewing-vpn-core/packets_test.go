@@ -41,6 +41,7 @@ func TestRealPacketRoundTrip(t *testing.T) {
 	var cfg struct {
 		PrivateKey, ServerPublicKey, Target string
 		Port                                int
+		SkipUDP, SkipLarge                  bool
 	}
 	if err := json.Unmarshal([]byte(value), &cfg); err != nil {
 		t.Fatal(err)
@@ -96,15 +97,70 @@ func TestRealPacketRoundTrip(t *testing.T) {
 	binary.BigEndian.PutUint16(u[24:], uint16(len(u)-20))
 	copy(u[28:], dns)
 	binary.BigEndian.PutUint16(u[10:], probeChecksum(u[:20]))
-	adapter.queue <- u
-	select {
-	case reply := <-responses:
-		if len(reply) < 40 || reply[9] != 17 || binary.BigEndian.Uint16(reply[22:]) != 45000 || binary.BigEndian.Uint16(reply[28:]) != 0xb101 {
-			t.Fatalf("unexpected UDP response: %x", reply)
+	if !cfg.SkipUDP {
+		adapter.queue <- u
+		select {
+		case reply := <-responses:
+			if len(reply) < 40 || reply[9] != 17 || binary.BigEndian.Uint16(reply[22:]) != 45000 || binary.BigEndian.Uint16(reply[28:]) != 0xb101 {
+				t.Fatalf("unexpected UDP response: %x", reply)
+			}
+			t.Logf("first UDP DNS response returned from %s", net.IP(reply[12:16]))
+		case <-time.After(10 * time.Second):
+			t.Fatal("first UDP datagram did not return")
 		}
-		t.Logf("first UDP DNS response returned from %s", net.IP(reply[12:16]))
-	case <-time.After(10 * time.Second):
-		t.Fatal("first UDP datagram did not return")
+	}
+	if cfg.SkipLarge {
+		return
+	}
+	// Exercise a packet larger than the authenticated link MTU, including
+	// reassembly, authorization, NAT, provider fragmentation and the return path.
+	large := make([]byte, 2048)
+	copy(large[:20], b[:20])
+	binary.BigEndian.PutUint16(large[2:4], uint16(len(large)))
+	large[20] = 8
+	binary.BigEndian.PutUint16(large[24:26], 0xb11)
+	binary.BigEndian.PutUint16(large[26:28], 1)
+	for i := 28; i < len(large); i++ {
+		large[i] = byte(i)
+	}
+	binary.BigEndian.PutUint16(large[22:24], probeChecksum(large[20:]))
+	binary.BigEndian.PutUint16(large[10:12], 0)
+	binary.BigEndian.PutUint16(large[10:12], probeChecksum(large[:20]))
+	// A TUN/WireGuard peer delivers MTU-sized IP fragments, not an oversized
+	// frame (wireguard-go's Windows message buffer is smaller than 2048).
+	for offset := 0; offset < len(large)-20; {
+		n := min(1248, len(large)-20-offset)
+		part := make([]byte, 20+n)
+		copy(part, large[:20])
+		copy(part[20:], large[20+offset:20+offset+n])
+		binary.BigEndian.PutUint16(part[2:4], uint16(len(part)))
+		flags := uint16(offset / 8)
+		if offset+n < len(large)-20 {
+			flags |= 0x2000
+		}
+		binary.BigEndian.PutUint16(part[6:8], flags)
+		binary.BigEndian.PutUint16(part[10:12], 0)
+		binary.BigEndian.PutUint16(part[10:12], probeChecksum(part[:20]))
+		adapter.queue <- part
+		offset += n
+	}
+	var fragments packetFragments
+	deadline := time.After(12 * time.Second)
+	for {
+		select {
+		case packet := <-responses:
+			reply := fragments.Accept(packet, time.Now())
+			if reply == nil {
+				continue
+			}
+			if len(reply) != len(large) || reply[9] != 1 || reply[20] != 0 || binary.BigEndian.Uint16(reply[24:26]) != 0xb11 {
+				t.Fatal("unexpected large ICMP response")
+			}
+			t.Logf("large ICMP echo returned through the native provider chain: %d bytes", len(reply))
+			return
+		case <-deadline:
+			t.Fatal("large fragmented ICMP echo did not return")
+		}
 	}
 }
 
@@ -152,6 +208,27 @@ func TestAuthenticatedPacketLinkDeliversFirstQueuedPacket(t *testing.T) {
 	case <-replies:
 	case <-time.After(time.Second):
 		t.Fatal("return path failed")
+	}
+	large := make([]byte, 4096)
+	copy(large, packet)
+	binary.BigEndian.PutUint16(large[2:4], uint16(len(large)))
+	clientTUN.queue <- large
+	select {
+	case b := <-got:
+		if len(b) != len(large) {
+			t.Fatal("authenticated large frame was truncated")
+		}
+		server.send(b)
+	case <-time.After(time.Second):
+		t.Fatal("large packet stopped the Windows receive routine")
+	}
+	select {
+	case b := <-replies:
+		if len(b) != len(large) {
+			t.Fatal("large return frame was truncated")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("large return packet lost")
 	}
 }
 
