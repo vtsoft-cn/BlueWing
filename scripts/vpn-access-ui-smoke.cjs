@@ -199,7 +199,32 @@ app.whenReady().then(async()=>{
  await wait('!!document.querySelector("textarea[aria-label=自定义域名]")');assert.equal(await js('document.querySelector("textarea[aria-label=自定义域名]").value.includes("custom.corp.example")'),false);
  assert.equal(await js('document.querySelector("textarea[aria-label=固定域名解析]").value'),'');await textClick('取消');await wait('!document.querySelector("[data-vpn-editor]")');
  await js('Array.from(document.querySelectorAll(".vpn-profile-item")).find(b=>b.textContent.includes("办公网络")).click()');await sleep(80);
+ await js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="新增接入").focus()');
  await textClick('新增接入');await wait('!!document.querySelector("[aria-label=选择接入类型]")');await sleep(380);
+ assert.equal(await js('document.querySelectorAll(".vpn-type-primary").length'),3);
+ assert.equal(await js('document.querySelectorAll(".vpn-type-engine").length'),0);
+ assert.equal(await js('document.querySelector(".vpn-type-disclosure").getAttribute("aria-expanded")'),'false');
+ assert.equal(await js('document.activeElement.getAttribute("aria-label")'),'关闭接入类型选择');
+ await js('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Tab",shiftKey:true,bubbles:true,cancelable:true}))');
+ assert.equal(await js('document.activeElement.classList.contains("vpn-type-disclosure")'),true);
+ await js('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Tab",bubbles:true,cancelable:true}))');
+ assert.equal(await js('document.activeElement.getAttribute("aria-label")'),'关闭接入类型选择');
+ await capture('vpn-type-picker-dark');await js('document.documentElement.classList.remove("dark")');await capture('vpn-type-picker-light');await js('document.documentElement.classList.add("dark")');
+ await click('.vpn-type-disclosure');assert.equal(await js('document.querySelectorAll(".vpn-type-engine").length'),12);
+ assert.equal(await js('(()=>{const cards=[...document.querySelectorAll(".vpn-type-engine")];return Math.abs(cards[0].getBoundingClientRect().top-cards[1].getBoundingClientRect().top)<1 && !document.querySelector(".vpn-type-engine-grid .vpn-type-experimental-note");})()'),true);
+ await capture('vpn-type-picker-expanded');
+ for(const [width,height] of [[540,620],[360,600],[1200,500]]){
+   w.setSize(width,height);await sleep(120);
+   assert.equal(await js('(()=>{const panel=document.querySelector(".vpn-type-picker"),body=document.querySelector(".vpn-type-picker-body"),box=panel.getBoundingClientRect();return box.top>=0 && box.bottom<=innerHeight+1 && box.left>=0 && box.right<=innerWidth+1 && panel.scrollWidth<=panel.clientWidth && body.scrollHeight>body.clientHeight;})()'),true);
+   await js('(()=>{const body=document.querySelector(".vpn-type-picker-body");body.scrollTop=body.scrollHeight;})()');
+   assert.equal(await js('(()=>{const last=[...document.querySelectorAll(".vpn-type-engine")].at(-1).getBoundingClientRect(),body=document.querySelector(".vpn-type-picker-body").getBoundingClientRect(),close=document.querySelector("[aria-label=关闭接入类型选择]").getBoundingClientRect();return last.top>=body.top && last.bottom<=body.bottom+1 && close.top>=0 && close.bottom<=innerHeight;})()'),true);
+   await capture('vpn-type-picker-'+width+'x'+height);
+ }
+ w.setSize(1200,780);await sleep(120);
+ await js('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}))');await wait('!document.querySelector(".vpn-type-picker")');
+ assert.equal(await js('document.activeElement.textContent.trim()'),'新增接入');
+ await textClick('新增接入');await wait('!!document.querySelector(".vpn-type-picker")');await sleep(380);
+ assert.equal(await js('document.querySelector(".vpn-type-disclosure").getAttribute("aria-expanded")'),'false');
  await js('Array.from(document.querySelectorAll(".vpn-provider-option")).find(b=>b.textContent.includes("aTrust")).click()');await wait('!!document.querySelector("[data-vpn-editor]")');
  await input('配置名称','测试接入');await input('网关地址','new.example.com');await input('登录账号','fixture-user');await capture('vpn-access-editor');
  await js('document.querySelector(".vpn-editor-footer button[type=submit]").focus();document.dispatchEvent(new KeyboardEvent("keydown",{key:"Tab",bubbles:true,cancelable:true}))');
@@ -365,6 +390,7 @@ app.whenReady().then(async()=>{
  Object.assign(report,{automaticPrivateDiscoveryDefault:true,automaticDiscoveryOptOutPersisted:true,learnedEndpointVisible:true,learnedClearReadOnly:true,learnedClearScoped:true,independentColumnScroll:true,fixedPageHeader:true,fixedListSearch:true,keyboardColumnScroll:true,profileSwitchResetsDetails:true,compactScroll980:true});
  Object.assign(report,{inactiveVpnUsesNormalRouting:true,failedVpnGuardCanBeReleased:true});
  Object.assign(report,{multipleConnections:true,scopedDisconnect:true,independentMFA:true,priorityEditableForInactivePeer:true,disconnectAll:true});
+ Object.assign(report,{typePickerGrouped:true,experimentalTypesCollapsed:true,experimentalGridAligned:true,typePickerLightDark:true,typePickerCompactAndShort:true,typePickerKeyboardAndRestore:true});
  fs.writeFileSync(path.join(__dirname,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));w.destroy();app.quit();
 }).catch(error=>{console.error(error.stack);app.exit(1);});
 `,

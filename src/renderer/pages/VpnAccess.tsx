@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight,
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Circle,
   Copy,
   Eye,
@@ -1353,6 +1354,31 @@ const AddTypePicker: React.FC<{
 }> = ({ onClose, onPickCorporate, onPickEngine }) => {
   const { exiting, requestClose } = useModalExit(onClose);
   const maskDrag = useMaskDrag();
+  const root = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  const experimentalId = useId();
+  const [showExperimental, setShowExperimental] = useState(false);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    root.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    return () => previous?.focus();
+  }, []);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      requestClose();
+    }
+    if (event.key !== 'Tab') return;
+    const buttons = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || []);
+    const first = buttons[0], last = buttons[buttons.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first?.focus();
+    }
+  };
   // 防双击穿透:刚打开 350ms 内忽略类型行点击(第二击可能落在位置重叠的行上)
   const openedAtRef = useRef(0);
   if (openedAtRef.current === 0) openedAtRef.current = Date.now();
@@ -1362,43 +1388,66 @@ const AddTypePicker: React.FC<{
       {...maskDrag}
       className={`vpn-modal-backdrop no-drag ${modalOverlayClass(exiting)}`}
     >
-      <div className={`vpn-surface ${modalPopClass(exiting)}`} role="dialog" aria-modal="true" aria-label="选择接入类型" style={{ maxWidth: 460, width: '100%', borderRadius: 14, padding: 20, background: 'var(--vpn-bg)', border: '1px solid var(--vpn-border)', boxShadow: '0 24px 80px #0005' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <strong style={{ fontSize: 14 }}>选择接入类型</strong>
-          <ModalCloseX onClick={requestClose} />
+      <div ref={root} className={`vpn-surface vpn-type-picker ${modalPopClass(exiting)}`} role="dialog" aria-modal="true" aria-label="选择接入类型" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
+        <div className="vpn-type-picker-header">
+          <span className="vpn-type-picker-icon"><Network size={21} /></span>
+          <div>
+            <h2 id={titleId}>选择接入类型</h2>
+            <p id={descriptionId}>选择公司提供的接入方式，继续填写网关和账号。</p>
+          </div>
+          <ModalCloseX onClick={requestClose} label="关闭接入类型选择" />
         </div>
-        <div className="vpn-add-type-list">
-          {vpnProviderList.map((provider) => (
-            <button
-              key={provider.id}
-              type="button"
-              className="vpn-provider-option"
-              onClick={() => { if (clickGuard()) return; onPickCorporate(provider.id); }}
-            >
-              <span className={`vpn-provider-mark ${provider.tone}`}>{provider.mark}</span>
-              <span>
-                <strong>{provider.name}</strong>
-                <small>{provider.description}</small>
-              </span>
+        <div className="vpn-type-picker-body">
+          <section aria-label="企业接入">
+            <div className="vpn-type-section-heading"><h3>企业接入</h3><span>按公司网关类型选择</span></div>
+            <div className="vpn-type-primary-grid">
+              {vpnProviderList.map((provider) => (
+                <button
+                  key={provider.id}
+                  type="button"
+                  className="vpn-provider-option vpn-type-primary"
+                  onClick={() => { if (clickGuard()) return; onPickCorporate(provider.id); }}
+                >
+                  <span className={`vpn-provider-mark ${provider.tone}`} aria-hidden="true">{provider.mark}</span>
+                  <span className="vpn-type-copy">
+                    <strong>{provider.name}</strong>
+                    <small>{provider.description}</small>
+                  </span>
+                  <ArrowRight className="vpn-type-arrow" size={16} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="vpn-type-experimental" aria-label="更多接入方式">
+            <button className="vpn-type-disclosure" type="button" aria-expanded={showExperimental} aria-controls={experimentalId} onClick={() => setShowExperimental(value => !value)}>
+              <span className="vpn-type-disclosure-copy"><strong>更多接入方式 <span className="vpn-type-experimental-badge">实验功能</span></strong><small>标准协议与其他企业网关</small></span>
+              <ChevronDown size={17} className={showExperimental ? 'is-expanded' : ''} aria-hidden="true" />
             </button>
-          ))}
-          <div className="vpn-add-type-divider" />
-          <p className="vpn-field-hint" role="note">以下接入为实验功能，尚未完成真实网关验收。</p>
-          {TYPE_GROUPS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="vpn-provider-option"
-              onClick={() => { if (clickGuard()) return; onPickEngine(t.id); }}
-            >
-              <span className="vpn-provider-mark teal">{ENGINE_TYPE_MARKS[t.id] || 'EN'}</span>
-              <span>
-                <strong>{t.label}</strong>
-                {t.hint && <small>{t.hint}</small>}
-              </span>
-            </button>
-          ))}
+            <div id={experimentalId} hidden={!showExperimental}>
+              {showExperimental && <>
+                <p className="vpn-type-experimental-note" role="note">以下类型尚未完成真实网关验证，连接效果取决于网关和认证要求。</p>
+                <div className="vpn-type-engine-grid">
+                  {TYPE_GROUPS.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="vpn-provider-option vpn-type-engine"
+                      onClick={() => { if (clickGuard()) return; onPickEngine(t.id); }}
+                    >
+                      <span className="vpn-provider-mark neutral" aria-hidden="true">{ENGINE_TYPE_MARKS[t.id] || 'EN'}</span>
+                      <span className="vpn-type-copy">
+                        <strong>{t.label}</strong>
+                        {t.hint && <small>{t.hint}</small>}
+                      </span>
+                      <ChevronRight className="vpn-type-arrow" size={15} aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </>}
+            </div>
+          </section>
         </div>
+        <p className="vpn-type-picker-footer"><HelpCircle size={14} aria-hidden="true" />不确定接入类型？请向网络管理员确认。</p>
       </div>
     </div>
   );

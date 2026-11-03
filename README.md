@@ -1,144 +1,160 @@
-# 青翼连接 BlueWing Connect (Windows PC 客户端)
+# 青翼连接 BlueWing Connect
 
 <p align="center">
-  <img src="src/images/png/app-light.png" width="128" height="128" alt="BlueWing Connect Logo">
-  <br>
-  <b>基于 sing-box 维护核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
-  <br>
-  <b>A Modern Universal Proxy Toolchain & Network Debugging Client for Windows PC</b>
+  <img src="src/images/png/app-light.png" width="112" height="112" alt="BlueWing Connect">
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/vtsoft_cn/blue-bird"><img src="https://img.shields.io/badge/Gitee-vtsoft__cn%2Fblue--bird-C71D23.svg?logo=gitee&style=flat-square" alt="Gitee"></a>
-  <a href="https://www.microsoft.com/windows"><img src="https://img.shields.io/badge/Platform-Windows%20x64-brightgreen.svg?style=flat-square" alt="Platform"></a>
+  <b>公司内网、国内公网、国外网站，在同一个客户端里各走合适的出口。</b>
+  <br>
+  免费开源的 Windows 网络分流客户端 · 企业 VPN 接入 · 公网代理 · 多接入协同
 </p>
 
----
+项目地址：[vtsoft-cn/BlueWing](https://github.com/vtsoft-cn/BlueWing)。
 
-## 📖 项目介绍 / Introduction
+## 为什么开发 BlueWing
 
-**青翼连接 BlueWing Connect** 是专门面向 PC 桌面环境深度打造的原生通用网络代理与网络调试工具,针对桌面大屏操作与 Windows 平台特性进行了全新原生架构设计。
+工作中的网络需求往往同时存在：SSH、Git 和内部系统需要公司 VPN，国外文档和开发工具需要公网代理，国内会议、下载与局域网设备又更适合使用本机网络。参与多个项目时，还可能需要同时访问不同公司的资源。
 
-软件基于官方原生 **Sing-box 1.14.3 稳定版**核心构建(全量构建标签,内置 NaiveProxy 支持),原生集成微软签名 **Wintun 0.14.1** 网卡驱动,全面支持 VLESS(含 Reality 伪装)、VMess、Trojan、Shadowsocks、Hysteria 1 / 2、TUIC、WireGuard、NaiveProxy、SOCKS5、HTTP 等全协议栈,提供毫秒级 TCP 握手测速、零断流节点热重载、Windows 进程应用级分流、防污染 FakeIP DNS 解析、WebDAV 云端多端同步与系统托盘快捷控制。
+分别连接这些工具之后，真正麻烦的是让它们一起工作：默认出口被切换、公司域名解析失效、内网地址走错隧道，或者程序退出后系统代理仍指向一个失效端口。用户不得不反复连接、断开和修改规则。
 
----
+**BlueWing 围绕“同时使用这些网络”开发**：把企业接入、公网代理和本机出口放进同一套分流规则中，按资源决定路径，并在界面上展示接入状态和流量去向。希望减少为切换网络而中断工作的次数。
 
-## 🚀 核心特性 / Features
+客户端免费使用。公司 VPN 网关、接入权限、代理节点或订阅由使用者自行准备。
 
-* **现代桌面原生 UI**：无边框设计(页头拖动窗口,内容区滚动后依然可靠;侧栏空白区域亦可拖动)、页头状态栏与内嵌窗口控制,系统浅色 / 深色主题无缝切换,页面切换与卡片交互动效;
-* **官方原生代理核心**：基于sing-box v1.14.3 的 BlueWing 维护构建,集成 gVisor 高性能网络协议栈与 Clash API 监控;
-* **零断流节点热切换**：集成 Clash API 动态热重载选择器，节点切换瞬间完成，零断流不断网；
-* **全协议栈与最新传输**：
-  * 支持 **VLESS** (支持 `xtls-rprx-vision` 流控、Reality 伪装、gRPC / WebSocket 传输);
-  * 支持 **VMess**, **Trojan**, **Shadowsocks**;
-  * 支持 **Hysteria 1 / 2** (含 Salamander 混淆)；
-  * 支持 **TUIC v5** (原生 QUIC 拥塞控制)；
-  * 支持 **WireGuard**(sing-box endpoint 架构)、**NaiveProxy**(真实 Chrome TLS 指纹,内置 libcronet)、**SOCKS5**、**HTTP**;
-* **双模式代理接管**：
-  * **Windows 系统代理**：真实操纵注册表与 WinINet API，智能绕过局域网地址，所有权跟踪与异常启动自动修复；
-  * **TUN 虚拟网卡**：基于 Wintun 0.14.1 驱动，全局透明接管所有软件网络流量，支持 DNS 劫持防护；
-* **Windows 应用分流**：支持扫描本机运行中的应用进程，精准针对可执行程序 (.exe) 指定走代理、直连或阻止连接；
-* **隔离物理级网络测速中心**：
-  * 核心内置独立 `speedtest-in` 回环入站与 `speedtest-selector` 出站组，测速与正常上网流量互不干扰；
-  * 原生 TCP Ping 三次握手精确时延检测（支持 10 并发极速测试）；
-  * HTTP URL 响应延迟与下行带宽吞吐测速，支持卡片与表格双重视图及数值外显；
-* **安全防污染 DNS**：
-  * 支持标准真实 IP 模式与 **FakeIP** (`198.18.0.0/15`) 极速首包响应模式；
-  * 支持自定义 DNS 服务器与 4096 条 DNS 内存高速缓存加速；
-* **跨端无损备份与数据安全**：
-  * 本地凭据采用 Windows DPAPI 系统凭据加密存储 (`enc:dpapi:`)；
-  * 数据库采用 Schema v3 原子写入，支持断电 0 字节自愈保护与损坏自动隔离；
-  * 深度打通 Android 手机端（AndroidParcel / Kryo 序列化无损互转），支持选择性分类备份与原子回滚保护；
-  * 内置 WebDAV 云备份与双向快照恢复；
-* **端到端纯净日志**：ANSI 控制符清洗，毫秒级时间戳，系统/核心/网络分类标签，平稳刷盘保护；
-* **系统托盘与便捷交互**：系统托盘常驻，支持动态连接状态显示与一键切换节点。
+## BlueWing 的特点
 
----
+### 企业 VPN 与公网代理协同
 
-## 📥 发行版下载 / Download
+默认智能分流下，公司资源走对应的企业隧道，国内公网和本地网络优先使用本机出口，国外网站使用已启用的代理节点。也可以分别调整国内、国外和局域网流量的出口。
 
-请前往 Gitee 仓库获取经过编译的 Windows 正式版本：
+| 访问目标 | 默认处理方式 |
+| --- | --- |
+| 公司 Git、SSH、内部网页 | 按网关下发资源、手动域名或网段规则，进入对应公司 VPN |
+| 国内公网服务 | 使用本机网络 |
+| 国外网站与开发工具 | 使用已启用的公网代理；未启用代理时按当前策略处理 |
+| 本地局域网设备 | 保留本地访问路径，明确配置的公司资源按公司规则处理 |
 
-👉 **[前往 Gitee 仓库](https://gitee.com/vtsoft_cn/blue-bird)**
+**只有公司内网需求时，也可以不添加代理节点，直接启动直连分流并连接企业接入。** 分流仍受网关授权和实际网络可达性约束。
 
-| 安装包类型 | 文件名 | 适用场景 |
-| :--- | :--- | :--- |
-| **Windows 安装版** | `BlueWingConnect-Setup.exe` | 推荐普通用户使用，自动创建开始菜单与桌面快捷方式，支持卸载 |
-| **便携绿色版** | `release/win-unpacked/` 目录 | 解压即用，数据保存在 exe 同级 data/ 目录,适合移动硬盘随身携带 |
+### 多个公司接入同时使用
 
-> 💡 **数据说明**：用户数据（配置、订阅、日志等）跟随安装位置——安装到用户可写目录时保存在安装目录下的 `data/`；安装到 `C:\Program Files` 等受保护位置时保存在 `%APPDATA%\BlueWingConnect`,并在下次换装到可写位置时自动整体迁回、不留副本。升级重装自动保留数据（即使应用正在运行中直接覆盖升级同样安全——安装器会先让运行实例还原系统代理后退出,再保全数据）；仅通过控制面板正式卸载时才会连同数据一并清理（此时也会还原/清除应用开启的系统代理）。
+内置企业接入可以同时建立多条连接，每条接入独立显示状态、认证提示和错误。可以只断开其中一家，其他接入继续保留。
 
----
+公司资源按各自规则匹配；重叠资源按接入优先级选择，数字越小越优先。同一个私网地址可能属于不同公司，无法仅凭地址确定业务归属时，需要明确配置规则。最高优先级的活动接入决定普通流量策略。
 
-## 🛠 本地开发与构建 / Development & Build
+### 减少手动维护内网规则
 
-### 依赖环境
-* Node.js >= 22.12.0
-* npm >= 10.0
+优先使用网关资源、手动域名、IP / 网段和固定解析。对未配置的私网 TCP 目标，可以在实际访问时尝试可用路径，并记住已验证的目标。
 
-### 编译步骤
-```bash
-# 1. 克隆代码仓库
-git clone https://gitee.com/vtsoft_cn/blue-bird.git
-cd blue-bird
+自动识别针对实际访问的目标，**不会从一个成功 IP 推断整个网段的归属，也不扫描未访问的设备**。特殊公司域名和地址冲突仍需要明确配置。SoftEther 在 TUN 模式下还提供 IPv4 UDP / ICMP 转发，支持未知私网目标的首包处理；其他内置企业接入目前主要使用 IPv4 TCP。
 
-# 2. 安装前端与桌面依赖
+### 关注异常后的网络恢复
+
+系统代理记录原始状态和当前所有权。正常退出、核心异常和登录后的残留检查会尝试恢复 BlueWing 接管的代理，并核对状态，避免覆盖其他软件后来设置的代理。
+
+公司隧道异常掉线时，已知公司资源保留保护规则，避免自动流入其他公司或公网；用户主动断开后释放该接入的保护。日志区分认证、隧道与分流阶段，便于判断问题发生在哪里。
+
+### 保留日常代理客户端的能力
+
+- **系统代理与 TUN**：按应用支持情况选择接管方式；TUN 通常需要管理员权限。配置应用规则后，流量仍需先进入 BlueWing 才能分流。
+- **节点、订阅与应用分流**：支持常见代理协议、订阅导入，以及按 Windows 进程指定代理、直连或阻止。
+- **DNS 与固定解析**：支持标准 / FakeIP 模式、自定义 DNS、公司域名解析和应用内 Hosts。
+- **测速与流量观察**：TCP 延迟、HTTP 响应和下载测速分开呈现；测速使用独立入口，避免改变正常使用的节点选择。
+- **备份与桌面交互**：分类导入导出、可选口令加密完整备份、HTTPS WebDAV 备份，以及浅色 / 深色主题和托盘控制。
+
+节点切换尽量使用选择器更新；涉及配置或共享分流核心重建时，已有连接可能中断，不保证所有长连接无感切换。
+
+## 接入范围与当前边界
+
+### 企业 VPN
+
+| 接入方式 | 当前范围 |
+| --- | --- |
+| EasyConnect | 内置接入，支持账号密码和已实现的动态码认证流程；已有部分真实网关验证，兼容性仍取决于具体网关 |
+| SoftEther | 内置 Virtual HUB 与账号密码接入；已有真实网关验证，TUN 下提供 IPv4 TCP / UDP / ICMP 路径 |
+| aTrust | 已实现登录域、认证方式发现及部分交互认证；要求可信终端的网关可能拒绝接入，尚不能作为通用替代方案 |
+| IKEv2、L2TP/IPsec、SSTP、OpenVPN、WireGuard 及其他企业网关协议 | 保留为实验功能，尚未完成真实网关验收，默认收起在“更多接入方式”中 |
+
+界面中的接入类型表示存在实现入口，不代表所有服务器版本、认证方式、终端检查和网络组合均兼容。内置企业隧道目前不提供 IPv6；不同接入的 UDP / ICMP 能力也不相同。详细范围见 [多 VPN 接入设计](docs/design/multi-vpn-access.md) 和 [SoftEther 接入说明](docs/design/softether-access-implementation.md)。
+
+### 公网代理
+
+维护核心基于 sing-box，客户端已接入 VLESS / Reality、VMess、Trojan、Shadowsocks、Hysteria 2、TUIC、WireGuard、NaiveProxy、SOCKS 和 HTTP 等节点类型。具体传输与选项以客户端、维护核心和服务端共同支持的范围为准。
+
+BlueWing 的价值在于把多种接入的资源和出口统一管理。真实网关验证和长期稳定性验证仍在持续进行，欢迎提供可脱敏复现的兼容性反馈。
+
+## 开始使用
+
+1. 如需访问国外网站，在“节点”或“订阅”中添加自己的代理配置，然后在首页选择出口并连接。只有公司内网需求时，可以选择“本机直连”。
+2. 在“VPN 接入”中新增公司接入，按公司提供的信息填写网关、账号和认证方式。
+3. 连接后检查公司资源和流量去向；网关未下发的业务域名、IP 或网段可在“高级分流”补充。
+4. 浏览器通常可以使用系统代理。Xshell 等支持显式代理的软件可使用接入页显示的应用代理地址；默认回环入口为 `127.0.0.1:2080`。需要接管不遵循系统代理的软件时，再考虑 TUN。
+
+测试业务时，请直接检查网页、SSH 等实际连接。`ping` 使用 ICMP，其结果不能代替 TCP 业务验证。
+
+安装包以仓库 Releases 中实际提供的版本和说明为准。完整分发包包含第三方引擎、运行库和规则，公开发行前需要完成 [发布检查](PUBLIC_RELEASE_CHECKLIST.md)；当前检查记录仍有待补材料，不应把源码构建成功视为公开二进制发行已经就绪。
+
+## 数据与备份
+
+只有密码和密钥使用既有 Windows 密码保护方式；名称、地址、节点 UUID、订阅、路由和 DNS 正常存储。密码暂时无法读取或保存时，软件保留原始文件并提示，不因密码存储不可用而直接退出。
+
+普通导出默认省略凭据；完整迁移可以选择口令加密备份。WebDAV 使用 HTTPS 并要求备份口令。节点 UUID、订阅链接和普通配置仍可能包含访问凭证或内部地址，分享时应使用脱敏导出并检查内容。Windows 保护的数据不能仅靠复制文件保证跨电脑恢复。
+
+安装到 `Program Files` 等受保护目录时，数据通常保存在 `%APPDATA%\BlueWingConnect`；便携模式使用程序同级 `data/`，目录选择和迁移由程序处理。升级或迁移前建议先导出备份。更多说明见 [隐私说明](PRIVACY.md)。
+
+## 本地开发
+
+面向 Windows x64。建议使用 Node.js 24、npm 10 或以上版本；两个维护核心固定使用 Go 1.26.10。
+
+克隆仓库并安装依赖：
+
+```powershell
+git clone https://github.com/vtsoft-cn/BlueWing.git
+cd BlueWing
 npm ci
 
-# 3. 运行本地开发环境
-#    (npm run dev 启动 Vite 渲染层开发服务器;调试完整桌面端需先 npm run build,
-#     再以 VITE_DEV_SERVER_URL=http://localhost:5173 electron dist/main/index.js 启动主进程)
-npm run dev
-
-# 4. 运行全量单元与集成测试套件 （以当前测试输出为准）
-npm test
-
-# 5. 构建前端与主进程(图标直接使用 src/images,无构建期处理)
+# 构建渲染层与 Electron 主进程
 npm run build
 
-# 6. 打包生成 Windows 安装程序与免安装目录
-npm run dist
+# 启动完整桌面应用
+npx electron dist/main/index.js
 ```
-构建产物将保存在 `release/` 目录中：
-- `release/win-unpacked/BlueWing Connect.exe`
-- `release/BlueWingConnect-Setup.exe`
 
-## Windows EasyConnect 共存诊断
-
-保留 Windows 版 EasyConnect 时，先区分连接后的路由、DNS 变化与客户端网络过滤。
-项目提供只读采集脚本，在断网期间也会继续将结果保存在本机：
+`npm run dev` 仅启动 Vite 渲染层开发服务器。需要联调桌面端时，先构建主进程，再在另一个 PowerShell 中执行：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\diagnose-easyconnect.ps1 -DurationSeconds 180
+$env:VITE_DEV_SERVER_URL = 'http://localhost:5173'
+npx electron dist/main/index.js
 ```
 
-使用平时登录桌面的 Windows 账户运行。开始采集后连接 EasyConnect，故障出现后保持
-10～15 秒，再断开 EasyConnect。结果保存在 `work/easyconnect-diagnostics/`，已从 Git 排除。
-脚本不修改路由、DNS、系统代理、驱动、服务或防火墙。
-
-采集包含路由、网卡、DNS、系统代理、相关进程及 TCP 连通性，并对比普通连接与指定物理网卡
-出口的连接。物理网卡测试成功而普通连接失败，可以进一步验证指定代理出口的修复；两者都失败
-时，需要结合路由、DNS 与过滤证据继续判断，不能仅凭超时认定专线模式，也不能把新增 `DIRECT`
-规则视为已解除限制。
-
-可用 `-IntranetHost 内网域名或IP -IntranetPort 443` 同时探测一个公司资源；
-`-DurationSeconds 0` 只采集一次当前状态。
-
-需要继续定位 Windows 过滤规则时，可以运行：
+完整运行和打包需要 `bin/` 下的维护核心、相应运行库与规则。纯源码快照不携带第三方二进制或规则，需先补齐有权使用的材料；核心构建入口如下：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\inspect-easyconnect-filters.ps1 -WatchSeconds 600
+npm run build:vpn-core
+npm run build:routing-core
 ```
 
-此脚本需要有权导出 WFP 状态的 Windows 账户。开始时保持 EasyConnect 断开，提示等待后
-连接并保持故障约 30 秒，再断开。脚本自动保存连接前、连接中与断开后的过滤规则、规则差异
-及公网／物理网关 TCP 探测结果；除了按 GUID 对比，也按规则内容对比，避免 Windows
-防火墙重建规则导致大量无关差异。`-WatchSeconds 0` 仅保存当前状态。
-它不会增加、删除或修改任何过滤规则。采集文件包含网络及应用路径信息，分享前请检查。
+常用验证和打包命令：
 
+```powershell
+npm test                       # 应用回归
+npm run test:vpn:integration    # 隔离的真实核心转发验证
+npm run test:startup            # 启动与密码存储异常验证
+npm run test:vpn:ui             # 隔离的接入界面验证
+npm run dist                   # 本地构建安装包，不自动发布
+```
 
-## 开源许可与安全发布
+安装包输出到 `release/BlueWingConnect-Setup.exe`，免安装目录为 `release/win-unpacked/`。隔离测试通过不等于所有真实网关与业务场景均已验收。
 
-原创代码采用 [AGPL-3.0-only](LICENSE)，第三方组件保留各自许可，见 [第三方声明](THIRD_PARTY_NOTICES.md) 和 [发布检查](PUBLIC_RELEASE_CHECKLIST.md)。公司现场数据与私有 Git 历史不应直接公开。`npm run public:source` 生成不含历史、运行数据和随包第三方二进制的新源码快照；不会改写当前仓库或发布到网络。第三方运行库及规则来源未完成核对时，快照不携带这些文件，构建完整运行版需自行提供有权使用的材料。
+## 反馈与参与
 
-日常配置不整库加密：名称、地址、节点 UUID、订阅、路由和 DNS 正常存储，只有密码和密钥使用原有 Windows 密码保护。程序就绪后才读取密码；密码暂不可读写时保留原文件并提示修改仅在本次会话生效，软件仍可打开使用。普通配置导出无需口令且省略凭据，需要完整迁移时可选口令加密备份。WebDAV 要求 HTTPS 及备份口令。见 [隐私说明](PRIVACY.md)。
+欢迎提交界面体验、兼容性和分流问题。反馈中请说明版本、接入类型、系统代理 / TUN 模式、预期出口、实际错误和最小复现步骤，并移除公司地址、账号及其他敏感信息。安全问题请按 [安全报告说明](SECURITY.md) 通过私密渠道反馈。
+
+保留官方 EasyConnect 客户端时，可参考 [共存诊断指南](docs/design/easyconnect-coexistence-diagnostics.md) 采集路由、DNS、代理和过滤变化。诊断文件仅保存在本机，分享前仍需检查内容。
+
+## 开源许可与发布
+
+原创代码采用 [AGPL-3.0-only](LICENSE)，第三方组件保留各自许可，见 [第三方声明](THIRD_PARTY_NOTICES.md)。免费使用与开源授权不免除再分发时的许可和对应源码义务。
+
+`npm run public:source` 生成不含私有 Git 历史、运行数据和第三方二进制的源码快照，不会自动上传或公开仓库。公开发布应使用审阅后的快照，并完成 [发布检查](PUBLIC_RELEASE_CHECKLIST.md)。
