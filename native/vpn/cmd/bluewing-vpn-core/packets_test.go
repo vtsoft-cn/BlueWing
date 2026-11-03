@@ -192,12 +192,12 @@ func TestAuthenticatedPacketLinkDeliversFirstQueuedPacket(t *testing.T) {
 	packet[8] = 64
 	packet[9] = 1
 	copy(packet[12:], net.IPv4(172, 19, 0, 1).To4())
-	copy(packet[16:], net.IPv4(192, 168, 110, 45).To4())
+	copy(packet[16:], net.IPv4(10, 203, 17, 45).To4())
 	packet[20] = 8
 	clientTUN.queue <- packet
 	select {
 	case b := <-got:
-		if len(b) < 28 || !net.IP(b[16:20]).Equal(net.IPv4(192, 168, 110, 45)) {
+		if len(b) < 28 || !net.IP(b[16:20]).Equal(net.IPv4(10, 203, 17, 45)) {
 			t.Fatal("first packet changed")
 		}
 		server.send(b)
@@ -239,7 +239,7 @@ func TestPacketAuthorizationCoversPrivateICMPAndUDPWithoutLearning(t *testing.T)
 		b[0] = 0x45
 		b[3] = 32
 		b[9] = proto
-		copy(b[16:], net.IPv4(192, 168, 110, 45).To4())
+		copy(b[16:], net.IPv4(10, 203, 17, 45).To4())
 		b[22] = 0x27
 		b[23] = 0x0f
 		if !s.allowedPacket(b) {
@@ -249,8 +249,8 @@ func TestPacketAuthorizationCoversPrivateICMPAndUDPWithoutLearning(t *testing.T)
 		if s.allowedPacket(b) {
 			t.Fatal("split packet scope widened to public traffic")
 		}
-		copy(b[16:], net.IPv4(192, 168, 110, 45).To4())
-		s.p.Targets = []target{{CIDRs: []string{"192.168.110.0/24"}, Ports: []string{"22"}, Network: "tcp"}}
+		copy(b[16:], net.IPv4(10, 203, 17, 45).To4())
+		s.p.Targets = []target{{CIDRs: []string{"10.203.17.0/24"}, Ports: []string{"22"}, Network: "tcp"}}
 		if s.allowedPacket(b) {
 			t.Fatal("explicit company restriction bypassed")
 		}

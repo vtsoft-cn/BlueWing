@@ -17,7 +17,7 @@ async function main() {
     id: 'dialtest3',
     name: '拨号链路测试',
     type: 'l2tp',
-    server: '172.25.167.75',
+    server: '127.0.0.1',
     username: 'hub1\\alice',
     password: 'pw',
     l2tpPsk: 'testpsk',

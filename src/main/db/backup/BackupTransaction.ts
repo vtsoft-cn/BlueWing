@@ -171,9 +171,9 @@ export class BackupTransaction {
           finalSettings = {
             ...origSettings,
             ...payload.settings,
-            // Preserve sensitive WebDAV credentials if not provided
+            // Reuse credentials only for the same server and account.
             webdav: {
-              ...origSettings.webdav,
+              ...((!payload.settings.webdav || ((payload.settings.webdav.serverUrl ?? origSettings.webdav.serverUrl) === origSettings.webdav.serverUrl && (payload.settings.webdav.username ?? origSettings.webdav.username) === origSettings.webdav.username)) ? origSettings.webdav : {...origSettings.webdav,password:'',backupPassphrase:'',autoSync:false}),
               ...(payload.settings.webdav || {}),
             },
           };
@@ -184,41 +184,7 @@ export class BackupTransaction {
         }
       }
 
-      // 3. Atomically write to disk via temporary file
-      const dbPath = path.join(Database.getInstance().getDataDir(), 'bluewing.json');
-      const tmpPath = `${dbPath}.tmp`;
-      const bakPath = `${dbPath}.bak`;
-
-      const newDbState = {
-        activeNodeId: finalNodes.some((n) => n.id === origActiveId)
-          ? origActiveId
-          : finalNodes[0]?.id || '',
-        nodes: finalNodes,
-        subscriptions: finalSubs,
-        rules: finalRules,
-        appRules: finalAppRules,
-        dns: finalDns,
-        settings: finalSettings,
-      };
-
-      const jsonStr = JSON.stringify(newDbState, null, 2);
-      fs.writeFileSync(tmpPath, jsonStr, 'utf8');
-
-      if (fs.existsSync(dbPath)) {
-        try {
-          fs.copyFileSync(dbPath, bakPath);
-        } catch {}
-      }
-
-      fs.renameSync(tmpPath, dbPath);
-
-      // 4. Update in-memory Database instance
-      db.saveNodes(finalNodes);
-      db.saveSubscriptions(finalSubs);
-      db.saveRules(finalRules);
-      db.saveAppRules(finalAppRules);
-      db.saveDns(finalDns);
-      db.saveSettings(finalSettings);
+      db.replaceForImport({nodes:finalNodes,subscriptions:finalSubs,rules:finalRules,appRules:finalAppRules,dns:finalDns,settings:finalSettings,activeNodeId:finalNodes.some(n=>n.id===origActiveId)?origActiveId:finalNodes[0]?.id||''});
 
       return {
         success: true,
@@ -233,15 +199,7 @@ export class BackupTransaction {
         },
       };
     } catch (err: any) {
-      // Rollback to original in-memory state
-      db.saveNodes(origNodes);
-      db.saveSubscriptions(origSubs);
-      db.saveRules(origRules);
-      db.saveAppRules(origAppRules);
-      db.saveDns(origDns);
-      db.saveSettings(origSettings);
-      if (origActiveId) db.setActiveNodeId(origActiveId);
-
+      // Database restores its in-memory state if the single encrypted commit fails.
       throw new Error(`Transaction aborted, database rolled back: ${err.message}`);
     }
   }

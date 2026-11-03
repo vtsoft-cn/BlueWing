@@ -35,7 +35,8 @@ var diagnosticFull bool
 func SetDiagnostics(f func(map[string]any), full bool) {
 	mu.Lock()
 	defer mu.Unlock()
-	diagnosticTrace, diagnosticFull = f, full
+	// Compatibility argument retained; released builds only emit metadata.
+	diagnosticTrace, diagnosticFull = f, false
 }
 
 func Configure(ctx context.Context, p Policy, f Prompt) {

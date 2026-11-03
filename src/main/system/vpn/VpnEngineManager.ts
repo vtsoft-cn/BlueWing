@@ -136,6 +136,10 @@ export class VpnEngineManager extends EventEmitter {
       LogManager.getInstance().addLog('warn', 'VPN 连接失败:档案不存在', 'system');
       return false;
     }
+    if (profile.credentialsUnavailable) {
+      LogManager.getInstance().addLog('warn', 'VPN 凭据暂时不可读取，请重新填写密码或新建配置', 'system');
+      return false;
+    }
 
     this.switching = true;
     const generation = ++this.generation;

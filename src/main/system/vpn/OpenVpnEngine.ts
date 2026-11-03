@@ -1,6 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { validateOpenVpnConfig, validateVpnId } from '../../security/VpnConfigSecurity';
+import { privateDirectory } from '../../security/PrivateFiles';
 import { Database } from '../../db/Database';
 import { VpnProfile } from '../../../types';
 import { VpnEngine, VpnEngineContext } from './EngineContract';
@@ -131,6 +133,7 @@ export class OpenVpnEngine implements VpnEngine {
   }
 
   public async start(ctx: VpnEngineContext): Promise<void> {
+    validateVpnId(ctx.profile.id);
     this.ctxRef = ctx;
     this.stopped = false;
     const { profile } = ctx;
@@ -154,13 +157,14 @@ export class OpenVpnEngine implements VpnEngine {
       );
       return;
     }
+    validateOpenVpnConfig(configContent);
     if (profile.authUserPass && !profile.username) {
       ctx.onError('已启用用户名密码认证,但未填写用户名');
       return;
     }
 
     const vpnDir = path.join(Database.getInstance().getDataDir(), 'vpn');
-    fs.mkdirSync(vpnDir, { recursive: true });
+    privateDirectory(vpnDir);
     const configPath = path.join(vpnDir, `${profile.id}.ovpn`);
     fs.writeFileSync(configPath, configContent, 'utf8');
 
@@ -198,9 +202,11 @@ export class OpenVpnEngine implements VpnEngine {
     this.proc.stdout?.on('data', (d) => this.handleOutput(ctx, d.toString(), false));
     this.proc.stderr?.on('data', (d) => this.handleOutput(ctx, d.toString(), false));
     this.proc.on('error', (err) => {
+      this.cleanupCredentials();
       ctx.onError(`OpenVPN 引擎启动失败: ${err.message}`);
     });
     this.proc.on('close', (code) => {
+      this.cleanupCredentials();
       this.proc = null;
       if (!this.stopped && !this.exitNotified) {
         this.exitNotified = true;
@@ -300,6 +306,7 @@ export class OpenVpnEngine implements VpnEngine {
   }
 
   public async stop(): Promise<void> {
+    this.cleanupCredentials();
     this.stopped = true;
     const proc = this.proc;
     if (proc?.pid) {
@@ -309,5 +316,13 @@ export class OpenVpnEngine implements VpnEngine {
       } catch {}
     }
     this.proc = null;
+  }
+
+  private cleanupCredentials(): void {
+    const id = this.ctxRef?.profile.id;
+    if (!id || !/^[a-zA-Z0-9-]{1,64}$/.test(id)) return;
+    for (const extension of ['auth', 'ovpn']) {
+      try { fs.rmSync(path.join(Database.getInstance().getDataDir(), 'vpn', `${id}.${extension}`), { force: true }); } catch { /* Retained only inside the owner-only directory on failure. */ }
+    }
   }
 }

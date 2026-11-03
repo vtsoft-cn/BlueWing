@@ -61,7 +61,7 @@ ipcMain.handle('vpn:disconnect', async () => {
   change({state:'stopping'}); await sleep(180); change({state:'idle'});
 });
 app.whenReady().then(async () => {
-  window = new BrowserWindow({show:false, width:1280, height:900, webPreferences:{preload:__PRELOAD__, contextIsolation:true, sandbox:false, offscreen:true, backgroundThrottling:false}});
+  window = new BrowserWindow({show:false, width:1280, height:900, webPreferences:{preload:__PRELOAD__, contextIsolation:true, sandbox:true, offscreen:true, backgroundThrottling:false}});
   const errors = [];
   window.webContents.on('console-message', event => { if(event.level==='error') errors.push(event.message); });
   const js = source => window.webContents.executeJavaScript(source);

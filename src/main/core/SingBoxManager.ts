@@ -1,6 +1,7 @@
 import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { privateDirectory } from '../security/PrivateFiles';
 import os from 'os';
 import net from 'net';
 import http from 'http';
@@ -168,7 +169,7 @@ export class SingBoxManager extends EventEmitter {
       };
       try {
         // PS 单引号字符串内反斜杠为字面量,路径可直接内插
-        const script = `Get-Process sing-box -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${this.binaryPath}' } | ForEach-Object { $_.Id }`;
+        const script = `Get-Process sing-box -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${this.binaryPath.replace(/'/g, "''")}' } | ForEach-Object { $_.Id }`;
         const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
           windowsHide: true,
         });
@@ -230,6 +231,7 @@ export class SingBoxManager extends EventEmitter {
   public async validate(config: Record<string, any>): Promise<{ valid: boolean; error?: string }> {
     const testConfigPath = `${this.configPath}.test.json`;
     try {
+      privateDirectory(path.dirname(this.configPath));
       fs.writeFileSync(testConfigPath, JSON.stringify(config, null, 2), 'utf8');
       return new Promise((resolve) => {
         const proc = spawn(this.binaryPath, ['check', '-c', testConfigPath], {
@@ -318,7 +320,8 @@ export class SingBoxManager extends EventEmitter {
           return false;
         }
 
-        fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf8');
+        privateDirectory(path.dirname(this.configPath));
+        fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
 
         const workingDir = path.dirname(this.binaryPath);
         this.log('info', `正在拉起核心引擎进程: ${this.binaryPath}`, 'core');

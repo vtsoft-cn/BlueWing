@@ -326,7 +326,11 @@ export class CorporateVpnSession extends EventEmitter {
       const isCurrent = () => this.state.generation === generation && this.state.state === 'starting' && permitted();
       try {
         const key = this.credentialKey(p, 'password');
-        const secret = password || (p.rememberPassword ? this.vault.get(key) : undefined) || '';
+        let savedPassword: string | undefined;
+        if (!password && p.rememberPassword && this.vault.available()) {
+          try { savedPassword = this.vault.get(key); } catch { /* Re-enter the password for this connection. */ }
+        }
+        const secret = password || savedPassword || '';
         if (!secret && p.authMethod !== 'auth/smsCheckCode') throw new Error(this.vault.needsReentry(p) ? 'CREDENTIAL_REENTRY_REQUIRED' : '请输入密码');
         this.policy.begin(p.id, this.profiles.list());
         await this.prepareRuntime(true);
@@ -350,10 +354,14 @@ export class CorporateVpnSession extends EventEmitter {
         if (!isCurrent()) return;
         this.diagnostics.input(id, 'password', secret);
         this.desired = { id, password: secret };
-        if (p.rememberPassword && password) this.vault.set(key, password);
-        const session = p.rememberSession
-          ? this.vault.get(this.credentialKey(p, 'session'))
-          : undefined;
+        if (p.rememberPassword && password) {
+          try { this.vault.set(key, password); }
+          catch { console.warn('密码仅用于本次连接，暂时无法记住密码'); }
+        }
+        let session: string | undefined;
+        if (p.rememberSession && this.vault.available()) {
+          try { session = this.vault.get(this.credentialKey(p, 'session')); } catch { /* Fresh authentication remains available. */ }
+        }
         this.core.send('connect', {
           profile: p,
           password: secret,
@@ -664,8 +672,10 @@ export class CorporateVpnSession extends EventEmitter {
         p.rememberSession &&
         typeof e.data === 'string' &&
         e.data.length < 1024 * 1024
-      )
-        this.vault.set(this.credentialKey(p, 'session'), e.data);
+      ) {
+        try { this.vault.set(this.credentialKey(p, 'session'), e.data); }
+        catch { console.warn('本次连接有效，暂时无法保存登录会话'); }
+      }
     } else if (e.type === 'error') {
       const d = e.data;
       const detail = d && typeof d.message === 'string' && typeof d.stage === 'string'

@@ -576,7 +576,7 @@ export const VpnAccess: React.FC<{
             </p>
           </aside>
           {selected && selected.engine && (
-            <div className="vpn-detail-column">
+            <div className="vpn-detail-column" ref={detailRef}>
               <section className="vpn-connection-card" aria-label="连接面板">
                 <header className="vpn-connection-header">
                   <div className="vpn-connection-identity">
@@ -664,7 +664,7 @@ export const VpnAccess: React.FC<{
             </div>
           )}
           {selected && !selected.engine && (
-            <div className="vpn-detail-column">
+            <div className="vpn-detail-column" ref={detailRef}>
               <section className="vpn-connection-card" aria-label="连接面板">
                 <header className="vpn-connection-header">
                   <div className="vpn-connection-identity">
@@ -936,7 +936,7 @@ export const VpnAccess: React.FC<{
                     </div>
                   </form>
                   <div className="vpn-diagnostics-bar">
-                    <span>{selected.profile.diagnosticMode === 'full' ? '完整诊断已开启 · 含明文凭据' : selected.profile.diagnosticMode === 'detail' ? '连接诊断已开启' : '基础错误日志'}</span>
+                    <span>{selected.profile.diagnosticMode === 'full' ? '扩展诊断已开启 · 已脱敏' : selected.profile.diagnosticMode === 'detail' ? '连接诊断已开启' : '基础错误日志'}</span>
                     <div><button type="button" className="vpn-text-button" disabled={busy || !selectedDiagnostic?.exists}
                       onClick={() => run(async () => { await window.electronAPI.corporateVpn.openDiagnostics(selected.id); })}>打开日志</button>
                     <button type="button" className="vpn-text-button" disabled={busy || !selectedDiagnostic?.exists}
@@ -1300,7 +1300,7 @@ export const VpnAccess: React.FC<{
             onClose={() => setAddPickerOpen(false)}
             onPickCorporate={(protocol) => {
               setAddPickerOpen(false);
-              openEditor({ ...newVpnProfile(), protocol });
+              openEditor(newVpnProfile(protocol));
             }}
             onPickEngine={(type) => {
               setAddPickerOpen(false);
@@ -1383,6 +1383,7 @@ const AddTypePicker: React.FC<{
             </button>
           ))}
           <div className="vpn-add-type-divider" />
+          <p className="vpn-field-hint" role="note">以下接入为实验功能，尚未完成真实网关验收。</p>
           {TYPE_GROUPS.map((t) => (
             <button
               key={t.id}
@@ -1505,7 +1506,7 @@ export const VpnAccessStatus: React.FC<{
                 onDismiss={() => setChallengeOpen(false)}
                 onSubmit={(value) =>
                   window.electronAPI.corporateVpn
-                    .respond(challengeView.id, challengeView.generation, value)
+                    .respond(challengeView.id, challengeView.generation, value, challengeView.profileId)
                 }
               />
             </div>

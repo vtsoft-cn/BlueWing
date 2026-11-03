@@ -9,7 +9,7 @@ const local = path.join(tools, 'toolchain', 'go', 'bin', 'go.exe');
 const go = process.env.GO_BINARY || (fs.existsSync(local) ? local : 'go');
 const env = {
   ...process.env,
-  GOTOOLCHAIN: 'local',
+  GOTOOLCHAIN: 'go1.26.10',
   GOPATH: process.env.GOPATH || path.join(tools, 'gopath'),
   GOCACHE: process.env.GOCACHE || path.join(tools, 'gocache'),
 };
@@ -18,8 +18,8 @@ const version = execFileSync(go, ['version'], {
   windowsHide: true,
   env,
 }).trim();
-if (!/go1\.25\.6\b/.test(version))
-  throw new Error('Use the pinned Go 1.25.6 toolchain (GO_BINARY).');
+if (!/go1\.26\.10\b/.test(version))
+  throw new Error('Use the pinned Go 1.26.10 toolchain (GO_BINARY).');
 const bin = path.join(root, 'bin');
 fs.mkdirSync(bin, { recursive: true });
 execFileSync(
@@ -83,7 +83,7 @@ fs.copyFileSync(
 const manifest = {
   schemaVersion: 1,
   name: 'bluewing-vpn-core',
-  revision: '5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.9-network-audit',
+  revision: '5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.10-publish-security',
   controlProtocol: 1,
   upstream: {
     repository: 'https://github.com/Mythologyli/zju-connect',
@@ -121,7 +121,7 @@ const manifest = {
     tun: 'NOT_RUN_REAL_WINDOWS',
   },
   license: 'AGPL-3.0',
-  releaseLicenseDecision: 'PENDING',
+  releaseLicenseDecision: 'AGPL-3.0-only',
 };
 const manifestFile = path.join(bin, 'vpn-core-manifest.json');
 const manifestTemp = `${manifestFile}.${process.pid}.tmp`;

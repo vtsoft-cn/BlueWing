@@ -9,8 +9,8 @@ import (
 )
 
 func TestDHCPClasslessRoutesNeverIncludeDefault(t *testing.T) {
-	routes := classlessRoutes([]byte{0, 10, 0, 0, 1, 24, 192, 168, 110, 10, 0, 0, 1})
-	if len(routes) != 1 || routes[0].String() != "192.168.110.0/24" {
+	routes := classlessRoutes([]byte{0, 10, 0, 0, 1, 24, 10, 203, 17, 10, 0, 0, 1})
+	if len(routes) != 1 || routes[0].String() != "10.203.17.0/24" {
 		t.Fatal(routes)
 	}
 	for _, bad := range [][]byte{{33}, {24, 10}, {24, 10, 20, 30}} {

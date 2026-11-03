@@ -64,7 +64,7 @@ describe('Database Storage & Recovery', () => {
 
     const raw = fs.readFileSync(dbFile, 'utf8');
     const parsed = JSON.parse(raw);
-    assert.equal(parsed.schemaVersion, 2, 'Schema version must be 2');
+    assert.equal(parsed.schemaVersion, Database.CURRENT_SCHEMA_VERSION);
 
     // Verify sensitive password is encrypted on disk
     assert.ok(

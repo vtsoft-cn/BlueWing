@@ -2,18 +2,18 @@
   "name": "bluewing-connect",
   "productName": "BlueWing Connect",
   "version": "1.0.0",
-  "description": "基于 Sing-box 官方原生核心打造的现代化通用代理客户端与网络调试工具",
+  "description": "基于 sing-box 维护核心的 Windows 网络代理与 VPN 客户端",
   "main": "dist/main/index.js",
   "author": {
     "name": "Garden"
   },
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && tsc -p tsconfig.node.json",
-    "test": "npx tsx --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts src/__tests__/datadir.test.ts src/__tests__/corporate-vpn.test.ts src/__tests__/corporate-vpn-multi.test.ts src/__tests__/proxy-lifecycle.test.ts src/__tests__/vpn-edge-cases.test.ts src/__tests__/vpn.test.ts src/__tests__/network-lifecycle.test.ts",
-    "test:vpn": "npx tsx --test src/__tests__/corporate-vpn.test.ts src/__tests__/corporate-vpn-multi.test.ts",
-    "test:vpn:integration": "npx tsx --test src/__tests__/corporate-vpn.integration.test.ts src/__tests__/corporate-vpn-multi.integration.test.ts src/__tests__/corporate-vpn-dns.integration.test.ts",
+    "test": "npx tsx --import ./src/__tests__/helpers/encryption.ts --test src/__tests__/backup.test.ts src/__tests__/core.test.ts src/__tests__/storage.test.ts src/__tests__/routing.test.ts src/__tests__/ui_log.test.ts src/__tests__/datadir.test.ts src/__tests__/corporate-vpn.test.ts src/__tests__/corporate-vpn-multi.test.ts src/__tests__/proxy-lifecycle.test.ts src/__tests__/vpn-edge-cases.test.ts src/__tests__/vpn.test.ts src/__tests__/network-lifecycle.test.ts src/__tests__/public-release-security.test.ts",
+    "test:vpn": "npx tsx --import ./src/__tests__/helpers/encryption.ts --test src/__tests__/corporate-vpn.test.ts src/__tests__/corporate-vpn-multi.test.ts",
+    "test:vpn:integration": "npx tsx --import ./src/__tests__/helpers/encryption.ts --test src/__tests__/corporate-vpn.integration.test.ts src/__tests__/corporate-vpn-multi.integration.test.ts src/__tests__/corporate-vpn-dns.integration.test.ts",
     "test:vpn:watch": "node scripts/vpn-watch-lab.cjs",
     "test:vpn:ui": "node scripts/vpn-access-ui-smoke.cjs",
     "test:vpn:state-ui": "node scripts/vpn-state-ui-smoke.cjs",
@@ -23,7 +23,13 @@
     "dist": "node scripts/preserve-data.js backup && npm run build && node scripts/dist-wrapper.js && node scripts/preserve-data.js restore",
     "dist:dir": "node scripts/preserve-data.js backup && npm run build && node scripts/dist-wrapper.js --dir && node scripts/preserve-data.js restore",
     "build:routing-core": "node scripts/build-routing-core.cjs",
-    "test:installer": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-network-maintenance.ps1"
+    "test:installer": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-network-maintenance.ps1",
+    "postinstall": "node node_modules/electron/install.js",
+    "licenses:inventory": "node scripts/release-inventory.cjs",
+    "public:source": "node scripts/public-source.cjs",
+    "release:check": "node scripts/release-check.cjs",
+    "test:security-ui": "node scripts/security-renderer-smoke.cjs",
+    "test:startup": "node scripts/startup-smoke.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.475.0",
@@ -36,13 +42,13 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "electron": "^44.8.0",
-    "electron-builder": "^26.15.3",
+    "electron": "44.10.1",
+    "electron-builder": "26.18.0",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.23.15",
     "typescript": "^5.7.3",
-    "vite": "^6.1.0"
+    "vite": "6.4.5"
   },
   "build": {
     "appId": "com.bluewing.connect",
@@ -56,6 +62,18 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "PRIVACY.md",
+        "to": "PRIVACY.md"
+      },
+      {
+        "from": "LICENSES",
+        "to": "LICENSES"
+      },
       {
         "from": "THIRD_PARTY_NOTICES.md",
         "to": "THIRD_PARTY_NOTICES.md"
@@ -99,5 +117,17 @@
       "shortcutName": "BlueWing Connect",
       "artifactName": "BlueWingConnect-Setup.exe"
     }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "overrides": {
+    "source-map-js": "^1.2.2",
+    "postcss-selector-parser": "^6.1.5",
+    "fast-uri": "^3.1.9",
+    "@electron/asar": "4.3.1",
+    "dir-compare": "5.0.0",
+    "minimatch": "11.0.1",
+    "glob@>=9.0.0": "14.0.3"
   }
 }

@@ -202,7 +202,7 @@ test('The first private TCP request survives a cold provider handshake and sends
   const received: string[] = [], port = await peer(t, true, received, 3700);
   const proxy = new PrivateRouteProxy(() => [{ id: 'cold', generation: 1, port, user: 'fixture', password: 'fixture' }]);
   const endpoint = await proxy.start(); t.after(() => proxy.stop());
-  const result = await through(endpoint, '192.168.110.45');
+  const result = await through(endpoint, '10.203.17.45');
   assert.equal(result.reply, 0);
   assert.ok(result.body.endsWith('WINNER'));
   assert.equal(received.length, 1);

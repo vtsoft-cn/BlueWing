@@ -1,4 +1,5 @@
 import http from 'http';
+import { coreApiHeaders } from '../security/CoreApiAuth';
 import https from 'https';
 import tls from 'tls';
 import net from 'net';
@@ -259,7 +260,7 @@ export class SpeedTestRunner {
       const tag = `node-${nodeId}`;
       const url = `http://127.0.0.1:${clashPort}/proxies/${encodeURIComponent(tag)}/delay?timeout=${timeoutMs}&url=${encodeURIComponent(testUrl)}`;
 
-      const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      const req = http.get(url, { timeout: timeoutMs, headers: coreApiHeaders() }, (res) => {
         let raw = '';
         res.on('data', (c) => (raw += c));
         res.on('end', () => {
@@ -312,7 +313,7 @@ export class SpeedTestRunner {
           path: '/proxies/speedtest-selector',
           method: 'PUT',
           headers: {
-            'Content-Type': 'application/json',
+            ...coreApiHeaders(), 'Content-Type': 'application/json',
             'Content-Length': String(Buffer.byteLength(payload)),
           },
           timeout: 2000,
@@ -342,7 +343,7 @@ export class SpeedTestRunner {
           path: '/proxies/speedtest-selector',
           method: 'PUT',
           headers: {
-            'Content-Type': 'application/json',
+            ...coreApiHeaders(), 'Content-Type': 'application/json',
             'Content-Length': String(Buffer.byteLength(payload)),
           },
           timeout: 1000,

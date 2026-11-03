@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar';
+import { CredentialStorageNotice } from './components/CredentialStorageNotice';
 import { PageHeader } from './components/PageHeader';
 import { ToastHost, toast } from './components/Toast';
 import { ConfirmDialogHost, confirmDialog } from './components/ConfirmDialog';
@@ -350,6 +351,7 @@ export const App: React.FC = () => {
             latency={settings.routingMode === 'direct' || nodes.length === 0 ? undefined : activeNode?.ping}
           />
           <VpnAccessStatus showSummary={currentTab !== 'vpn-access'} onOpen={() => setCurrentTab('vpn-access')} />
+          <CredentialStorageNotice />
 
           {/* Main Content Area(key 随页签变化,触发入场动画;no-drag 保证滚动条可交互) */}
           <main className={`flex-1 min-h-0 p-6 no-drag ${currentTab === 'vpn-access' ? 'overflow-hidden' : 'overflow-y-auto'}`}>

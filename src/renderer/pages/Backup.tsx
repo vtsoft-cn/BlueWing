@@ -40,6 +40,7 @@ export const Backup: React.FC<BackupProps> = ({
   onUpdateSettings,
   onRefreshAllData,
 }) => {
+  const [backupPassphrase, setBackupPassphrase] = useState('');
   // Category selection for Export
   const [exportCategories, setExportCategories] = useState<BackupCategories>({
     profiles: true,
@@ -129,7 +130,7 @@ export const Backup: React.FC<BackupProps> = ({
       setActionNotice({
         type: 'success',
         message: '备份配置已成功复制到剪贴板！',
-        details: '您可以直接将该文本内容发送给其他设备或通过微信/QQ等直接分享导入。',
+        details: '已移除密码、私钥和订阅地址；导入后需要重新填写。完整迁移请使用口令加密导出。',
       });
     } catch (e: any) {
       setActionNotice({
@@ -143,12 +144,13 @@ export const Backup: React.FC<BackupProps> = ({
   const handleExportWindows = async () => {
     if (!window.electronAPI?.backup) return;
     try {
-      const data = await window.electronAPI.backup.exportData(exportCategories);
+      if (backupPassphrase && backupPassphrase.length < 12) throw new Error('加密备份口令需要至少 12 个字符；留空可导出不含密码的普通配置');
+      const data = await window.electronAPI.backup.exportData(exportCategories, backupPassphrase || undefined);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       downloadFile(data, `BlueWingConnect_Win_Backup_${timestamp}.bluewingbackup`);
       setActionNotice({
         type: 'success',
-        message: 'Windows 桌面端备份文件已生成并下载。',
+        message: backupPassphrase ? '加密备份已生成；请另行保管口令，遗失后无法恢复。' : '普通配置已导出（不含密码和密钥），恢复后请重新填写凭据。',
       });
     } catch (e: any) {
       setActionNotice({
@@ -168,7 +170,7 @@ export const Backup: React.FC<BackupProps> = ({
       setActionNotice({
         type: 'success',
         message: 'Android 手机端兼容备份已成功生成！',
-        details: '该文件符合手机端原生 Base64 Parcel 规范，手机端可直接点击“从文件导入”无损恢复。',
+        details: '已移除密码、私钥和订阅地址；手机端导入后需要重新填写。完整迁移请使用口令加密的桌面备份。',
       });
     } catch (e: any) {
       setActionNotice({
@@ -195,7 +197,7 @@ export const Backup: React.FC<BackupProps> = ({
         // Run dry-run preview in background
         const preview: BackupPreviewResult = await window.electronAPI.backup.previewImport(
           content,
-          importCategories
+          importCategories, backupPassphrase || undefined
         );
         setPreviewResult(preview);
         setPreviewModalOpen(true);
@@ -223,7 +225,7 @@ export const Backup: React.FC<BackupProps> = ({
       const result: BackupImportResult = await window.electronAPI.backup.importWithTransaction(
         pendingFileContent,
         importCategories,
-        importMode
+        importMode, backupPassphrase || undefined
       );
 
       setPreviewModalOpen(false);
@@ -445,6 +447,11 @@ export const Backup: React.FC<BackupProps> = ({
           </div>
         </div>
 
+        <label className="block my-3 text-sm">
+          <span>备份口令（可选；加密完整备份时至少 12 个字符）</span>
+          <input type="password" aria-label="备份口令" autoComplete="new-password" value={backupPassphrase} onChange={e => setBackupPassphrase(e.target.value)} className="block w-full mt-1 px-3 py-2 rounded-xl border dark:bg-slate-800" />
+          <small>留空导出不含密码的普通配置；填写口令可加密导出完整备份。分享和 Android 导出均脱敏。</small>
+        </label>
         {/* The 4 Primary Action Buttons Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Button 1: 分享 (Share) */}
@@ -572,7 +579,7 @@ export const Backup: React.FC<BackupProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 mt-0.5">
-                自动将 Windows 节点的 Sing-box Outbound 配置和分组打包为 Android 原生 Base64 格式，手机端从文件导入即刻恢复
+                将节点和分组转换为 Android 兼容格式；密码、私钥和订阅地址已移除，手机端导入后需重新填写。
               </div>
             </div>
           </div>
@@ -719,6 +726,11 @@ export const Backup: React.FC<BackupProps> = ({
             />
           </div>
 
+          <label className="block text-sm">
+            <span>云备份加密口令（至少 12 个字符）</span>
+            <input type="password" aria-label="云备份加密口令" autoComplete="new-password" value={webdavForm.backupPassphrase || ''} onChange={e => setWebdavForm({ ...webdavForm, backupPassphrase: e.target.value })} className="block w-full mt-1 px-3 py-2 rounded-xl border dark:bg-slate-800" />
+            <small>与 WebDAV 登录密码分开保管，跨设备恢复时填写相同口令。</small>
+          </label>
           <div className="flex items-center justify-between sm:pt-6">
             <span className="font-semibold text-slate-700 dark:text-slate-300">
               自动同步到云端

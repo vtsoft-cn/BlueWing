@@ -27,7 +27,7 @@ const result = spawnSync(
     windowsHide: true,
     env: {
       ...process.env,
-      GOTOOLCHAIN: 'local',
+      GOTOOLCHAIN: 'go1.26.10',
       GOPATH: process.env.GOPATH || path.join(tools, 'gopath'),
       GOCACHE: process.env.GOCACHE || path.join(tools, 'gocache'),
     },

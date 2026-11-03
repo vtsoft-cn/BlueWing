@@ -16,6 +16,8 @@ import {
   BackupCategories,
 } from '../../../types';
 import { VpnProfile } from '../../../types/corporateVpn';
+import { withoutSecrets } from '../../security/SecretFields';
+import { BackupProtection, protectBackup, unprotectBackup } from '../../security/BackupProtection';
 
 export class WindowsBackupCodec {
   public static readonly CURRENT_SCHEMA_VERSION = 3;
@@ -28,7 +30,8 @@ export class WindowsBackupCodec {
     dns: DnsConfig,
     settings: AppSettings,
     categories: BackupCategories = { profiles: true, rules: true, settings: true },
-    corporateVpn?: VpnProfile[]
+    corporateVpn?: VpnProfile[],
+    protection: BackupProtection = {}
   ): string {
     const backup: Partial<BackupData> = {
       schema_version: this.CURRENT_SCHEMA_VERSION,
@@ -59,11 +62,12 @@ export class WindowsBackupCodec {
       backup.webdav = settings.webdav;
     }
 
-    return JSON.stringify(backup, null, 2);
+    if (protection.passphrase || protection.local) return protectBackup(JSON.stringify(backup), protection);
+    return JSON.stringify({ ...withoutSecrets(backup), secretsOmitted: true }, null, 2);
   }
 
-  public static decode(content: string): Partial<BackupData> {
-    const parsed = JSON.parse(content);
+  public static decode(content: string, passphrase?: string): Partial<BackupData> {
+    const parsed = JSON.parse(unprotectBackup(content, passphrase));
     if (!parsed || typeof parsed !== 'object') {
       throw new Error('Invalid JSON structure in backup');
     }

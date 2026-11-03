@@ -175,7 +175,7 @@ func ipv4TestPacket(protocol byte) []byte {
 	b[8] = 64
 	b[9] = protocol
 	copy(b[12:], net.IPv4(172, 19, 0, 1).To4())
-	copy(b[16:], net.IPv4(192, 168, 110, 45).To4())
+	copy(b[16:], net.IPv4(10, 203, 17, 45).To4())
 	copy(b[28:], []byte("first-packet"))
 	if protocol == 1 {
 		b[20] = 8

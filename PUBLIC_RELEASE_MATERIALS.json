@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "projectLicense": "AGPL-3.0-only",
+  "maintainerRightsConfirmed": true,
+  "confirmationDate": "2026-11-03",
+  "binaryRedistribution": {
+    "wintun": false,
+    "openvpnAndLibraries": false,
+    "openconnectAndLibraries": false,
+    "cronetAndChromium": false,
+    "ruleSnapshots": false,
+    "coreDependencyCorrespondingSource": false
+  },
+  "releaseOperations": {
+    "traditionalVpnGatewayValidation": false,
+    "privateSecurityContactConfigured": false,
+    "cleanWindowsValidation": false,
+    "artifactSigningOrProvenance": false
+  },
+  "evidence": {},
+  "note": "Only mark an item complete with reviewable evidence paths/URLs. No credentials or private contact secrets belong here. Source-only snapshot intentionally excludes bundled runtime binaries and private Git history."
+}

@@ -105,7 +105,7 @@ const wgCfg = ConfigGenerator.generate('n1', [node], [], [], { ...dns, mode: 'st
   routes: ['10.7.0.0/16'],
   dnsServers: ['10.7.0.1'],
   domainSuffixes: ['corp.wg'],
-  wireguard: { server: '1.2.3.4', port: 51820, privateKey: 'MIlcShCz0mFiTzShdC7wzZXbpqLqNbFlxI8RVqQD1mA=', peerPublicKey: 'qPC1QTJ4OSIaK4N0u8bqzjgIHQeM8EmN2YcbOopTpTk=', localAddress: '10.7.0.2/32' },
+  wireguard: { server: '1.2.3.4', port: 51820, privateKey: Buffer.alloc(32, 7).toString('base64'), peerPublicKey: 'qPC1QTJ4OSIaK4N0u8bqzjgIHQeM8EmN2YcbOopTpTk=', localAddress: '10.7.0.2/32' },
 });
 fs.writeFileSync(path.join(tmp, 'cfg-wg.json'), JSON.stringify(wgCfg, null, 2), 'utf8');
 const r3 = spawnSync(path.resolve('bin/sing-box.exe'), ['check', '-c', path.join(tmp, 'cfg-wg.json')], { encoding: 'utf8', timeout: 20000, env: { ...process.env, ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true' } });

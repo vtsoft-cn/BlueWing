@@ -10,7 +10,7 @@ import (
 )
 
 func TestPrivateDiscoveryNeverProbesPublicOrSpecialAddresses(t *testing.T) {
-	for _, host := range []string{"10.0.0.1", "172.16.0.1", "172.31.255.254", "192.168.110.117"} {
+	for _, host := range []string{"10.0.0.1", "172.16.0.1", "172.31.255.254", "10.203.17.117"} {
 		if !privateAddress(host) {
 			t.Fatal(host)
 		}
@@ -34,7 +34,7 @@ func TestPrivateDiscoveryNeverProbesPublicOrSpecialAddresses(t *testing.T) {
 func TestSoftEtherNetworkDiscoveryScopeAndResourceGuards(t *testing.T) {
 	s := &session{p: profile{Protocol: "softether", AutoDiscoverPrivate: true, TrafficMode: "split"}, privateRoutes: &privateRoutePicker{publicTCP: true}}
 	for _, port := range []int{22, 80, 443, 23879} {
-		if automatic, allowed := s.classifyTCP("110.42.238.247", port); !automatic || !allowed {
+		if automatic, allowed := s.classifyTCP("8.8.8.8", port); !automatic || !allowed {
 			t.Fatal("public company target never reaches automatic routing", port)
 		}
 	}
@@ -44,12 +44,12 @@ func TestSoftEtherNetworkDiscoveryScopeAndResourceGuards(t *testing.T) {
 		}
 	}
 	s.p.Protocol = "easyconnect"
-	if _, allowed := s.classifyTCP("110.42.238.247", 22); allowed {
+	if _, allowed := s.classifyTCP("8.8.8.8", 22); allowed {
 		t.Fatal("public network discovery escaped SoftEther")
 	}
 	s.p.Protocol = "softether"
-	s.p.Targets = []target{{CIDRs: []string{"110.42.238.247/32"}, Ports: []string{"443"}}}
-	if _, allowed := s.classifyTCP("110.42.238.247", 22); allowed {
+	s.p.Targets = []target{{CIDRs: []string{"8.8.8.8/32"}, Ports: []string{"443"}}}
+	if _, allowed := s.classifyTCP("8.8.8.8", 22); allowed {
 		t.Fatal("explicit company port restriction bypassed")
 	}
 }
@@ -71,7 +71,7 @@ func TestSoftEtherNetworkDiscoveryRetainsLongLivedWinningSocket(t *testing.T) {
 	}}
 	c.active = &session{ctx: ctx, cancel: cancel, p: profile{ID: "fixture", Protocol: "softether", TrafficMode: "split", AutoDiscoverPrivate: true}, privateRoutes: picker, conns: make(map[net.Conn]struct{})}
 	conn := socks(t, ep, ep.config.Password)
-	if _, err := conn.Write([]byte{5, 1, 0, 1, 110, 42, 238, 247, 0, 22}); err != nil {
+	if _, err := conn.Write([]byte{5, 1, 0, 1, 8, 8, 8, 8, 0, 22}); err != nil {
 		t.Fatal(err)
 	}
 	reply := make([]byte, 10)
@@ -109,7 +109,7 @@ func TestPrivateDiscoveryReusesLocalSocketAndDoesNotContactVPN(t *testing.T) {
 		vpnCalls++
 		return nil, errors.New("unexpected VPN")
 	}}
-	conn, outlet, err := picker.dial(context.Background(), "192.168.110.117:22")
+	conn, outlet, err := picker.dial(context.Background(), "10.203.17.117:22")
 	if err != nil || conn != a || outlet != "direct" || vpnCalls != 0 {
 		t.Fatal(outlet, err)
 	}
@@ -132,7 +132,7 @@ func TestPrivateDiscoveryCachesExactEndpointWithinSessionAndRechecksAfterExpiry(
 		return a, nil
 	}}
 	for i := 0; i < 2; i++ {
-		conn, outlet, err := picker.dial(context.Background(), "192.168.110.117:22")
+		conn, outlet, err := picker.dial(context.Background(), "10.203.17.117:22")
 		if err != nil || outlet != "vpn" {
 			t.Fatal(err)
 		}
@@ -141,20 +141,20 @@ func TestPrivateDiscoveryCachesExactEndpointWithinSessionAndRechecksAfterExpiry(
 	if localCalls != 1 || vpnCalls != 2 {
 		t.Fatal(localCalls, vpnCalls)
 	}
-	conn, _, _ := picker.dial(context.Background(), "192.168.110.117:80")
+	conn, _, _ := picker.dial(context.Background(), "10.203.17.117:80")
 	conn.Close()
 	if localCalls != 2 {
 		t.Fatal("port scope widened")
 	}
-	picker.hints["192.168.110.117:22"] = routeHint{outlet: "vpn", expires: time.Now().Add(-time.Second)}
-	conn, _, _ = picker.dial(context.Background(), "192.168.110.117:22")
+	picker.hints["10.203.17.117:22"] = routeHint{outlet: "vpn", expires: time.Now().Add(-time.Second)}
+	conn, _, _ = picker.dial(context.Background(), "10.203.17.117:22")
 	conn.Close()
 	if localCalls != 3 {
 		t.Fatal("expired hint not revalidated")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, err := picker.dial(ctx, "192.168.110.118:22"); !errors.Is(err, context.Canceled) || localCalls != 3 {
+	if _, _, err := picker.dial(ctx, "10.203.17.118:22"); !errors.Is(err, context.Canceled) || localCalls != 3 {
 		t.Fatal("cancelled discovery still dialed", err)
 	}
 }

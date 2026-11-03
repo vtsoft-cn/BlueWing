@@ -15,6 +15,8 @@ export type ProxyType =
   | 'naive';
 
 export interface ProxyNode {
+  /** Runtime-only: protected data is retained on disk until unlocked. */
+  credentialsUnavailable?: boolean;
   id: string;
   name: string;
   type: ProxyType;
@@ -76,6 +78,7 @@ export interface ProxyNode {
 }
 
 export interface Subscription {
+  credentialsUnavailable?: boolean;
   id: string;
   name: string;
   url: string;
@@ -145,6 +148,8 @@ export interface DnsConfig {
 }
 
 export interface WebDAVConfig {
+  /** Encrypts cloud backup content; protected by OS storage locally. */
+  backupPassphrase?: string;
   serverUrl: string;
   username: string;
   password: string;
@@ -299,6 +304,7 @@ export type VpnProfileType =
 export type SoftEtherMode = 'l2tp' | 'sstp' | 'openvpn';
 
 export interface VpnProfile {
+  credentialsUnavailable?: boolean;
   id: string;
   name: string;
   type: VpnProfileType;

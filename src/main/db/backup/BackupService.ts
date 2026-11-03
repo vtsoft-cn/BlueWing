@@ -15,6 +15,8 @@ import { BackupTransaction } from './BackupTransaction';
 import { UniversalSubscriptionParser } from '../../net/UniversalSubscriptionParser';
 import { ProfileRepository, validateProfile } from '../../vpn/ProfileRepository';
 import { ImportJournal } from './ImportJournal';
+import { BackupProtection, protectBackup, unprotectBackup } from '../../security/BackupProtection';
+import { withoutSecrets } from '../../security/SecretFields';
 import {
   BackupCategories,
   BackupPreviewResult,
@@ -36,7 +38,7 @@ export class BackupService {
    */
   public static async previewImport(
     content: string,
-    categories?: Partial<BackupCategories>
+    categories?: Partial<BackupCategories>, passphrase?: string
   ): Promise<BackupPreviewResult> {
     const db = Database.getInstance();
     const current = {
@@ -48,7 +50,7 @@ export class BackupService {
       corporateVpn: new ProfileRepository(db.getDataDir()).list(),
     };
 
-    const parsedData = this.parseRawContent(content);
+    const parsedData = this.parseRawContent(content, passphrase);
     return BackupPreview.generatePreview(parsedData, current, categories);
   }
 
@@ -58,9 +60,9 @@ export class BackupService {
   public static async importWithTransaction(
     content: string,
     categories: BackupCategories = { profiles: true, rules: true, settings: true, corporateVpn:true },
-    mode: 'merge' | 'replace' = 'merge'
+    mode: 'merge' | 'replace' = 'merge', passphrase?: string
   ): Promise<BackupImportResult> {
-    const parsed = this.parseRawContent(content);
+    const parsed = this.parseRawContent(content, passphrase);
 
     const db=Database.getInstance(),dir=db.getDataDir();
     const withCompany=categories.corporateVpn===true&&!!parsed.corporateVpn?.length;
@@ -87,7 +89,8 @@ export class BackupService {
    * Exports native Windows backup file content (.bluewingbackup).
    */
   public static async exportWindowsBackup(
-    categories: BackupCategories = { profiles: true, rules: true, settings: true, corporateVpn:true }
+    categories: BackupCategories = { profiles: true, rules: true, settings: true, corporateVpn:true },
+    protection: BackupProtection = {}
   ): Promise<string> {
     const db = Database.getInstance();
     return WindowsBackupCodec.encode(
@@ -98,7 +101,7 @@ export class BackupService {
       db.getDns(),
       db.getSettings(),
       categories,
-      new ProfileRepository(db.getDataDir()).export()
+      new ProfileRepository(db.getDataDir()).export(), protection
     );
   }
 
@@ -110,10 +113,10 @@ export class BackupService {
   ): Promise<string> {
     const db = Database.getInstance();
     return AndroidBackupEncoder.encode(
-      db.getNodes(),
-      db.getSubscriptions(),
+      withoutSecrets(db.getNodes()),
+      withoutSecrets(db.getSubscriptions()),
       db.getRules(),
-      db.getSettings(),
+      withoutSecrets(db.getSettings()),
       categories
     );
   }
@@ -135,15 +138,19 @@ export class BackupService {
       db.getDns(),
       db.getSettings(),
       { profiles: true, rules: true, settings: true, corporateVpn:true },
-      new ProfileRepository(db.getDataDir()).export()
+      new ProfileRepository(db.getDataDir()).export(), { local: true }
     );
 
     fs.writeFileSync(tmpPath, content, 'utf8');
 
     if (fs.existsSync(targetPath)) {
-      try {
-        fs.copyFileSync(targetPath, bakPath);
-      } catch {}
+      const previous = fs.readFileSync(targetPath, 'utf8');
+      let format: string | undefined;
+      try { format = JSON.parse(previous).format; } catch { /* Preserve malformed legacy content inside encryption. */ }
+      const alreadyProtected = format === 'bluewing-local-v1' || format === 'bluewing-encrypted-v1';
+      const backupTemp = `${bakPath}.tmp`;
+      fs.writeFileSync(backupTemp, alreadyProtected ? previous : protectBackup(previous, { local: true }), { mode: 0o600 });
+      fs.renameSync(backupTemp, bakPath);
     }
 
     fs.renameSync(tmpPath, targetPath);
@@ -187,7 +194,8 @@ export class BackupService {
   /**
    * Parses raw text or buffer into normalized parsed backup structure.
    */
-  public static parseRawContent(content: string | Buffer): RawParsedBackupData {
+  public static parseRawContent(content: string | Buffer, passphrase?: string): RawParsedBackupData {
+    if (typeof content === 'string') content = unprotectBackup(content, passphrase);
     const detection = BackupValidator.detectFormat(content);
 
     if (detection.format === 'bluewing_android') {

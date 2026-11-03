@@ -149,7 +149,7 @@ func TestCompanyDNSRecordTypes(t *testing.T) {
 			}
 		}
 	}()
-	s := &session{ctx: ctx, p: profile{ID: "fixture", Targets: []target{{Domains: []string{"corp.example"}}}}, resources: resources{DNSServers: []string{"192.168.30.1"}}, stack: stack, leases: make(map[string]dnsLease)}
+	s := &session{ctx: ctx, p: profile{ID: "fixture", Targets: []target{{Domains: []string{"corp.example"}}}}, resources: resources{DNSServers: []string{"10.203.19.1"}}, stack: stack, leases: make(map[string]dnsLease)}
 	c := &controller{active: s}
 	for _, kind := range []uint16{dns.TypeA, dns.TypeSRV, dns.TypeTXT} {
 		t.Run(dns.TypeToString[kind], func(t *testing.T) {

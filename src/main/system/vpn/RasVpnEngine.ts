@@ -1,15 +1,15 @@
 import { spawn } from 'child_process';
 import path from 'path';
-import fs from 'fs';
 import { VpnProfile, VpnProfileType } from '../../../types';
 import { VpnEngine, VpnEngineContext } from './EngineContract';
-import { WindowsNetQuery, psEscape, classifyAdapterRoutes } from './WindowsNetQuery';
+import { WindowsNetQuery, classifyAdapterRoutes } from './WindowsNetQuery';
+import { RasCredentials, RAS_SETUP_SCRIPT, RAS_CLEAR_SCRIPT } from './RasCredentials';
 
 /**
  * Windows 原生 RAS 引擎(IKEv2 / L2TP / SSTP)——零第三方二进制依赖。
  *
  * 连接:Add-VpnConnection 建电话簿条目(按用户,无需管理员)→ rasdial 拨号
- * (凭据经 argv 传递,与系统 rasdial 常规用法一致)→ 轮询 WAN Miniport 适配器
+ * (凭据经私有管道交给 Windows RAS 安全存储,argv 不含秘密)→ 轮询 WAN Miniport 适配器
  * Up → 查询路由/DNS 上报。断开:rasdial /disconnect + Remove-VpnConnection
  * 清掉电话簿条目,系统不残留。
  *
@@ -69,39 +69,6 @@ export function rasEntryName(profile: VpnProfile): string {
   return `BlueWing VPN ${safeId}`;
 }
 
-/**
- * 直接改写电话簿内容中的 L2TP PSK(纯函数,供单测)。
- * 背景:本机(Windows 10 19045)实测 VpnClient cmdlet 对 L2tpPsk 全面失效——
- * Add-VpnConnection 静默丢弃 PSK 值(仅落 IpSecFlags=1),Set-VpnConnection 直接
- * NullReferenceException 崩溃;而 rasphone.pbk 本就是 RAS 的原生存储,直写
- * `IpSecFlags=1` + `L2tpPsk=<psk>` 即为业界部署脚本的标准绕法。
- * 返回改写后的完整内容;条目节不存在返回 null(调用方放弃,走 cmdlet 原值)。
- */
-export function patchPhonebookPsk(content: string, entryName: string, psk: string): string | null {
-  const lines = content.split(/\r?\n/);
-  const sectionStart = lines.findIndex((l) => l.trim() === `[${entryName}]`);
-  if (sectionStart < 0) return null;
-  const sectionEnd = lines.findIndex((l, i) => i > sectionStart && l.trim().startsWith('['));
-  const end = sectionEnd < 0 ? lines.length : sectionEnd;
-
-  let flagsIdx = -1;
-  let pskIdx = -1;
-  for (let i = sectionStart; i < end; i++) {
-    if (/^IpSecFlags=/.test(lines[i])) flagsIdx = i;
-    if (/^L2tpPsk=/.test(lines[i])) pskIdx = i;
-  }
-  const eol = content.includes('\r\n') ? '\r\n' : '\n';
-  if (pskIdx >= 0) {
-    lines[pskIdx] = `L2tpPsk=${psk}`;
-  } else if (flagsIdx >= 0) {
-    lines.splice(flagsIdx + 1, 0, `L2tpPsk=${psk}`);
-  } else {
-    lines.splice(end, 0, `IpSecFlags=1`, `L2tpPsk=${psk}`);
-  }
-  if (flagsIdx >= 0) lines[flagsIdx] = 'IpSecFlags=1';
-  return lines.join(eol);
-}
-
 export class RasVpnEngine implements VpnEngine {
   public readonly engineName = 'ras';
   private profile: VpnProfile | null = null;
@@ -123,41 +90,22 @@ export class RasVpnEngine implements VpnEngine {
     }
     this.entryName = rasEntryName(profile);
 
-    // 1) 幂等重建电话簿条目(遗留条目直接覆盖,-Force)
-    const pskPart =
-      profile.type === 'l2tp' && profile.l2tpPsk
-        ? ` -L2tpPsk '${psEscape(profile.l2tpPsk)}'`
-        : '';
-    const suffixPart = profile.dnsSuffix ? ` -DnsSuffix '${psEscape(profile.dnsSuffix)}'` : '';
-    const addScript =
-      `Remove-VpnConnection -Name '${psEscape(this.entryName)}' -Force -ErrorAction SilentlyContinue; ` +
-      `$null = Add-VpnConnection -Name '${psEscape(this.entryName)}' ` +
-      `-ServerAddress '${psEscape(profile.server)}' -TunnelType ${tunnelType} ` +
-      `-SplitTunneling:$${profile.splitTunnel === false ? 'false' : 'true'} -Force${pskPart}${suffixPart}; ` +
-      `if ($?) { 'ok' } else { 'fail' }`;
-    const addOut = await WindowsNetQuery.runPowerShell(addScript, 15000);
-    if (!addOut.trim().endsWith('ok')) {
-      ctx.onError('创建 Windows VPN 连接条目失败(Add-VpnConnection)');
+    // Secrets enter the Windows credential store via stdin and RasSetCredentialsW.
+    const prepared = await RasCredentials.run(RAS_SETUP_SCRIPT, {
+      entry:this.entryName, server:profile.server, tunnel:tunnelType,
+      split:profile.splitTunnel !== false, suffix:profile.dnsSuffix || '',
+      user:profile.username || '', password:profile.password || '',
+      psk:profile.type === 'l2tp' ? profile.l2tpPsk || '' : '',
+    });
+    if (!prepared.ok) {
+      ctx.onError('安全保存 Windows VPN 凭据或创建条目失败' + (prepared.code ? ' (RAS ' + prepared.code + ')' : ''));
+      await this.cleanupEntry();
       return;
     }
-    if (this.stopped) return;
+    if (this.stopped) { await this.cleanupEntry(); return; }
 
-    // L2TP PSK 补丁:cmdlet 在部分 Windows 构建上静默丢弃 -L2tpPsk(实测 19045:
-    // 条目仅落 IpSecFlags=1 而无 L2tpPsk 值,IKE 协商必败/789)。直写电话簿兜底。
-    if (profile.type === 'l2tp' && profile.l2tpPsk) {
-      const patched = this.applyPhonebookPsk(this.entryName, profile.l2tpPsk);
-      if (patched) {
-        ctx.onLog('info', '已直写电话簿补全 L2TP 预共享密钥(cmdlet 在此 Windows 构建上不可靠)');
-      } else {
-        ctx.onLog('warn', 'L2TP 预共享密钥直写电话簿失败:未找到条目,继续按 cmdlet 结果拨号');
-      }
-    }
-
-    // 2) rasdial 拨号:凭据经参数传递(仅用户名密码认证;证书认证的 IKEv2 不适用)
-    const dialArgs = profile.username
-      ? [this.entryName, profile.username, profile.password || '']
-      : [this.entryName];
-    const dialCode = await this.rasdial(dialArgs);
+    // rasdial reads cached Windows credentials; no username/password in argv.
+    const dialCode = await this.rasdial([this.entryName]);
     if (dialCode !== 0) {
       ctx.onError(describeRasdialExitCode(dialCode));
       await this.cleanupEntry();
@@ -215,38 +163,14 @@ export class RasVpnEngine implements VpnEngine {
 
   private async cleanupEntry(): Promise<void> {
     if (!this.entryName) return;
-    const script = `Remove-VpnConnection -Name '${psEscape(this.entryName)}' -Force -ErrorAction SilentlyContinue; 'done'`;
-    await WindowsNetQuery.runPowerShell(script, 10000);
-  }
-
-  /** 将 L2TP PSK 直写当前用户电话簿(Add-VpnConnection 已建好条目之后调用) */
-  private applyPhonebookPsk(entryName: string, psk: string): boolean {
-    try {
-      // 电话簿按 ANSI 字节读写,非 ASCII 的 PSK 无法安全直写(需 cp936 编码,放弃并回退)
-      if (!/^[\x20-\x7e]+$/.test(psk)) return false;
-      const pbkPath = path.join(
-        process.env.APPDATA || '',
-        'Microsoft', 'Network', 'Connections', 'Pbk', 'rasphone.pbk'
-      );
-      if (!process.env.APPDATA || !fs.existsSync(pbkPath)) return false;
-      // latin1 字节保真往返:电话簿在中文系统是 ANSI(cp936),utf-8 读写会破坏字节
-      const content = fs.readFileSync(pbkPath, 'latin1');
-      const patched = patchPhonebookPsk(content, entryName, psk);
-      if (patched === null) return false;
-      const tmpPath = `${pbkPath}.bwtmp`;
-      fs.writeFileSync(tmpPath, patched, 'latin1');
-      fs.renameSync(tmpPath, pbkPath);
-      return true;
-    } catch {
-      return false;
-    }
+    await RasCredentials.run(RAS_CLEAR_SCRIPT, {entry:this.entryName}, 10000);
   }
 
   /** 直拉 rasdial.exe(参数化 argv,不经 shell 拼接);返回退出码,异常返回 -1 */
   private rasdial(args: string[]): Promise<number> {
     return new Promise((resolve) => {
       try {
-        const proc = spawn('rasdial.exe', args, { windowsHide: true });
+        const proc = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'rasdial.exe'), args, { windowsHide: true });
         const timer = setTimeout(() => {
           try {
             proc.kill();

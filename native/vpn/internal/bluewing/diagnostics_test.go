@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestDiagnosticBodiesPreservedAndExplicitlyOptedIn(t *testing.T) {
+func TestDiagnosticModesNeverDiscloseBodiesHeadersOrURLCredentials(t *testing.T) {
 	const payload = `{"otp":"123456","password":"example-secret"}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -37,14 +37,7 @@ func TestDiagnosticBodiesPreservedAndExplicitlyOptedIn(t *testing.T) {
 			t.Fatal("response or trace altered", entries)
 		}
 		d := entries[0]
-		if full {
-			if d["requestBody"] != payload || d["responseBody"] != string(body) || !strings.Contains(d["url"].(string), "sid=original") {
-				t.Fatal("raw content lost", d)
-			}
-			if d["responseHeaders"].(http.Header).Get("Set-Cookie") != "sid=original-cookie" {
-				t.Fatal("cookie lost")
-			}
-		} else if d["requestBody"] != nil || d["responseBody"] != nil || d["responseHeaders"] != nil || strings.Contains(d["url"].(string), "sid=") {
+		if d["requestBody"] != nil || d["responseBody"] != nil || d["responseHeaders"] != nil || strings.Contains(d["url"].(string), "sid=") {
 			t.Fatal("basic mode logged credential content", d)
 		}
 	}

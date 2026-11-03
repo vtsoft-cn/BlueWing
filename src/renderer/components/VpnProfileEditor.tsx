@@ -20,6 +20,7 @@ import {
   VpnAuthMethod,
   VpnCertificate,
   VpnProfile,
+  VpnProtocol,
 } from '../../types/corporateVpn';
 import { vpnProviders } from '../vpn/providers';
 import { vpnTrafficModes } from '../../utils/vpnRouting';
@@ -42,14 +43,14 @@ const companyDomains = (value: string) => lines(value).map(entry => {
   if (url.username || url.password) throw new Error('公司网址请勿包含账号或密码');
   return url.hostname;
 });
-export const newVpnProfile = (): VpnProfile => ({
+export const newVpnProfile = (protocol: VpnProtocol = 'easyconnect'): VpnProfile => ({
   id: '',
   name: '',
-  protocol: 'easyconnect',
-  gateway: { host: '', port: 10443 },
+  protocol,
+  gateway: { host: '', port: protocol === 'softether' ? 5555 : 10443 },
   username: '',
   authMethod: 'auth/psw',
-  loginDomain: '',
+  loginDomain: protocol === 'softether' ? 'VPN' : '',
   trafficMode: 'split',
   autoDiscoverPrivate: true,
   routingPriority: 100,
@@ -863,12 +864,12 @@ export function VpnProfileEditor({
                       onChange={e => setForm({ ...form, diagnosticMode: e.target.value as VpnProfile['diagnosticMode'] })}>
                       <option value="off">基础错误（默认）</option>
                       <option value="detail">连接诊断（请求路径、状态和耗时）</option>
-                      <option value="full">完整诊断（含密码和验证码）</option>
+                      <option value="full">扩展诊断（凭据和 HTTP 正文均脱敏）</option>
                     </select>
                     <small>保存在本机独立文件，可在连接页面打开或清空。每个文件最多约 10 MB，保留一份轮换文件。</small>
                   </label>
                   {form.diagnosticMode === 'full' && <div className="vpn-notice danger" role="status"><p>
-                    完整诊断会记录提交的明文密码、验证码及原始认证请求和响应（含 Cookie、令牌）。仅在本机保存，请勿直接分享此日志。
+                    扩展诊断仅保留连接元数据，不记录密码、验证码、Cookie、令牌或 HTTP 正文。日志仍可能包含网关和网络信息，分享前请检查。
                   </p></div>}
                 </section>
               </fieldset>

@@ -1,11 +1,24 @@
 /**
  * CredentialSecurity: Secure storage for passwords, tokens, and sensitive keys.
  * Uses Electron's safeStorage (backed by Windows DPAPI) when available,
- * and gracefully falls back to base64 encoding in non-GUI / headless test environments.
+ * Fails closed when OS encryption is unavailable. Tests inject a provider explicitly.
  */
 export class CredentialSecurity {
   private static safeStorageModule: any = null;
   private static initialized = false;
+  public static useProvider(provider: any): void {
+    this.initialized = true;
+    this.safeStorageModule = provider;
+  }
+  public static isLockedError(error: unknown): boolean {
+    return error instanceof Error && error.message.includes('CREDENTIAL_STORE_LOCKED');
+  }
+  public static available(): boolean {
+    try {
+      const storage = this.getSafeStorage();
+      return !!storage?.isEncryptionAvailable?.() && storage.getSelectedStorageBackend?.() !== 'basic_text';
+    } catch { return false; }
+  }
 
   private static getSafeStorage(): any {
     if (!this.initialized) {
@@ -28,16 +41,13 @@ export class CredentialSecurity {
   public static encrypt(plainText: string): string {
     if (!plainText) return '';
     const storage = this.getSafeStorage();
-    if (storage && typeof storage.isEncryptionAvailable === 'function' && storage.isEncryptionAvailable()) {
+    if (storage && typeof storage.isEncryptionAvailable === 'function' && storage.isEncryptionAvailable() && storage.getSelectedStorageBackend?.() !== 'basic_text') {
       try {
         const buffer = storage.encryptString(plainText);
         return `enc:dpapi:${buffer.toString('base64')}`;
-      } catch (err) {
-        console.warn('safeStorage.encryptString failed, using fallback:', err);
-      }
+      } catch { throw new Error('CREDENTIAL_STORE_LOCKED：系统加密失败，未保存敏感信息'); }
     }
-    // Safe fallback for environments where DPAPI is not available (e.g. CI / CLI tests)
-    return `enc:b64:${Buffer.from(plainText, 'utf8').toString('base64')}`;
+    throw new Error('CREDENTIAL_STORE_LOCKED：系统加密不可用，未保存敏感信息');
   }
 
   /**
@@ -58,12 +68,10 @@ export class CredentialSecurity {
           const buffer = Buffer.from(b64, 'base64');
           return storage.decryptString(buffer);
         } catch (err) {
-          console.error('safeStorage.decryptString failed:', err);
-          return '';
+          throw new Error('CREDENTIAL_STORE_LOCKED：无法解密此用户的凭据');
         }
       } else {
-        console.warn('DPAPI encrypted value cannot be decrypted in this environment');
-        return '';
+        throw new Error('CREDENTIAL_STORE_LOCKED：系统加密不可用');
       }
     }
 

@@ -1,6 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, screen, shell } from 'electron';
+import { guardedIpc } from './security/IpcSecurity';
 import { ConnectionIntent } from './core/ConnectionIntent';
+import { coreApiSecret } from './security/CoreApiAuth';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import fs from 'fs';
 import http from 'http';
 import dns from 'dns';
@@ -39,6 +42,10 @@ import tls from 'tls';
 
 const coreConnectionIntent = new ConnectionIntent();
 let mainWindow: BrowserWindow | null = null;
+const ipcMain = guardedIpc(electronIpcMain, () => mainWindow, () =>
+  !app.isPackaged && process.env.VITE_DEV_SERVER_URL
+    ? new URL(process.env.VITE_DEV_SERVER_URL).href
+    : pathToFileURL(path.join(__dirname, '../renderer/index.html')).href);
 let trafficTimer: NodeJS.Timeout | null = null;
 let startTime: number = 0;
 let totalRx: number = 0;
@@ -206,7 +213,7 @@ function createWindow(): void {
     icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -231,13 +238,16 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault();
     if (url.startsWith('http:') || url.startsWith('https:')) {
       event.preventDefault();
       shell.openExternal(url);
     }
   });
 
-  if (process.env.VITE_DEV_SERVER_URL) {
+  mainWindow.webContents.on('will-attach-webview', event => event.preventDefault());
+  mainWindow.webContents.session.setPermissionRequestHandler((contents, permission, callback) => callback(contents === mainWindow?.webContents && permission === 'clipboard-sanitized-write'));
+  if (!app.isPackaged && process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
@@ -302,6 +312,7 @@ app.whenReady().then(async () => {
   await warnAndExitIfForeignInstance();
   bootLog('foreign-instance check passed');
 
+  initializeCoreLifecycle();
   createWindow();
   bootLog('main window created');
 
@@ -328,7 +339,7 @@ app.whenReady().then(async () => {
       const uptime = Math.floor((Date.now() - startTime) / 1000);
       const settings = Database.getInstance().getSettings();
       const port = settings.clashApiPort || 9090;
-      const secret = settings.clashApiSecret;
+      const secret = coreApiSecret();
 
       let rx = 0;
       let tx = 0;
@@ -395,12 +406,16 @@ app.whenReady().then(async () => {
   // Check and clean residual system proxy if core is not active
   const settings = Database.getInstance().getSettings();
   await SystemProxy.initializeRecovery();
-  if (!settings.autoConnectOnLaunch) {
+  if (!settings.autoConnectOnLaunch || Database.getInstance().credentialStatus().mode !== 'normal') {
     SystemProxy.checkAndCleanResidual(settings.mixedPort || 2080);
   } else {
     // 自启连接是用户的常设意愿,等同显式发起(允许连接意图保护兜底)
-    handleCoreStart({ userInitiated: true });
+    handleCoreStart({ userInitiated: true }).catch(error => bootLog('auto-connect failed: ' + String(error)));
   }
+}).catch(error => {
+  bootLog('initialization failed: ' + String(error));
+  dialog.showErrorBox('BlueWing 启动未完成', '初始化未能完成，原始配置已保留。请从启动日志查看原因。');
+  app.quit();
 });
 
 app.on('before-quit', async (e) => {
@@ -415,12 +430,13 @@ app.on('before-quit', async (e) => {
       trafficTimer = null;
     }
     try {
-      Database.getInstance().flush();
+      Database.getInstance().flushPending();
+    } catch (err) { console.error('Configuration save failed during quit; continuing network cleanup'); }
+    try {
       await Promise.allSettled([existingCorporateVpn()?.dispose(), VpnEngineManager.getInstance().shutdown()]);
-      await handleCoreStop();
-      await SystemProxy.restoreOriginal();
-      await LogManager.getInstance().destroy();
-      TrayManager.getInstance().destroy();
+      for (const cleanup of [() => handleCoreStop(), () => SystemProxy.restoreOriginal(), () => LogManager.getInstance().destroy(), () => TrayManager.getInstance().destroy()]) {
+        try { await cleanup(); } catch { console.error('A shutdown step failed; continuing remaining cleanup'); }
+      }
     } catch (err) {
       console.error('Error during cleanup on quit:', err);
     }
@@ -639,6 +655,10 @@ async function handleCoreStart(options?: { userInitiated?: boolean; shouldContin
   const settings = db.getSettings();
   const nodes = db.getNodes();
   const activeNodeId = db.getActiveNodeId();
+  if ((settings.routingMode !== 'direct' && (nodes.find(n => n.id === activeNodeId) || nodes[0])?.credentialsUnavailable) || db.credentialStatus().lockedSettings.includes('inboundPass')) {
+    LogManager.getInstance().addLog('warn', '所选节点或代理认证凭据暂时不可读取，原配置已保留。请重新填写密码或添加节点。', 'app');
+    return false;
+  }
 
   if (nodes.length === 0) {
     LogManager.getInstance().addLog(
@@ -1052,15 +1072,16 @@ setVpnRoutingInitializer(isCurrent => handleCoreStart({
   userInitiated: SingBoxManager.getInstance().getState() !== 'running',
   shouldContinue: isCurrent,
 }));
+const proxyLifecycle = new ProxyLifecycle({
+  running: () => SingBoxManager.getInstance().getState() === 'running',
+  pid: () => SingBoxManager.getInstance().getPid(),
+}, () => Database.getInstance().getSettings());
+function initializeCoreLifecycle(): void {
 SingBoxManager.getInstance().setConfigEnricher(async config=>{
   const runtime=await getCorporateVpn().prepareRuntime(true);
   SystemProxy.setCorporateRouting(runtime.profiles.length>0);
   applyCorporateConfig(config,runtime);
 });
-const proxyLifecycle = new ProxyLifecycle({
-  running: () => SingBoxManager.getInstance().getState() === 'running',
-  pid: () => SingBoxManager.getInstance().getPid(),
-}, () => Database.getInstance().getSettings());
 SingBoxManager.getInstance().on('configured', config => {
   getCorporateVpn().publicCoreStarted(getCorporateVpn().policy.runtime());
   proxyLifecycle.configured(config).catch(() => {});
@@ -1100,6 +1121,8 @@ SingBoxManager.getInstance().on('stateChange', (state) => {
     cancelTunAutoRecovery(state === 'running' ? '核心已成功运行' : '核心正在停止');
   }
 });
+
+}
 
 // Nodes
 // 渲染层全部走定向操作;主进程变更后广播 nodes:changed,渲染层订阅刷新。
@@ -1456,11 +1479,11 @@ ipcMain.handle('webdav:restore', async () => {
 });
 
 // Backup
-ipcMain.handle('backup:export', (_, categories) => BackupService.exportWindowsBackup(categories));
+ipcMain.handle('backup:export', (_, categories, passphrase) => BackupService.exportWindowsBackup(categories, { passphrase }));
 ipcMain.handle('backup:exportAndroid', (_, categories) => BackupService.exportAndroidBackup(categories));
-ipcMain.handle('backup:previewImport', (_, content, categories) => BackupService.previewImport(content, categories));
-ipcMain.handle('backup:importWithTransaction', (_, content, categories, mode) =>
-  runBackupImport(() => BackupService.importWithTransaction(content, categories, mode))
+ipcMain.handle('backup:previewImport', (_, content, categories, passphrase) => BackupService.previewImport(content, categories, passphrase));
+ipcMain.handle('backup:importWithTransaction', (_, content, categories, mode, passphrase) =>
+  runBackupImport(() => BackupService.importWithTransaction(content, categories, mode, passphrase))
 );
 ipcMain.handle('backup:createLocalBackup', () => BackupService.createLocalBackup());
 ipcMain.handle('backup:restoreLocalBackup', () =>
@@ -1487,6 +1510,7 @@ ipcMain.handle('backup:importLinks', async (_, text) => {
 
 // Settings
 ipcMain.handle('settings:get', () => Database.getInstance().getSettings());
+ipcMain.handle('settings:credentialStatus', () => Database.getInstance().credentialStatus());
 ipcMain.handle('settings:save', async (_, s) => {
   const db = Database.getInstance();
   const prevSettings = { ...db.getSettings() };

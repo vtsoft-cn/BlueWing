@@ -48,7 +48,8 @@ export class WebDAVSyncService {
 
       // 2. Generate backup content
       const exportCats = categories || { profiles: true, rules: true, settings: true };
-      const content = await BackupService.exportWindowsBackup(exportCats);
+      if (!cfg.backupPassphrase || cfg.backupPassphrase.length < 12) throw new Error('请先设置至少 12 个字符的云备份加密口令');
+      const content = await BackupService.exportWindowsBackup(exportCats, { passphrase: cfg.backupPassphrase });
 
       // 3. Upload timestamped snapshot and latest pointer
       const now = Date.now();
@@ -117,7 +118,7 @@ export class WebDAVSyncService {
       }
 
       const importCats = categories || { profiles: true, rules: true, settings: true };
-      const result = await BackupService.importWithTransaction(content, importCats);
+      const result = await BackupService.importWithTransaction(content, importCats, 'merge', cfg.backupPassphrase);
 
       if (result.success) {
         LogManager.getInstance().addLog(

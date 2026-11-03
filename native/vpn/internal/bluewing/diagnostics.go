@@ -81,7 +81,7 @@ func (t contextTransport) roundTrip(r *http.Request) (*http.Response, error) {
 	}
 	if err != nil {
 		cleanup()
-		entry["error"] = err.Error()
+		entry["error"] = "HTTP exchange failed" // net errors can embed credential-bearing URLs.
 		emit()
 		return resp, err
 	}

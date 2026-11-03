@@ -7,6 +7,9 @@ export class WebDAVClient {
   private authHeader: string;
 
   constructor(serverUrl: string, username?: string, password?: string) {
+    const parsed = new URL(serverUrl);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash)
+      throw new Error('WebDAV 必须使用 HTTPS，账号密码请填写在独立字段中');
     this.serverUrl = serverUrl.replace(/\/+$/, '');
     if (username && password) {
       const token = Buffer.from(`${username}:${password}`).toString('base64');
@@ -51,7 +54,13 @@ export class WebDAVClient {
       const client = isHttps ? https : http;
       const req = client.request(options, (res) => {
         const chunks: Buffer[] = [];
-        res.on('data', (chunk) => chunks.push(chunk));
+        let bytes = 0;
+        res.on('data', (chunk) => {
+          bytes += chunk.length;
+          if (bytes > 46 * 1024 * 1024) { res.destroy(); reject(new Error('WebDAV 响应超过 46 MiB')); }
+          else chunks.push(chunk);
+        });
+        res.on('error', reject);
         res.on('end', () => {
           resolve({
             statusCode: res.statusCode || 0,

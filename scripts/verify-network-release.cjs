@@ -26,6 +26,19 @@ for (const [kind, binary, source] of [['vpn', 'bluewing-vpn-core.exe', 'vpn'], [
   verified.push({ kind, revision: manifest.revision, sourceFiles: sources.length, binarySHA256: manifest.sha256 });
 }
 assert.deepEqual(fs.readFileSync(path.join(resources, 'THIRD_PARTY_NOTICES.md')), fs.readFileSync(path.join(root, 'THIRD_PARTY_NOTICES.md')));
+for (const file of ['LICENSE', 'PRIVACY.md']) assert.deepEqual(fs.readFileSync(path.join(resources, file)), fs.readFileSync(path.join(root, file)), file);
+let licenseFiles = 0;
+function verifyLicenses(dir) {
+  for (const entry of fs.readdirSync(dir, {withFileTypes:true})) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) verifyLicenses(file);
+    else { assert.deepEqual(fs.readFileSync(path.join(resources, path.relative(root, file))), fs.readFileSync(file), file); licenseFiles++; }
+  }
+}
+verifyLicenses(path.join(root, 'LICENSES'));
+assert.equal(JSON.parse(asar.extractFile(path.join(resources, 'app.asar'), 'package.json').toString()).license, 'AGPL-3.0-only');
+assert.ok(fs.statSync(path.join(resources, '..', 'LICENSE.electron.txt')).size > 100);
+assert.ok(fs.statSync(path.join(resources, '..', 'LICENSES.chromium.html')).size > 1000);
 // Exercise the shipped release entry point without reading/modifying real proxy settings.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bluewing-release-contract-'));
 try {
@@ -37,6 +50,6 @@ try {
   assert.equal(invalid.status, 1);
   assert.equal(fs.readFileSync(path.join(tmp, 'invalid.json'), 'utf8'), 'broken');
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
-const installer = path.join(release, 'BlueWingConnect-NetworkAuditFixed-Setup.exe');
+const installer = path.join(release, process.argv[3] || 'BlueWingConnect-NetworkAuditFixed-Setup.exe');
 assert.ok(fs.statSync(installer).size > 20e6);
-console.log(JSON.stringify({ result: 'PASS', distFiles: count, cores: verified, installer, installerBytes: fs.statSync(installer).size, installerSHA256: hash(fs.readFileSync(installer)) }, null, 2));
+console.log(JSON.stringify({ result: 'PASS', distFiles: count, licenseFiles, cores: verified, installer, installerBytes: fs.statSync(installer).size, installerSHA256: hash(fs.readFileSync(installer)) }, null, 2));

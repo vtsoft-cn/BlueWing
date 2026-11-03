@@ -3,7 +3,7 @@
 <p align="center">
   <img src="src/images/png/app-light.png" width="128" height="128" alt="BlueWing Connect Logo">
   <br>
-  <b>基于 Sing-box 官方原生核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
+  <b>基于 sing-box 维护核心打造的现代化 Windows 通用网络代理工具链与网络调试客户端</b>
   <br>
   <b>A Modern Universal Proxy Toolchain & Network Debugging Client for Windows PC</b>
 </p>
@@ -26,7 +26,7 @@
 ## 🚀 核心特性 / Features
 
 * **现代桌面原生 UI**：无边框设计(页头拖动窗口,内容区滚动后依然可靠;侧栏空白区域亦可拖动)、页头状态栏与内嵌窗口控制,系统浅色 / 深色主题无缝切换,页面切换与卡片交互动效;
-* **官方原生代理核心**：基于官方 Sing-box 1.14.3 稳定版原生二进制,集成 gVisor 高性能网络协议栈与 Clash API 监控;
+* **官方原生代理核心**：基于sing-box v1.14.3 的 BlueWing 维护构建,集成 gVisor 高性能网络协议栈与 Clash API 监控;
 * **零断流节点热切换**：集成 Clash API 动态热重载选择器，节点切换瞬间完成，零断流不断网；
 * **全协议栈与最新传输**：
   * 支持 **VLESS** (支持 `xtls-rprx-vision` 流控、Reality 伪装、gRPC / WebSocket 传输);
@@ -46,8 +46,8 @@
   * 支持标准真实 IP 模式与 **FakeIP** (`198.18.0.0/15`) 极速首包响应模式；
   * 支持自定义 DNS 服务器与 4096 条 DNS 内存高速缓存加速；
 * **跨端无损备份与数据安全**：
-  * 本地凭据采用 Windows DPAPI 硬件级加密存储 (`enc:dpapi:`)；
-  * 数据库采用 Schema v2 原子写入，支持断电 0 字节自愈保护与损坏自动隔离；
+  * 本地凭据采用 Windows DPAPI 系统凭据加密存储 (`enc:dpapi:`)；
+  * 数据库采用 Schema v3 原子写入，支持断电 0 字节自愈保护与损坏自动隔离；
   * 深度打通 Android 手机端（AndroidParcel / Kryo 序列化无损互转），支持选择性分类备份与原子回滚保护；
   * 内置 WebDAV 云备份与双向快照恢复；
 * **端到端纯净日志**：ANSI 控制符清洗，毫秒级时间戳，系统/核心/网络分类标签，平稳刷盘保护；
@@ -73,7 +73,7 @@
 ## 🛠 本地开发与构建 / Development & Build
 
 ### 依赖环境
-* Node.js >= 20.0
+* Node.js >= 22.12.0
 * npm >= 10.0
 
 ### 编译步骤
@@ -83,14 +83,14 @@ git clone https://gitee.com/vtsoft_cn/blue-bird.git
 cd blue-bird
 
 # 2. 安装前端与桌面依赖
-npm install
+npm ci
 
 # 3. 运行本地开发环境
 #    (npm run dev 启动 Vite 渲染层开发服务器;调试完整桌面端需先 npm run build,
 #     再以 VITE_DEV_SERVER_URL=http://localhost:5173 electron dist/main/index.js 启动主进程)
 npm run dev
 
-# 4. 运行全量单元与集成测试套件 (40 项测试)
+# 4. 运行全量单元与集成测试套件 （以当前测试输出为准）
 npm test
 
 # 5. 构建前端与主进程(图标直接使用 src/images,无构建期处理)
@@ -136,3 +136,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\inspect-easyco
 防火墙重建规则导致大量无关差异。`-WatchSeconds 0` 仅保存当前状态。
 它不会增加、删除或修改任何过滤规则。采集文件包含网络及应用路径信息，分享前请检查。
 
+
+## 开源许可与安全发布
+
+原创代码采用 [AGPL-3.0-only](LICENSE)，第三方组件保留各自许可，见 [第三方声明](THIRD_PARTY_NOTICES.md) 和 [发布检查](PUBLIC_RELEASE_CHECKLIST.md)。公司现场数据与私有 Git 历史不应直接公开。`npm run public:source` 生成不含历史、运行数据和随包第三方二进制的新源码快照；不会改写当前仓库或发布到网络。第三方运行库及规则来源未完成核对时，快照不携带这些文件，构建完整运行版需自行提供有权使用的材料。
+
+日常配置不整库加密：名称、地址、节点 UUID、订阅、路由和 DNS 正常存储，只有密码和密钥使用原有 Windows 密码保护。程序就绪后才读取密码；密码暂不可读写时保留原文件并提示修改仅在本次会话生效，软件仍可打开使用。普通配置导出无需口令且省略凭据，需要完整迁移时可选口令加密备份。WebDAV 要求 HTTPS 及备份口令。见 [隐私说明](PRIVACY.md)。

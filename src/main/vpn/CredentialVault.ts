@@ -29,10 +29,12 @@ export class CredentialVault {
     }
   }
   available(): boolean {
+    try {
     return (
       this.provider.isEncryptionAvailable() &&
       this.provider.getSelectedStorageBackend?.() !== 'basic_text'
     );
+    } catch { return false; }
   }
   set(key: string, value: string): void {
     if (!this.available())

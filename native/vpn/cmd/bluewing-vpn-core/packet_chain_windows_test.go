@@ -81,7 +81,7 @@ func packetChainDatagram(proto byte, size int, ident uint16) []byte {
 	p[8] = 64
 	p[9] = proto
 	copy(p[12:], net.IPv4(100, 126, 255, 2).To4())
-	copy(p[16:], net.IPv4(192, 168, 110, 45).To4())
+	copy(p[16:], net.IPv4(10, 203, 17, 45).To4())
 	for i := 28; i < len(p); i++ {
 		p[i] = byte(i) ^ byte(ident)
 	}

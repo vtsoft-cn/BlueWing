@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import { redactDiagnostic } from '../security/DiagnosticRedaction';
 import { VpnProfile } from '../../types/corporateVpn';
 
-/** Local-only records. Input values are recorded only after explicit full-mode opt-in. */
+/** Metadata-only diagnostics; credentials and HTTP payloads are never written. */
 export class VpnDiagnostics {
   private modes = new Map<string, VpnProfile['diagnosticMode']>();
   private errors = new Map<string, string>();
@@ -23,11 +24,11 @@ export class VpnDiagnostics {
   begin(profile: VpnProfile, generation: number) {
     this.modes.set(profile.id, profile.diagnosticMode || 'off');
     this.write(profile.id, { event: 'connection-start', generation, protocol: profile.protocol,
-      gateway: profile.gateway, username: profile.username, loginDomain: profile.loginDomain,
+      gateway: profile.gateway, username: '[REDACTED]', loginDomain: profile.loginDomain,
       authMethod: profile.authMethod, authName: profile.authName, diagnosticMode: profile.diagnosticMode || 'off' });
   }
   input(id: string, kind: 'password' | 'verification-code', value: string) {
-    if (this.modes.get(id) === 'full') this.write(id, { event: 'submitted-input', kind, value });
+    if (this.modes.get(id) === 'full') this.write(id, { event: 'submitted-input', kind, redacted: true });
   }
   trace(id: string, detail: unknown) {
     if (['detail', 'full'].includes(this.modes.get(id) || '')) this.write(id, { event: 'native-trace', detail });
@@ -41,7 +42,7 @@ export class VpnDiagnostics {
         fs.rmSync(previous, { force: true });
         fs.renameSync(file, previous);
       }
-      fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...detail }) + '\n', { mode: 0o600 });
+      fs.appendFileSync(file, JSON.stringify({ time: new Date().toISOString(), ...redactDiagnostic(detail) as object }) + '\n', { mode: 0o600 });
       this.errors.delete(id);
     } catch (e) {
       this.errors.set(id, e instanceof Error ? e.message : String(e));

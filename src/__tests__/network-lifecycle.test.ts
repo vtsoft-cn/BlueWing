@@ -66,6 +66,16 @@ test('control: unchanged identity can use its explicitly saved password', async 
   assert.ok(f.core.commands.find(c => c.type === 'connect')?.password);
 });
 
+test('an unavailable password store cannot block a manually entered VPN password', async t => {
+  const f=await fixture(t);
+  t.mock.method(f.vault,'available',()=>false);
+  t.mock.method(f.vault,'get',()=>{throw Error('No stored passwords can be read');});
+  t.mock.method(f.vault,'set',()=>{throw Error('No password can be saved');});
+  await f.manager.connect('alpha','manual-session-password');
+  assert.equal(f.core.commands.find(c=>c.type==='connect')?.password,'manual-session-password');
+  assert.notEqual(f.manager.snapshot().state.state,'failed');
+});
+
 test('legacy credentials are preserved but require explicit rebinding to the full identity', async t => {
   const f = await fixture(t);
   f.vault.remove(`${f.profile.id}:`);
@@ -132,7 +142,7 @@ test('regression: manual public-core stop must cancel the in-flight two-second s
   const core = { getState: () => state, isAdmin: () => true, consumeTunAdapterFatal: () => false, wasTunStrippedLastStart: () => false,
     start: async () => { starts++; state = starts === 1 ? 'error' : 'running'; return starts > 1; }, stop: async () => { state = 'stopped'; } };
   const settings = { tunEnabled: false, systemProxyEnabled: true };
-  const db = { getSettings: () => settings, getNodes: () => [], getActiveNodeId: () => '', getRules: () => [], getAppRules: () => [], getDns: () => ({}) };
+  const db = { credentialStatus:()=>({mode:'normal',lockedSettings:[]}), getSettings: () => settings, getNodes: () => [], getActiveNodeId: () => '', getRules: () => [], getAppRules: () => [], getDns: () => ({}) };
   const vpn = { prepareRuntime: async () => ({ profiles: [] }), publicCoreStarted() {}, disconnect: async () => {} };
   const context: any = { coreConnectionIntent: new ConnectionIntent(),
     cancelTunAutoRecovery() {},

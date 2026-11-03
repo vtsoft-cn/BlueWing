@@ -1,4 +1,5 @@
 import http from 'http';
+import { coreApiSecret } from '../security/CoreApiAuth';
 import { Database } from '../db/Database';
 import { SingBoxManager } from './SingBoxManager';
 import { LogManager } from '../log/LogManager';
@@ -48,7 +49,7 @@ export class ProxySelectionService {
 
     // 2. Core is running: Attempt instantaneous hot-switch via Clash API selector
     const port = settings.clashApiPort || 9090;
-    const secret = settings.clashApiSecret;
+    const secret = coreApiSecret();
     const tag = `node-${nodeId}`;
 
     // A selector PUT cannot update the final route or DNS left by a node-free run.

@@ -1,0 +1,4766 @@
+{
+  "schemaVersion": 1,
+  "scope": "npm production dependencies and both complete Go module build graphs (includes test/build-only modules)",
+  "npm": [
+    {
+      "name": "lucide-react",
+      "version": "0.475.0",
+      "license": "ISC",
+      "licenseFiles": [
+        "LICENSES/npm/lucide-react_0.475.0/LICENSE"
+      ]
+    },
+    {
+      "name": "react",
+      "version": "19.3.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSES/npm/react_19.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "19.3.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSES/npm/react-dom_19.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.28.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSES/npm/scheduler_0.28.0/LICENSE"
+      ]
+    }
+  ],
+  "go": [
+    {
+      "name": "bitbucket.org/creachadair/shell",
+      "version": "v0.0.8",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "c2sp.org/CCTV/age",
+      "version": "v0.0.0-20251208015420-e9274a7bdbfd",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cel.dev/expr",
+      "version": "v0.25.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cloud.google.com/go",
+      "version": "v0.26.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cloud.google.com/go/auth",
+      "version": "v0.18.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cloud.google.com/go/auth/oauth2adapt",
+      "version": "v0.2.7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cloud.google.com/go/compute/metadata",
+      "version": "v0.9.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cloud.google.com/go/monitoring",
+      "version": "v1.24.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "cloud.google.com/go/trace",
+      "version": "v1.11.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "code.pfad.fr/check",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "contrib.go.opencensus.io/exporter/stackdriver",
+      "version": "v0.13.14",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "filippo.io/age",
+      "version": "v1.3.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "filippo.io/edwards25519",
+      "version": "v1.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/filippo.io_edwards25519_v1.2.0/LICENSE"
+      ]
+    },
+    {
+      "name": "filippo.io/hpke",
+      "version": "v0.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "filippo.io/nistec",
+      "version": "v0.0.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "fyne.io/systray",
+      "version": "v1.11.1-0.20250812065214-4856ac3adc3c",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aclements/go-moremath",
+      "version": "v0.0.0-20210112150236-f10218a38794",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/ajg/form",
+      "version": "v1.5.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_ajg_form_v1.5.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/akutz/memconn",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/alexbrainman/sspi",
+      "version": "v0.0.0-20231016080023-1a75b4708caa",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_alexbrainman_sspi_v0.0.0-20231016080023-1a75b4708caa/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/anchore/go-lzo",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_anchore_go-lzo_v0.1.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/andybalholm/brotli",
+      "version": "v1.2.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_andybalholm_brotli_v1.2.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/andybalholm/brotli",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_andybalholm_brotli_v1.1.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/anmitsu/go-shlex",
+      "version": "v0.0.0-20200514113438-38f4b401e2be",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_anmitsu_go-shlex_v0.0.0-20200514113438-38f4b401e2be/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/anthropics/anthropic-sdk-go",
+      "version": "v1.26.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_anthropics_anthropic-sdk-go_v1.26.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/anytls/sing-anytls",
+      "version": "v0.0.11",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_anytls_sing-anytls_v0.0.11/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/atotto/clipboard",
+      "version": "v0.1.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go",
+      "version": "v1.55.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2",
+      "version": "v1.30.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream",
+      "version": "v1.6.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/config",
+      "version": "v1.27.27",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/credentials",
+      "version": "v1.17.27",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/feature/ec2/imds",
+      "version": "v1.16.11",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/internal/configsources",
+      "version": "v1.3.15",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/internal/endpoints/v2",
+      "version": "v2.6.15",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/internal/ini",
+      "version": "v1.8.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding",
+      "version": "v1.11.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/service/internal/presigned-url",
+      "version": "v1.11.17",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/service/sso",
+      "version": "v1.22.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/service/ssooidc",
+      "version": "v1.26.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/aws-sdk-go-v2/service/sts",
+      "version": "v1.30.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/aws/smithy-go",
+      "version": "v1.20.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/axiomhq/hyperloglog",
+      "version": "v0.0.0-20240319100328-84253e514e02",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_axiomhq_hyperloglog_v0.0.0-20240319100328-84253e514e02/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/Azure/azure-sdk-for-go/sdk/azcore",
+      "version": "v1.17.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/Azure/azure-sdk-for-go/sdk/azidentity",
+      "version": "v1.7.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/Azure/azure-sdk-for-go/sdk/internal",
+      "version": "v1.10.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/AzureAD/microsoft-authentication-library-for-go",
+      "version": "v1.2.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/bahlo/generic-list-go",
+      "version": "v0.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/bazelbuild/rules_go",
+      "version": "v0.44.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/beevik/etree",
+      "version": "v1.6.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_beevik_etree_v1.6.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/beorn7/perks",
+      "version": "v1.0.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/bgentry/speakeasy",
+      "version": "v0.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/boombuler/barcode",
+      "version": "v1.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_boombuler_barcode_v1.1.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/bufbuild/protocompile",
+      "version": "v0.14.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/buger/jsonparser",
+      "version": "v1.1.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/BurntSushi/toml",
+      "version": "v1.4.1-0.20240526193622-a339e1f7089c",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/caddyserver/certmagic",
+      "version": "v0.25.3-0.20260421143802-60d9d8b415d6",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_caddyserver_certmagic_v0.25.3-0.20260421143802-60d9d8b415d6/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "github.com/caddyserver/zerossl",
+      "version": "v0.1.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_caddyserver_zerossl_v0.1.5/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/cenkalti/backoff",
+      "version": "v2.2.1+incompatible",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cenkalti/backoff/v4",
+      "version": "v4.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/census-instrumentation/opencensus-proto",
+      "version": "v0.4.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cespare/xxhash/v2",
+      "version": "v2.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cheggaaa/pb/v3",
+      "version": "v3.1.6",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cilium/ebpf",
+      "version": "v0.12.3",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cilium/ebpf",
+      "version": "v0.16.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/client9/misspell",
+      "version": "v0.3.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/clipperhouse/uax29/v2",
+      "version": "v2.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_clipperhouse_uax29_v2_v2.2.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/cloudflare/circl",
+      "version": "v1.3.7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cncf/udpa/go",
+      "version": "v0.0.0-20191209042840-269d4d468f6f",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cncf/xds/go",
+      "version": "v0.0.0-20260202195803-dba9d589def2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/coder/websocket",
+      "version": "v1.8.14",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_coder_websocket_v1.8.14/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "github.com/containerd/cgroups",
+      "version": "v1.0.4",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/console",
+      "version": "v1.0.3",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/containerd",
+      "version": "v1.6.36",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/errdefs",
+      "version": "v0.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/fifo",
+      "version": "v1.0.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/go-runc",
+      "version": "v1.0.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/log",
+      "version": "v0.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/ttrpc",
+      "version": "v1.1.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containerd/typeurl",
+      "version": "v1.0.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/containers/winquit",
+      "version": "v1.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/coreos/go-iptables",
+      "version": "v0.7.1-0.20240112124308-65c67c9f46e6",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/coreos/go-oidc/v3",
+      "version": "v3.17.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_coreos_go-oidc_v3_v3.17.0/LICENSE",
+        "LICENSES/go/github.com_coreos_go-oidc_v3_v3.17.0/NOTICE"
+      ]
+    },
+    {
+      "name": "github.com/coreos/go-semver",
+      "version": "v0.3.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/coreos/go-systemd/v22",
+      "version": "v22.6.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/coreos/go-systemd/v22",
+      "version": "v22.5.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cpuguy83/go-md2man/v2",
+      "version": "v2.0.6",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/creachadair/taskgroup",
+      "version": "v0.13.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/creack/pty",
+      "version": "v1.1.24",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/cretz/bine",
+      "version": "v0.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_cretz_bine_v0.2.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/DATA-DOG/go-sqlmock",
+      "version": "v1.5.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/database64128/netx-go",
+      "version": "v0.1.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_database64128_netx-go_v0.1.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/database64128/tfo-go/v2",
+      "version": "v2.3.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_database64128_tfo-go_v2_v2.3.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/davecgh/go-spew",
+      "version": "v1.1.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/davecgh/go-spew",
+      "version": "v1.1.2-0.20180830191138-d8f796af33cc",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/dblohm7/wingoes",
+      "version": "v0.0.0-20240119213807-a09d6be7affa",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_dblohm7_wingoes_v0.0.0-20240119213807-a09d6be7affa/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/dgrijalva/jwt-go/v4",
+      "version": "v4.0.0-preview1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/dgryski/go-camellia",
+      "version": "v0.0.0-20191119043421-69a8a13fb23d",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_dgryski_go-camellia_v0.0.0-20191119043421-69a8a13fb23d/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/dgryski/go-metro",
+      "version": "v0.0.0-20180109044635-280f6062b5bc",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_dgryski_go-metro_v0.0.0-20180109044635-280f6062b5bc/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/digitalocean/go-smbios",
+      "version": "v0.0.0-20180907143718-390a4f403a8e",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/djherbis/times",
+      "version": "v1.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/dnaeon/go-vcr",
+      "version": "v1.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/docker/go-events",
+      "version": "v0.0.0-20190806004212-e31b211e4f1c",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/docker/go-units",
+      "version": "v0.4.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/dustin/go-humanize",
+      "version": "v1.0.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/dvyukov/go-fuzz",
+      "version": "v0.0.0-20210103155950-6a8e9d1f2415",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/ebitengine/purego",
+      "version": "v0.10.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_ebitengine_purego_v0.10.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/envoyproxy/go-control-plane",
+      "version": "v0.14.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/envoyproxy/go-control-plane/envoy",
+      "version": "v1.37.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/envoyproxy/go-control-plane/ratelimit",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/envoyproxy/protoc-gen-validate",
+      "version": "v1.3.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/fatih/color",
+      "version": "v1.18.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/fatih/structs",
+      "version": "v1.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/felixge/httpsnoop",
+      "version": "v1.0.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/florianl/go-nfqueue/v2",
+      "version": "v2.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/fogleman/gg",
+      "version": "v1.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/fsnotify/fsnotify",
+      "version": "v1.10.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/fsnotify/fsnotify",
+      "version": "v1.9.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_fsnotify_fsnotify_v1.9.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/fullstorydev/grpcurl",
+      "version": "v1.9.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/fxamacker/cbor/v2",
+      "version": "v2.9.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_fxamacker_cbor_v2_v2.9.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/gaissmai/bart",
+      "version": "v0.26.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_gaissmai_bart_v0.26.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/github/fakeca",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/go-chi/chi/v5",
+      "version": "v5.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_go-chi_chi_v5_v5.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/go-chi/render",
+      "version": "v1.0.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_go-chi_render_v1.0.3/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/go-jose/go-jose/v4",
+      "version": "v4.1.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_go-jose_go-jose_v4_v4.1.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/go-logr/logr",
+      "version": "v1.4.3",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/go-logr/stdr",
+      "version": "v1.2.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/go-ole/go-ole",
+      "version": "v1.3.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_go-ole_go-ole_v1.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/go-sql-driver/mysql",
+      "version": "v1.9.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/go-task/slim-sprig",
+      "version": "v0.0.0-20230315185526-52ccab3ef572",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/go-viper/mapstructure/v2",
+      "version": "v2.4.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/go4org/hashtriemap",
+      "version": "v0.0.0-20251130024219-545ba229f689",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_go4org_hashtriemap_v0.0.0-20251130024219-545ba229f689/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/gobwas/httphead",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_gobwas_httphead_v0.1.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/gobwas/pool",
+      "version": "v0.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_gobwas_pool_v0.2.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/godbus/dbus/v5",
+      "version": "v5.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/godbus/dbus/v5",
+      "version": "v5.2.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/gofrs/flock",
+      "version": "v0.8.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/gofrs/uuid/v5",
+      "version": "v5.5.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_gofrs_uuid_v5_v5.5.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/gogo/protobuf",
+      "version": "v1.3.2",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/golang-jwt/jwt/v5",
+      "version": "v5.2.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/golang/freetype",
+      "version": "v0.0.0-20170609003504-e2365dfdc4a0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/golang/glog",
+      "version": "v1.2.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/golang/groupcache",
+      "version": "v0.0.0-20210331224755-41bb18bfe9da",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/golang/groupcache",
+      "version": "v0.0.0-20241129210726-2c02b8208cf8",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_golang_groupcache_v0.0.0-20241129210726-2c02b8208cf8/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/golang/mock",
+      "version": "v1.7.0-rc.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/golang/protobuf",
+      "version": "v1.5.4",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/btree",
+      "version": "v1.1.3",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_google_btree_v1.1.3/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/google/certificate-transparency-go",
+      "version": "v1.3.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_google_certificate-transparency-go_v1.3.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/google/go-cmp",
+      "version": "v0.7.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/go-querystring",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/go-tpm",
+      "version": "v0.9.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/gofuzz",
+      "version": "v1.2.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/gopacket",
+      "version": "v1.1.19",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_google_gopacket_v1.1.19/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/google/nftables",
+      "version": "v0.2.1-0.20240414091927-5e242ec57806",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/pprof",
+      "version": "v0.0.0-20210407192527-94a9f03dee38",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/s2a-go",
+      "version": "v0.1.9",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/subcommands",
+      "version": "v1.0.2-0.20190508160503-636abe8753b8",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/trillian",
+      "version": "v1.7.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/google/uuid",
+      "version": "v1.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_google_uuid_v1.6.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/googleapis/enterprise-certificate-proxy",
+      "version": "v0.3.6",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/googleapis/enterprise-certificate-proxy",
+      "version": "v0.3.11",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/googleapis/gax-go/v2",
+      "version": "v2.17.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/googleapis/gnostic",
+      "version": "v0.5.5",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp",
+      "version": "v1.33.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/gorilla/csrf",
+      "version": "v1.7.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/gorilla/mux",
+      "version": "v1.8.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/gorilla/securecookie",
+      "version": "v1.1.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/gorilla/websocket",
+      "version": "v1.5.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/grpc-ecosystem/go-grpc-middleware",
+      "version": "v1.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus",
+      "version": "v1.0.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/grpc-ecosystem/go-grpc-middleware/v2",
+      "version": "v2.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/grpc-ecosystem/grpc-gateway/v2",
+      "version": "v2.26.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/hashicorp/errwrap",
+      "version": "v1.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/hashicorp/go-multierror",
+      "version": "v1.1.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/hashicorp/golang-lru/v2",
+      "version": "v2.0.7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/hashicorp/yamux",
+      "version": "v0.1.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_hashicorp_yamux_v0.1.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/hdevalence/ed25519consensus",
+      "version": "v0.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_hdevalence_ed25519consensus_v0.2.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/hugelgupf/socketpair",
+      "version": "v0.0.0-20190730060125-05d35a94e714",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/huin/goupnp",
+      "version": "v1.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_huin_goupnp_v1.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/illarion/gonotify/v3",
+      "version": "v3.0.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/inconshreveable/mousetrap",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_inconshreveable_mousetrap_v1.1.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/insomniacslk/dhcp",
+      "version": "v0.0.0-20260719225207-c76316d4aa82",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_insomniacslk_dhcp_v0.0.0-20260719225207-c76316d4aa82/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/invopop/jsonschema",
+      "version": "v0.13.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jackc/pgpassfile",
+      "version": "v1.0.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jackc/pgservicefile",
+      "version": "v0.0.0-20240606120523-5a60cdf6a761",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jackc/pgx/v5",
+      "version": "v5.7.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jackc/puddle/v2",
+      "version": "v2.2.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jackpal/go-nat-pmp",
+      "version": "v1.0.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_jackpal_go-nat-pmp_v1.0.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/jellydator/ttlcache/v3",
+      "version": "v3.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jessevdk/go-flags",
+      "version": "v1.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jhump/protoreflect",
+      "version": "v1.17.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jmespath/go-jmespath",
+      "version": "v0.4.1-0.20220621161143-b0104c826a24",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jonboulle/clockwork",
+      "version": "v0.5.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jordanlewis/gcassert",
+      "version": "v0.0.0-20250430164644-389ef753e22e",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/josharian/native",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jsimonetti/rtnetlink",
+      "version": "v1.4.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/jsimonetti/rtnetlink/v2",
+      "version": "v2.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/json-iterator/go",
+      "version": "v1.1.12",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/keybase/dbus",
+      "version": "v0.0.0-20220506165403-5aa21ea2c23a",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/keybase/go-keychain",
+      "version": "v0.0.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/klauspost/compress",
+      "version": "v1.18.7",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_klauspost_compress_v1.18.7/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/klauspost/compress",
+      "version": "v1.19.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_klauspost_compress_v1.19.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/klauspost/cpuid/v2",
+      "version": "v2.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_klauspost_cpuid_v2_v2.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/knadh/koanf/maps",
+      "version": "v0.1.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/knadh/koanf/parsers/toml/v2",
+      "version": "v2.2.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/knadh/koanf/providers/env/v2",
+      "version": "v2.0.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/knadh/koanf/providers/file",
+      "version": "v1.2.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/knadh/koanf/providers/posflag",
+      "version": "v1.0.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/knadh/koanf/providers/structs",
+      "version": "v1.0.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/knadh/koanf/v2",
+      "version": "v2.3.6",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/Kodeworks/golang-image-ico",
+      "version": "v0.0.0-20141118225523-73f0f4cfade9",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/koron/go-ssdp",
+      "version": "v0.0.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_koron_go-ssdp_v0.0.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/kortschak/wol",
+      "version": "v0.0.0-20200729010619-da482cc4850a",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/kr/fs",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_kr_fs_v0.1.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/kr/pretty",
+      "version": "v0.2.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/kr/pty",
+      "version": "v1.1.8",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/kr/text",
+      "version": "v0.2.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/kylelemons/godebug",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/letsencrypt/challtestsrv",
+      "version": "v1.4.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/letsencrypt/pebble/v2",
+      "version": "v2.10.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/letsencrypt/pkcs11key/v4",
+      "version": "v4.0.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/lib/pq",
+      "version": "v1.10.9",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/libdns/acmedns",
+      "version": "v0.5.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_libdns_acmedns_v0.5.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/libdns/alidns",
+      "version": "v1.0.6",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_libdns_alidns_v1.0.6/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/libdns/cloudflare",
+      "version": "v0.2.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_libdns_cloudflare_v0.2.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/libdns/libdns",
+      "version": "v1.1.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_libdns_libdns_v1.1.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/libp2p/go-nat",
+      "version": "v1.0.1-0.20250821073202-01afc089f138",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_libp2p_go-nat_v1.0.1-0.20250821073202-01afc089f138/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/libp2p/go-netroute",
+      "version": "v0.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_libp2p_go-netroute_v0.2.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/logrusorgru/aurora",
+      "version": "v2.0.3+incompatible",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_logrusorgru_aurora_v2.0.3_incompatible/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/lufia/plan9stats",
+      "version": "v0.0.0-20211012122336-39d0f177ccd0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/lxn/walk",
+      "version": "v0.0.0-20210112085537-c389da54e794",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/lxn/win",
+      "version": "v0.0.0-20210218163916-a377121e959e",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mailru/easyjson",
+      "version": "v0.7.7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mattbaird/jsonpatch",
+      "version": "v0.0.0-20171005235357-81af80346b1a",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mattn/go-colorable",
+      "version": "v0.1.15",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mattn/go-isatty",
+      "version": "v0.0.23",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mattn/go-runewidth",
+      "version": "v0.0.27",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_mattn_go-runewidth_v0.0.27/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/mattn/go-sqlite3",
+      "version": "v1.14.28",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mdlayher/genetlink",
+      "version": "v1.3.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mdlayher/netlink",
+      "version": "v1.11.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mdlayher/packet",
+      "version": "v1.1.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mdlayher/sdnotify",
+      "version": "v1.0.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mdlayher/socket",
+      "version": "v0.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/metacubex/gvisor",
+      "version": "v0.0.0-20251227095601-261ec1326fe8",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/metacubex/utls",
+      "version": "v1.8.7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_metacubex_utls_v1.8.7/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/mholt/acmez/v3",
+      "version": "v3.1.6",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_mholt_acmez_v3_v3.1.6/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/Microsoft/go-winio",
+      "version": "v0.6.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/Microsoft/hcsshim",
+      "version": "v0.9.12",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/miekg/dns",
+      "version": "v1.1.72",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_miekg_dns_v1.1.72/COPYRIGHT",
+        "LICENSES/go/github.com_miekg_dns_v1.1.72/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/miekg/pkcs11",
+      "version": "v1.1.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mikioh/ipaddr",
+      "version": "v0.0.0-20190404000644-d465c8ab6721",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mitchellh/copystructure",
+      "version": "v1.2.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_mitchellh_copystructure_v1.2.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/mitchellh/go-ps",
+      "version": "v1.0.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_mitchellh_go-ps_v1.0.0/LICENSE.md"
+      ]
+    },
+    {
+      "name": "github.com/mitchellh/reflectwalk",
+      "version": "v1.0.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_mitchellh_reflectwalk_v1.0.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/moby/sys/capability",
+      "version": "v0.4.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/moby/sys/mountinfo",
+      "version": "v0.6.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/modern-go/concurrent",
+      "version": "v0.0.0-20180306012644-bacd9c7ef1dd",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/modern-go/reflect2",
+      "version": "v1.0.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mohae/deepcopy",
+      "version": "v0.0.0-20170308212314-bb9b5e7adda9",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/munnerz/goautoneg",
+      "version": "v0.0.0-20191010083416-a7dc8b61c822",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/mythologyli/sing-tun",
+      "version": "v0.0.0-20260201144630-c04d9db95dc7",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_mythologyli_sing-tun_v0.0.0-20260201144630-c04d9db95dc7/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/nfnt/resize",
+      "version": "v0.0.0-20180221191011-83c6a9932646",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/olekukonko/tablewriter",
+      "version": "v0.0.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/onsi/ginkgo/v2",
+      "version": "v2.12.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/onsi/gomega",
+      "version": "v1.27.10",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/openai/openai-go/v3",
+      "version": "v3.26.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_openai_openai-go_v3_v3.26.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/opencontainers/go-digest",
+      "version": "v1.0.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/opencontainers/image-spec",
+      "version": "v1.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/opencontainers/runtime-spec",
+      "version": "v1.1.0-rc.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/opencontainers/runtime-spec",
+      "version": "v1.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/oschwald/maxminddb-golang",
+      "version": "v1.13.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_oschwald_maxminddb-golang_v1.13.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/patrickmn/go-cache",
+      "version": "v2.1.0+incompatible",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_patrickmn_go-cache_v2.1.0_incompatible/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/pelletier/go-toml/v2",
+      "version": "v2.4.3",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/philhofer/fwd",
+      "version": "v1.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/pierrec/lz4/v4",
+      "version": "v4.1.26",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pierrec_lz4_v4_v4.1.26/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/pion/dtls/v3",
+      "version": "v3.1.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pion_dtls_v3_v3.1.5/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/pion/logging",
+      "version": "v0.2.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pion_logging_v0.2.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/pion/transport/v4",
+      "version": "v4.0.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pion_transport_v4_v4.0.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/pires/go-proxyproto",
+      "version": "v0.8.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pires_go-proxyproto_v0.8.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/pkg/browser",
+      "version": "v0.0.0-20240102092130-5ac0b6a4141c",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/pkg/errors",
+      "version": "v0.9.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/pkg/sftp",
+      "version": "v1.13.10",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pkg_sftp_v1.13.10/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/planetscale/vtprotobuf",
+      "version": "v0.6.1-0.20240319094008-0393e58bdf10",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/pmezard/go-difflib",
+      "version": "v1.0.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/pmezard/go-difflib",
+      "version": "v1.0.1-0.20181226105442-5d4384ee4fb2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/power-devops/perfstat",
+      "version": "v0.0.0-20240221224432-82ca36839d55",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/pquerna/otp",
+      "version": "v1.5.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_pquerna_otp_v1.5.0/LICENSE",
+        "LICENSES/go/github.com_pquerna_otp_v1.5.0/NOTICE"
+      ]
+    },
+    {
+      "name": "github.com/prometheus/client_golang",
+      "version": "v1.23.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/prometheus/client_model",
+      "version": "v0.6.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/prometheus/common",
+      "version": "v0.69.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/prometheus/procfs",
+      "version": "v0.20.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/prometheus/prometheus",
+      "version": "v0.51.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/quic-go/qpack",
+      "version": "v0.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_quic-go_qpack_v0.6.0/LICENSE.md"
+      ]
+    },
+    {
+      "name": "github.com/refraction-networking/utls",
+      "version": "v1.8.2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_refraction-networking_utls_v1.8.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/riobard/go-bloom",
+      "version": "v0.0.0-20200614022211-cdc8013cb5b3",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/rivo/uniseg",
+      "version": "v0.4.7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/rogpeppe/go-internal",
+      "version": "v1.14.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/rs/cors",
+      "version": "v1.11.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/russross/blackfriday/v2",
+      "version": "v2.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/RyuaNerin/elliptic2",
+      "version": "v1.0.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/RyuaNerin/go-krypto",
+      "version": "v1.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_RyuaNerin_go-krypto_v1.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/RyuaNerin/testingutil",
+      "version": "v0.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/safchain/ethtool",
+      "version": "v0.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/asc-go",
+      "version": "v0.0.0-20260914163356-9e3d45a797c1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/bbolt",
+      "version": "v0.0.0-20260915102804-500ee1e84832",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_bbolt_v0.0.0-20260915102804-500ee1e84832/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/cors",
+      "version": "v1.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_cors_v1.2.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/cronet-go",
+      "version": "v0.0.0-20260912104727-0d28acc44093",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_cronet-go_v0.0.0-20260912104727-0d28acc44093/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/all",
+      "version": "v0.0.0-20260912104727-0d28acc44093",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_cronet-go_all_v0.0.0-20260912104727-0d28acc44093/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/android_386",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/android_amd64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/android_arm",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/android_arm64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/darwin_amd64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/darwin_arm64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/ios_amd64_simulator",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/ios_arm64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/ios_arm64_simulator",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_386",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_386_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_amd64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_amd64_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_arm",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_arm_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_arm64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_arm64_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_loong64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_loong64_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_mips64le",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_mipsle",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_mipsle_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_riscv64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/linux_riscv64_musl",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/tvos_amd64_simulator",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/tvos_arm64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/tvos_arm64_simulator",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/windows_amd64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_cronet-go_lib_windows_amd64_v0.0.0-20260912104006-c10c03c318db/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/cronet-go/lib/windows_arm64",
+      "version": "v0.0.0-20260912104006-c10c03c318db",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/fswatch",
+      "version": "v0.1.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_fswatch_v0.1.2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/gliderssh",
+      "version": "v0.3.4-0.20260531100337-2194faca5648",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_gliderssh_v0.3.4-0.20260531100337-2194faca5648/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/go-tun2socks",
+      "version": "v1.16.12-0.20220818015926-16cb67876a61",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/gomobile",
+      "version": "v0.1.12",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/gvisor",
+      "version": "v0.0.0-20260727.0-sing-box-mod.1",
+      "replace": {
+        "name": "./third_party/gvisor"
+      },
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_gvisor_v0.0.0-20260727.0-sing-box-mod.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/netlink",
+      "version": "v0.0.0-20240916134442-83396419aa8b",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/netlink",
+      "version": "v0.0.0-20260814022025-64455d367bbf",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/nftables",
+      "version": "v0.3.0-mod.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sagernet/quic-go",
+      "version": "v0.61.0-sing-box-mod.9",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_quic-go_v0.61.0-sing-box-mod.9/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing",
+      "version": "v0.7.18",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing_v0.7.18/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing",
+      "version": "v0.9.7-0.20260929150544-0ad23b637bd4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing_v0.9.7-0.20260929150544-0ad23b637bd4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-cloudflared",
+      "version": "v0.1.4-0.20261002084126-c1255ae368f2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-cloudflared_v0.1.4-0.20261002084126-c1255ae368f2/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-mux",
+      "version": "v0.3.10-0.20260929204512-caf09fe32475",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-mux_v0.3.10-0.20260929204512-caf09fe32475/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-openconnect",
+      "version": "v0.1.1-0.20260929151225-cbd68c45de58",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-openconnect_v0.1.1-0.20260929151225-cbd68c45de58/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-openvpn",
+      "version": "v0.1.1-0.20260929151220-7c3045dbddce",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-openvpn_v0.1.1-0.20260929151220-7c3045dbddce/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-quic",
+      "version": "v0.7.2-0.20261002084117-75c3ac4fa12b",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-quic_v0.7.2-0.20261002084117-75c3ac4fa12b/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-shadowsocks",
+      "version": "v0.2.9-0.20260929204512-65740e0f0e3e",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-shadowsocks_v0.2.9-0.20260929204512-65740e0f0e3e/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-shadowsocks2",
+      "version": "v0.2.2-0.20260929152114-a69d1086332b",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-shadowsocks2_v0.2.2-0.20260929152114-a69d1086332b/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-shadowtls",
+      "version": "v0.2.2-0.20260928201441-a9c0127d5c99",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-shadowtls_v0.2.2-0.20260928201441-a9c0127d5c99/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-snell",
+      "version": "v0.0.0-20260904135315-bc5a12ac736f",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-snell_v0.0.0-20260904135315-bc5a12ac736f/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-tun",
+      "version": "v0.9.7-0.20261009020158-bca4bf029237",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-tun_v0.9.7-0.20261009020158-bca4bf029237/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-usbip",
+      "version": "v0.0.0-20260817040617-28bd42667eca",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-usbip_v0.0.0-20260817040617-28bd42667eca/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/sing-vmess",
+      "version": "v0.2.9-0.20260929152519-9b95ab8c9478",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_sing-vmess_v0.2.9-0.20260929152519-9b95ab8c9478/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/smux",
+      "version": "v1.5.50-sing-box-mod.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_smux_v1.5.50-sing-box-mod.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/tailscale",
+      "version": "v1.102.1-sing-box-1.14-mod.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_tailscale_v1.102.1-sing-box-1.14-mod.5/LICENSE",
+        "LICENSES/go/github.com_sagernet_tailscale_v1.102.1-sing-box-1.14-mod.5/PATENTS",
+        "LICENSES/go/github.com_sagernet_tailscale_v1.102.1-sing-box-1.14-mod.5/license_test.go"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/wireguard-go",
+      "version": "v0.0.8-0.20260929150556-6731c7387c81",
+      "replace": {
+        "name": "./third_party/wireguard-go"
+      },
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_wireguard-go_v0.0.8-0.20260929150556-6731c7387c81/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sagernet/ws",
+      "version": "v0.0.0-20231204124109-acfe8907c854",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_sagernet_ws_v0.0.0-20231204124109-acfe8907c854/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/scjalliance/comshim",
+      "version": "v0.0.0-20251021001035-b69f3cdad6f3",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_scjalliance_comshim_v0.0.0-20251021001035-b69f3cdad6f3/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sergi/go-diff",
+      "version": "v1.3.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/shadowsocks/go-shadowsocks2",
+      "version": "v0.1.5",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/shirou/gopsutil/v4",
+      "version": "v4.26.4",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_shirou_gopsutil_v4_v4.26.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/sirupsen/logrus",
+      "version": "v1.9.4",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sirupsen/logrus",
+      "version": "v1.9.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/skip2/go-qrcode",
+      "version": "v0.0.0-20200617195104-da1b6568686e",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/smallstep/pkcs7",
+      "version": "v0.1.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_smallstep_pkcs7_v0.1.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/soheilhy/cmux",
+      "version": "v0.1.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/sourcegraph/go-diff",
+      "version": "v0.7.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/spf13/cobra",
+      "version": "v1.10.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_spf13_cobra_v1.10.2/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "github.com/spf13/pflag",
+      "version": "v1.0.10",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_spf13_pflag_v1.0.10/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/spiffe/go-spiffe/v2",
+      "version": "v2.7.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/stretchr/objx",
+      "version": "v0.1.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/stretchr/objx",
+      "version": "v0.5.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/stretchr/testify",
+      "version": "v1.11.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/stretchr/testify",
+      "version": "v1.12.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tailscale/certstore",
+      "version": "v0.1.1-0.20260409135935-3638fb84b77d",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tailscale_certstore_v0.1.1-0.20260409135935-3638fb84b77d/LICENSE.md"
+      ]
+    },
+    {
+      "name": "github.com/tailscale/go-winio",
+      "version": "v0.0.0-20231025203758-c4f33415bf55",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tailscale_go-winio_v0.0.0-20231025203758-c4f33415bf55/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tailscale/hujson",
+      "version": "v0.0.0-20260302212456-ecc657c15afd",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tailscale_hujson_v0.0.0-20260302212456-ecc657c15afd/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tailscale/netlink",
+      "version": "v1.1.1-0.20240822203006-4d49adab4de7",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tailscale/peercred",
+      "version": "v0.0.0-20250107143737-35a0c7bd7edc",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tailscale/web-client-prebuilt",
+      "version": "v0.0.0-20250124233751-d4cd19a26976",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tailscale_web-client-prebuilt_v0.0.0-20250124233751-d4cd19a26976/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tailscale/xnet",
+      "version": "v0.0.0-20240729143630-8497ac4dab2e",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tc-hib/winres",
+      "version": "v0.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/things-go/go-socks5",
+      "version": "v0.1.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tidwall/gjson",
+      "version": "v1.18.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tidwall_gjson_v1.18.0/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tidwall/match",
+      "version": "v1.1.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tidwall_match_v1.1.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tidwall/pretty",
+      "version": "v1.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tidwall_pretty_v1.2.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tidwall/sjson",
+      "version": "v1.2.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tidwall_sjson_v1.2.5/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tinylib/msgp",
+      "version": "v1.6.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tjfoc/gmsm",
+      "version": "v1.4.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_tjfoc_gmsm_v1.4.1/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/tklauser/go-sysconf",
+      "version": "v0.3.16",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tklauser/numcpus",
+      "version": "v0.11.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tmc/grpc-websocket-proxy",
+      "version": "v0.0.0-20220101234140-673ab2c3ae75",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/tomasen/realip",
+      "version": "v0.0.0-20180522021738-f0c99a92ddce",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/toqueteos/webbrowser",
+      "version": "v1.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/transparency-dev/merkle",
+      "version": "v0.0.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/u-root/uio",
+      "version": "v0.0.0-20240224005618-d2acac8f3701",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_u-root_uio_v0.0.0-20240224005618-d2acac8f3701/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/vishvananda/netlink",
+      "version": "v1.1.1-0.20211118161826-650dca95af54",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/vishvananda/netns",
+      "version": "v0.0.5",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_vishvananda_netns_v0.0.5/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/VividCortex/ewma",
+      "version": "v1.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/wk8/go-ordered-map/v2",
+      "version": "v2.1.8",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/wlynxg/anet",
+      "version": "v0.0.5",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/x448/float16",
+      "version": "v0.8.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_x448_float16_v0.8.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/xiang90/probing",
+      "version": "v0.0.0-20221125231312-a49e3df8f510",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/xyproto/randomstring",
+      "version": "v1.0.5",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/youmark/pkcs8",
+      "version": "v0.0.0-20240726163527-a2c0da244d78",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_youmark_pkcs8_v0.0.0-20240726163527-a2c0da244d78/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/yuin/goldmark",
+      "version": "v1.4.13",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/yusufpapurcu/wmi",
+      "version": "v1.2.4",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_yusufpapurcu_wmi_v1.2.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/zeebo/assert",
+      "version": "v1.1.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/zeebo/blake3",
+      "version": "v0.2.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/github.com_zeebo_blake3_v0.2.4/LICENSE"
+      ]
+    },
+    {
+      "name": "github.com/zeebo/errs",
+      "version": "v1.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "github.com/zeebo/pcg",
+      "version": "v1.0.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/bbolt",
+      "version": "v1.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/api/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/client/pkg/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/client/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/etcdctl/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/etcdutl/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/pkg/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/server/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/tests/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/etcd/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/gofail",
+      "version": "v0.2.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.etcd.io/raft/v3",
+      "version": "v3.6.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opencensus.io",
+      "version": "v0.24.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/auto/sdk",
+      "version": "v1.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/contrib/detectors/gcp",
+      "version": "v1.44.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+      "version": "v0.59.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+      "version": "v0.61.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel",
+      "version": "v1.44.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+      "version": "v1.34.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+      "version": "v1.34.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel/metric",
+      "version": "v1.44.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel/sdk",
+      "version": "v1.44.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel/sdk/metric",
+      "version": "v1.44.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/otel/trace",
+      "version": "v1.44.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.opentelemetry.io/proto/otlp",
+      "version": "v1.5.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.uber.org/goleak",
+      "version": "v1.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.uber.org/mock",
+      "version": "v0.5.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go.uber.org/multierr",
+      "version": "v1.11.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go.uber.org_multierr_v1.11.0/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "go.uber.org/zap",
+      "version": "v1.27.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go.uber.org_zap_v1.27.1/LICENSE"
+      ]
+    },
+    {
+      "name": "go.uber.org/zap/exp",
+      "version": "v0.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go.uber.org_zap_exp_v0.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "go.yaml.in/yaml/v3",
+      "version": "v3.0.4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "go4.org/intern",
+      "version": "v0.0.0-20230525184215-6c62f75575cb",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go4.org_intern_v0.0.0-20230525184215-6c62f75575cb/LICENSE"
+      ]
+    },
+    {
+      "name": "go4.org/mem",
+      "version": "v0.0.0-20240501181205-ae6ca9944745",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go4.org_mem_v0.0.0-20240501181205-ae6ca9944745/LICENSE"
+      ]
+    },
+    {
+      "name": "go4.org/netipx",
+      "version": "v0.0.0-20231129151722-fdeea329fbba",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go4.org_netipx_v0.0.0-20231129151722-fdeea329fbba/LICENSE"
+      ]
+    },
+    {
+      "name": "go4.org/unsafe/assume-no-moving-gc",
+      "version": "v0.0.0-20231121144256-b99613f794b6",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/go4.org_unsafe_assume-no-moving-gc_v0.0.0-20231121144256-b99613f794b6/LICENSE"
+      ]
+    },
+    {
+      "name": "golang.org/x/crypto",
+      "version": "v0.58.1-0.20261009181718-2f1f834330b2",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_crypto_v0.58.1-0.20261009181718-2f1f834330b2/LICENSE",
+        "LICENSES/go/golang.org_x_crypto_v0.58.1-0.20261009181718-2f1f834330b2/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/exp",
+      "version": "v0.0.0-20260508232706-74f9aab9d74a",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_exp_v0.0.0-20260508232706-74f9aab9d74a/LICENSE",
+        "LICENSES/go/golang.org_x_exp_v0.0.0-20260508232706-74f9aab9d74a/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/exp",
+      "version": "v0.0.0-20260410095643-746e56fc9e2f",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_exp_v0.0.0-20260410095643-746e56fc9e2f/LICENSE",
+        "LICENSES/go/golang.org_x_exp_v0.0.0-20260410095643-746e56fc9e2f/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/exp/typeparams",
+      "version": "v0.0.0-20231108232855-2478ac86f678",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/image",
+      "version": "v0.41.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/lint",
+      "version": "v0.0.0-20200302205851-738671d3881b",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/mod",
+      "version": "v0.36.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/mod",
+      "version": "v0.41.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_mod_v0.41.0/LICENSE",
+        "LICENSES/go/golang.org_x_mod_v0.41.0/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/net",
+      "version": "v0.62.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_net_v0.62.0/LICENSE",
+        "LICENSES/go/golang.org_x_net_v0.62.0/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/oauth2",
+      "version": "v0.30.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/oauth2",
+      "version": "v0.36.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_oauth2_v0.36.0/LICENSE"
+      ]
+    },
+    {
+      "name": "golang.org/x/perf",
+      "version": "v0.0.0-20250813145418-2f7363a06fe1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/sync",
+      "version": "v0.20.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/sync",
+      "version": "v0.24.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_sync_v0.24.0/LICENSE",
+        "LICENSES/go/golang.org_x_sync_v0.24.0/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/sys",
+      "version": "v0.49.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_sys_v0.49.0/LICENSE",
+        "LICENSES/go/golang.org_x_sys_v0.49.0/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/telemetry",
+      "version": "v0.0.0-20260508192327-42602be52be6",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/telemetry",
+      "version": "v0.0.0-20260924152758-ed294f943157",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/term",
+      "version": "v0.47.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/text",
+      "version": "v0.43.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/time",
+      "version": "v0.15.0",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.org_x_time_v0.15.0/LICENSE",
+        "LICENSES/go/golang.org_x_time_v0.15.0/PATENTS"
+      ]
+    },
+    {
+      "name": "golang.org/x/tools",
+      "version": "v0.45.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/tools",
+      "version": "v0.51.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/tools/go/expect",
+      "version": "v0.1.1-deprecated",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/tools/go/packages/packagestest",
+      "version": "v0.1.1-deprecated",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/xerrors",
+      "version": "v0.0.0-20220907171357-04be3eba64a2",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.org/x/xerrors",
+      "version": "v0.0.0-20200804184101-5ec99f83aff1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.zx2c4.com/wintun",
+      "version": "v0.0.0-20230126152724-0fa3db229ce2",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.zx2c4.com_wintun_v0.0.0-20230126152724-0fa3db229ce2/LICENSE"
+      ]
+    },
+    {
+      "name": "golang.zx2c4.com/wireguard",
+      "version": "v0.0.0-20260522210424-ecfc5a8d5446",
+      "replace": {
+        "name": "./third_party/wireguard"
+      },
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.zx2c4.com_wireguard_v0.0.0-20260522210424-ecfc5a8d5446/LICENSE"
+      ]
+    },
+    {
+      "name": "golang.zx2c4.com/wireguard",
+      "version": "v0.0.0-20231211153847-12269c276173",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.zx2c4.com/wireguard/wgctrl",
+      "version": "v0.0.0-20241231184526-a9ab2273dd10",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.zx2c4.com_wireguard_wgctrl_v0.0.0-20241231184526-a9ab2273dd10/LICENSE.md"
+      ]
+    },
+    {
+      "name": "golang.zx2c4.com/wireguard/windows",
+      "version": "v1.0.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "golang.zx2c4.com/wireguard/windows",
+      "version": "v0.5.3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/golang.zx2c4.com_wireguard_windows_v0.5.3/COPYING"
+      ]
+    },
+    {
+      "name": "gonum.org/v1/gonum",
+      "version": "v0.17.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/api",
+      "version": "v0.249.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/api",
+      "version": "v0.226.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/appengine",
+      "version": "v1.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/genproto",
+      "version": "v0.0.0-20250122153221-138b5a5a4fd4",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/genproto/googleapis/api",
+      "version": "v0.0.0-20260526163538-3dc84a4a5aaa",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/genproto/googleapis/rpc",
+      "version": "v0.0.0-20250818200422-3122310a409c",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/genproto/googleapis/rpc",
+      "version": "v0.0.0-20260526163538-3dc84a4a5aaa",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/google.golang.org_genproto_googleapis_rpc_v0.0.0-20260526163538-3dc84a4a5aaa/LICENSE"
+      ]
+    },
+    {
+      "name": "google.golang.org/grpc",
+      "version": "v1.75.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/grpc",
+      "version": "v1.83.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/google.golang.org_grpc_v1.83.2/LICENSE",
+        "LICENSES/go/google.golang.org_grpc_v1.83.2/NOTICE.txt"
+      ]
+    },
+    {
+      "name": "google.golang.org/protobuf",
+      "version": "v1.36.8",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "google.golang.org/protobuf",
+      "version": "v1.36.11",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/google.golang.org_protobuf_v1.36.11/LICENSE",
+        "LICENSES/go/google.golang.org_protobuf_v1.36.11/PATENTS"
+      ]
+    },
+    {
+      "name": "gopkg.in/check.v1",
+      "version": "v1.0.0-20190902080502-41f04d3bba15",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/check.v1",
+      "version": "v0.0.0-20161208181325-20d25e280405",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/inf.v0",
+      "version": "v0.9.1",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/natefinch/lumberjack.v2",
+      "version": "v2.2.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/yaml.v1",
+      "version": "v1.0.0-20140924161607-9f9df34309c0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/yaml.v2",
+      "version": "v2.4.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/yaml.v2",
+      "version": "v2.2.8",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "gopkg.in/yaml.v3",
+      "version": "v3.0.1",
+      "cores": [
+        "vpn",
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/gopkg.in_yaml.v3_v3.0.1/LICENSE",
+        "LICENSES/go/gopkg.in_yaml.v3_v3.0.1/NOTICE"
+      ]
+    },
+    {
+      "name": "gvisor.dev/gvisor",
+      "version": "v0.0.0-20260129214308-cb856800aa1c",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/gvisor.dev_gvisor_v0.0.0-20260129214308-cb856800aa1c/LICENSE"
+      ]
+    },
+    {
+      "name": "honnef.co/go/tools",
+      "version": "v0.6.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "howett.net/plist",
+      "version": "v1.0.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "inet.af/netaddr",
+      "version": "v0.0.0-20230525184311-b8eac61e914a",
+      "replace": {
+        "name": "github.com/inetaf/netaddr",
+        "version": "v0.0.0-20230525184311-b8eac61e914a"
+      },
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/inet.af_netaddr_v0.0.0-20230525184311-b8eac61e914a/LICENSE"
+      ]
+    },
+    {
+      "name": "k8s.io/api",
+      "version": "v0.23.16",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "k8s.io/apimachinery",
+      "version": "v0.23.16",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "k8s.io/client-go",
+      "version": "v0.23.16",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "k8s.io/klog/v2",
+      "version": "v2.30.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "k8s.io/klog/v2",
+      "version": "v2.130.1",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "k8s.io/kube-openapi",
+      "version": "v0.0.0-20211115234752-e816edb12b65",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "k8s.io/utils",
+      "version": "v0.0.0-20211116205334-6203023598ed",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "lukechampine.com/blake3",
+      "version": "v1.3.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/lukechampine.com_blake3_v1.3.0/LICENSE"
+      ]
+    },
+    {
+      "name": "mvdan.cc/gofumpt",
+      "version": "v0.9.2",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "sigs.k8s.io/json",
+      "version": "v0.0.0-20211020170558-c049b76a60c6",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "sigs.k8s.io/json",
+      "version": "v0.0.0-20241010143419-9aa6b5e7a4b3",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "sigs.k8s.io/structured-merge-diff/v4",
+      "version": "v4.2.3",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "sigs.k8s.io/yaml",
+      "version": "v1.2.0",
+      "cores": [
+        "vpn"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "sigs.k8s.io/yaml",
+      "version": "v1.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "software.sslmate.com/src/go-pkcs12",
+      "version": "v0.4.0",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": []
+    },
+    {
+      "name": "zombiezen.com/go/capnproto2",
+      "version": "v2.18.2+incompatible",
+      "cores": [
+        "routing"
+      ],
+      "licenseFiles": [
+        "LICENSES/go/zombiezen.com_go_capnproto2_v2.18.2_incompatible/LICENSE"
+      ]
+    }
+  ],
+  "goRuntimeLicenses": [
+    "LICENSES/runtime/go1.26.10/LICENSE",
+    "LICENSES/runtime/go1.26.10/PATENTS"
+  ],
+  "binaries": [
+    {
+      "file": "bin/bluewing-vpn-core.exe",
+      "sha256": "59a6e4b3fec91a7725ac5f371d4c6af92563fec7bc98c0c1cdfccc69c38d47bd",
+      "bytes": 14112256
+    },
+    {
+      "file": "bin/libcronet.dll",
+      "sha256": "3217c6260fbca5f16072e0b79735742f40109a63bb0ff88fd6b96dd6b54a2928",
+      "bytes": 9529344
+    },
+    {
+      "file": "bin/rules/geoip-cn.srs",
+      "sha256": "29e1d721bfbe77cda8e8745afae9227575bee3aaff9180d5f3ae1eec1afa06c6",
+      "bytes": 37245
+    },
+    {
+      "file": "bin/rules/geoip-private.srs",
+      "sha256": "aa5331117805821ed6c4bcf30d4e844e73af4a1b3c8ad9bc8e67b1c26e3a75a7",
+      "bytes": 144
+    },
+    {
+      "file": "bin/rules/geosite-category-ads-all.srs",
+      "sha256": "5d7e3f38ceb008c793f12c4b84108ed61c64ae11e16a920af961e0c33a7e9233",
+      "bytes": 7394
+    },
+    {
+      "file": "bin/rules/geosite-cn.srs",
+      "sha256": "aab1ee5e109403b890c30c0710b482f9a799fc02d0c98626c35690e5f7135c6c",
+      "bytes": 441943
+    },
+    {
+      "file": "bin/sing-box.exe",
+      "sha256": "405d26db45de49096edf19c14071282ea57176cbe20b54288b6f0edab88a9ed6",
+      "bytes": 82101248
+    },
+    {
+      "file": "bin/vpn/openconnect/iconv.dll",
+      "sha256": "74e23093e962adceccf77d2b05af4f4c7d6deee4a524140a296609f849700fc2",
+      "bytes": 39456
+    },
+    {
+      "file": "bin/vpn/openconnect/libgcc_s_seh-1.dll",
+      "sha256": "7d5458682d7dcc2838c38c4401bcf25a15af0e2b0bc95ad6f5d2eafc0eaccb4f",
+      "bytes": 992573
+    },
+    {
+      "file": "bin/vpn/openconnect/libgmp-10.dll",
+      "sha256": "f08b10f629adba4fb0dac80b5cef1e71ea409a7b0def52f65abd217ceac6669d",
+      "bytes": 756101
+    },
+    {
+      "file": "bin/vpn/openconnect/libgnutls-30.dll",
+      "sha256": "2688344f1848618e328814d196fdac14ac13869f58d8e82cd0ec12b45a2b5e68",
+      "bytes": 2568855
+    },
+    {
+      "file": "bin/vpn/openconnect/libhogweed-6.dll",
+      "sha256": "0688d3d9880556c9f46d88681e5a307a13e141da9e48b6b02c58ff77ebb69582",
+      "bytes": 272265
+    },
+    {
+      "file": "bin/vpn/openconnect/libintl-8.dll",
+      "sha256": "837bf639dc29ea04360d1b2ad3369ed6323b57582bfe4ab013a34aed387991b6",
+      "bytes": 317959
+    },
+    {
+      "file": "bin/vpn/openconnect/liblz4.dll",
+      "sha256": "ebabc13985c97860fdc62844e1044e4f4ddc960b474903992c9c54332660b2b5",
+      "bytes": 154449
+    },
+    {
+      "file": "bin/vpn/openconnect/libnettle-8.dll",
+      "sha256": "a3ad6f97c218bdffaecbd0b03e6ee1aa7737011a8325050d37fb7adc71b7fb1b",
+      "bytes": 366378
+    },
+    {
+      "file": "bin/vpn/openconnect/libopenconnect-5.dll",
+      "sha256": "1f953921066267e669deb320020d894a2d830fdc58460f7c4fe657e6f99e8dcf",
+      "bytes": 2842404
+    },
+    {
+      "file": "bin/vpn/openconnect/libstoken-1.dll",
+      "sha256": "5396e30a262eaa7cc069bcd5cfd36e36d918a2518c65c8a332a9ccb3ac6ad9a3",
+      "bytes": 126212
+    },
+    {
+      "file": "bin/vpn/openconnect/libtasn1-6.dll",
+      "sha256": "da49e0a85b1499525a338f2b83f21a101f7570e1a9e4dec1edfed6ae987e2d61",
+      "bytes": 120913
+    },
+    {
+      "file": "bin/vpn/openconnect/libwinpthread-1.dll",
+      "sha256": "80eb2559ea2a3e0c165ea8a4813cd9ba80937b4bbe13a2318a7b3cbaf2dfac43",
+      "bytes": 75506
+    },
+    {
+      "file": "bin/vpn/openconnect/libxml2-2.dll",
+      "sha256": "af9be1ec2b42cb64bcbfa91b8eae874a4490a2039898d0fb3c53ae1538b7a393",
+      "bytes": 1460249
+    },
+    {
+      "file": "bin/vpn/openconnect/list-system-keys.exe",
+      "sha256": "200e1c9db75411c2dc758bfc7f7db141adc382603d28aec56a7115e511662755",
+      "bytes": 285765
+    },
+    {
+      "file": "bin/vpn/openconnect/openconnect.exe",
+      "sha256": "f6f1f2559f57c2035fef28f140e4ee6f90efd395d36d2ce98390eeeea242ed37",
+      "bytes": 496537
+    },
+    {
+      "file": "bin/vpn/openconnect/wintun.dll",
+      "sha256": "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce",
+      "bytes": 427552
+    },
+    {
+      "file": "bin/vpn/openconnect/zlib1.dll",
+      "sha256": "e5d64914a70e26e1731ed98628be370b855454ff70c9774aea4273dc25c9ce2b",
+      "bytes": 136438
+    },
+    {
+      "file": "bin/vpn/openvpn/libcrypto-3-x64.dll",
+      "sha256": "1bbececb5ccb120a2003d105ace388fec5ffa174dd8268ba51a6d4f29d41a94f",
+      "bytes": 5290504
+    },
+    {
+      "file": "bin/vpn/openvpn/libpkcs11-helper-1.dll",
+      "sha256": "6636876cf2682a45b411d516bf592f40c3c811fe1f415fbe17ef363da6a63e35",
+      "bytes": 112048
+    },
+    {
+      "file": "bin/vpn/openvpn/libssl-3-x64.dll",
+      "sha256": "434801bbecc42f2b861c9da535baacb8d8720d3f463f92129a1667edda8aad9c",
+      "bytes": 923656
+    },
+    {
+      "file": "bin/vpn/openvpn/openssl.exe",
+      "sha256": "ff5d03987fd70966f069ea1a41645be35d9c4699df19fa4b69112faf8c4112c4",
+      "bytes": 878600
+    },
+    {
+      "file": "bin/vpn/openvpn/openvpn.exe",
+      "sha256": "02d1f147e58de4e12735d9d4614a40d69a87a4874928b962aa235264fa364ea1",
+      "bytes": 1077680
+    },
+    {
+      "file": "bin/vpn/openvpn/vcruntime140.dll",
+      "sha256": "c51c64dfb7c445ecf0001f69c27e13299ddcfba0780efa72b866a7487b7491c7",
+      "bytes": 97152
+    },
+    {
+      "file": "bin/wintun.dll",
+      "sha256": "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce",
+      "bytes": 427552
+    }
+  ]
+}

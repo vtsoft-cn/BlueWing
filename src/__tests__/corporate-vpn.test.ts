@@ -260,7 +260,7 @@ test('SoftEther packet routes are ready for the first unknown private ICMP/UDP p
   const before = policy.prepare(repo.list()).profiles[0].packet!;
   assert.equal(Buffer.from(before.privateKey, 'base64').length, 32);
   policy.setPacketEndpoint(p.id, { port: 32001, publicKey: before.publicKey, loopbackInterface: 'fixture-loopback', icmp: { port: 32002, publicKey: before.icmp!.publicKey } }, repo.list());
-  policy.update(p.id, { targets: [{ domains: [], cidrs: ['192.168.30.0/24'], ports: ['1:65535'] }], hosts: {}, dnsServers: ['192.168.30.1'] }, repo.list());
+  policy.update(p.id, { targets: [{ domains: [], cidrs: ['10.203.19.0/24'], ports: ['1:65535'] }], hosts: {}, dnsServers: ['10.203.19.1'] }, repo.list());
   policy.setProbe(p.id, 'cold-first-packet', repo.list());
   const runtime = policy.runtime(), r = runtime.profiles[0];
   const config: any = { inbounds: [], outbounds: [], route: { rule_set: [], rules: [{ action: 'hijack-dns', network: 'udp', port: [53] }, { ip_is_private: true, outbound: 'direct' }] }, dns: { servers: [], rules: [] } };
@@ -1430,7 +1430,7 @@ test('Company import failure rolls main database back with profile store', async
   );
   assert.notEqual(db.getSettings().mixedPort, 29999);
 });
-test('Only explicit full diagnostics records exact submitted input, and clear removes rotated logs', t => {
+test('Every diagnostic mode redacts submitted input, and clear removes rotated logs', t => {
   const dir = temp(t), repo = new ProfileRepository(dir), log = new VpnDiagnostics(dir, 100);
   const secret = '  fixture-password\\n!\n', otp = ' 123456 ';
   for (const diagnosticMode of ['off', 'detail', 'full'] as const) {
@@ -1439,7 +1439,9 @@ test('Only explicit full diagnostics records exact submitted input, and clear re
     const all = [log.file(p.id) + '.1', log.file(p.id)].filter(fs.existsSync).flatMap(f => fs.readFileSync(f, 'utf8').trim().split('\n').map(line => JSON.parse(line)));
     const inputs = all.filter(e => e.event === 'submitted-input');
     assert.equal(inputs.length, diagnosticMode === 'full' ? 2 : 0);
-    if (diagnosticMode === 'full') assert.deepEqual(inputs.map(e => e.value), [secret, otp]);
+    if (diagnosticMode === 'full') assert.ok(inputs.every(e => e.redacted === true && e.value === undefined));
+    assert.ok(!JSON.stringify(all).includes(secret));
+    assert.ok(!JSON.stringify(all).includes(otp));
     assert.ok(!JSON.stringify(repo.list()).includes('fixture-password'));
     assert.ok(repo.export().every(profile => profile.diagnosticMode === 'off'));
     const imported = new ProfileRepository(path.join(dir, 'imported-' + diagnosticMode));
@@ -1470,7 +1472,8 @@ test('VPN diagnostics correlate the active generation and preserve original trus
   emit('error', detail, generation, 'ATRUST_TRUSTED_ENDPOINT_REQUIRED');
   assert.deepEqual(manager.snapshot().state.errorDetail, detail);
   const text = fs.readFileSync(manager.diagnosticFile(p.id), 'utf8');
-  for (const expected of ['example-local-password', '654321', 'original-cookie-123', '75500503']) assert.ok(text.includes(expected));
+  assert.ok(text.includes('75500503'));
+  for (const secret of ['example-local-password', '654321', 'original-cookie-123']) assert.ok(!text.includes(secret));
   for (const stale of ['stale-content', 'stale-otp']) assert.ok(!text.includes(stale));
   assert.ok(!JSON.stringify(manager.snapshot()).includes('example-local-password'));
   await manager.save({ ...p, diagnosticMode: 'off' });

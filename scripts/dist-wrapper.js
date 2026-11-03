@@ -16,6 +16,12 @@ const path = require('path');
 const fsSync = require('fs');
 
 const ROOT = path.join(__dirname, '..');
+const publish = process.argv.find((arg, index) => arg === '--publish' ? process.argv[index + 1] !== 'never' : arg.startsWith('--publish=') && arg !== '--publish=never');
+if (publish) {
+  require('node:child_process').execFileSync(process.execPath, [path.join(__dirname, 'release-check.cjs'), '--public'], { cwd: ROOT, stdio: 'inherit', windowsHide: true });
+} else if (!process.argv.some(arg => arg === '--publish' || arg.startsWith('--publish='))) {
+  process.argv.push('--publish', 'never');
+}
 
 // ---- NSIS 模板补丁(幂等,锚点失配即抛错) ----
 function patchTemplates() {
@@ -23,12 +29,10 @@ function patchTemplates() {
   const contents = new Map();
   const patches = [
     {
-      name: '目录页钩子注入:PRE 防闪烁锁(bbDirPre,含 --updated 跳页)+ SHOW 解锁(bbDirShow)+ LEAVE 校验(bbRejectRootDir),函数体在 build/installer.nsh。钩子行已物理写入 node_modules 模板(本补丁仅作守卫:模板被 npm 重装重置时在此报错,请按 git 历史中 build/installer.nsh 的注释手工恢复三行 define)',
+      name: '在干净模板中安装目录页 PRE/SHOW/LEAVE 钩子',
       file: 'assistedInstaller.nsh',
       find:
-        '    !define MUI_PAGE_CUSTOMFUNCTION_PRE bbDirPre\n' +
-        '    !define MUI_PAGE_CUSTOMFUNCTION_SHOW bbDirShow\n' +
-        '    !define MUI_PAGE_CUSTOMFUNCTION_LEAVE bbRejectRootDir\n' +
+        '    !insertmacro skipPageIfUpdated\n' +
         '    !insertmacro MUI_PAGE_DIRECTORY',
       replace:
         '    !define MUI_PAGE_CUSTOMFUNCTION_PRE bbDirPre\n' +

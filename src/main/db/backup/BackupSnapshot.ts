@@ -36,7 +36,7 @@ export class BackupSnapshot {
       db.getDns(),
       db.getSettings(),
       { profiles: true, rules: true, settings: true, corporateVpn:true },
-      new ProfileRepository(db.getDataDir()).export()
+      new ProfileRepository(db.getDataDir()).export(), { local: true }
     );
 
     fs.writeFileSync(snapshotPath, backupJson, 'utf8');

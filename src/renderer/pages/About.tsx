@@ -28,7 +28,7 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
               青翼连接 BlueWing Connect
             </h2>
             <p className="text-xs text-slate-400 mt-1.5 max-w-md mx-auto">
-              基于 Sing-box 官方原生核心打造的现代化通用代理工具链与网络调试客户端
+              基于 sing-box 维护核心打造的现代化通用代理工具链与网络调试客户端
             </p>
           </div>
         </div>
@@ -41,7 +41,7 @@ export const About: React.FC<AboutProps> = ({ theme, coreVersion }) => {
 
           <div className="space-y-3 divide-y divide-slate-100 dark:divide-slate-800/60">
             <div className="flex items-center justify-between pt-1">
-              <span className="text-slate-500">Sing-box 官方核心版本</span>
+              <span className="text-slate-500">sing-box 维护核心版本</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
                 {coreVersion}
               </span>

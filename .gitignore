@@ -30,6 +30,16 @@ BlueWing Connect/
 
 # 便携版用户数据备份(scripts/preserve-data.js 构建期间生成)
 .data-preserve/
+# Local credentials, key stores and exported backups must never enter source control.
+*.bluewingbackup
+*.pfx
+*.p12
+/data/
+/logs/
+/snapshots/
+bluewing.json
+bluewing.json.bak
+bluewing.json.tmp
 # 注:bin/rules 内置分流规则集已入库(离线首启依赖,缺失会导致核心联网下载规则、被墙后反复重启)
 
 # ---------- 编辑器 / IDE ----------

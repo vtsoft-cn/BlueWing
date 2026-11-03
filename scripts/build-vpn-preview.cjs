@@ -4,10 +4,10 @@ const fs = require('node:fs'),
 const root = path.resolve(__dirname, '..');
 const electronDist =
   process.env.BLUEWING_ELECTRON_DIST ||
-  path.join(root, 'work', 'corporate-vpn-tools', 'electron-runtime', 'dist');
+  path.join(root, 'node_modules', 'electron', 'dist');
 if (!fs.existsSync(path.join(electronDist, 'electron.exe')))
   throw new Error(
-    'Set BLUEWING_ELECTRON_DIST to the verified Electron 44.8.0 distribution.',
+    'Set BLUEWING_ELECTRON_DIST to the verified, pinned Electron distribution.',
   );
 const output = path.resolve(
   root,
@@ -27,7 +27,7 @@ if (!process.argv.includes('--refresh-archive'))
       require.resolve('electron-builder/out/cli/cli.js'),
       '--dir',
       `--config.electronDist=${electronDist}`,
-      '--config.electronVersion=44.8.0',
+      `--config.electronVersion=${require('../package.json').devDependencies.electron}`,
       `--config.directories.output=${output}`,
       '--config.npmRebuild=false',
       '--config.win.signAndEditExecutable=false',

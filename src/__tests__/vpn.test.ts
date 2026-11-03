@@ -13,7 +13,7 @@ import {
   toNetworkCidr,
   ipInCidr,
 } from '../main/system/vpn/WindowsNetQuery';
-import { rasEntryName, describeRasdialExitCode, patchPhonebookPsk } from '../main/system/vpn/RasVpnEngine';
+import { rasEntryName, describeRasdialExitCode } from '../main/system/vpn/RasVpnEngine';
 import { parseOpenVpnLine, buildManualOvpnConfig, derToPem } from '../main/system/vpn/OpenVpnEngine';
 import { parseOpenConnectLine, OPENCONNECT_PROTOCOL_MAP } from '../main/system/vpn/OpenConnectEngine';
 import { resolveVpnEngineType, effectiveEngineProfile } from '../main/system/vpn/VpnEngineManager';
@@ -282,7 +282,7 @@ describe('WindowsNetQuery 纯逻辑', () => {
 
   test('toNetworkCidr 主机地址归位到网络地址', () => {
     assert.equal(toNetworkCidr('10.8.0.6', 24), '10.8.0.0/24');
-    assert.equal(toNetworkCidr('192.168.110.131', 24), '192.168.110.0/24');
+    assert.equal(toNetworkCidr('10.203.17.131', 24), '10.203.17.0/24');
     assert.equal(toNetworkCidr('172.16.5.9', 12), '172.16.0.0/12');
     assert.equal(toNetworkCidr('1.2.3.4', 32), '1.2.3.4/32');
     assert.equal(toNetworkCidr('1.2.3.4', 0), '0.0.0.0/0');
@@ -330,34 +330,6 @@ describe('引擎纯逻辑', () => {
     assert.ok(describeRasdialExitCode(789).includes('预共享密钥'));
     assert.ok(describeRasdialExitCode(800).includes('无法建立'));
     assert.ok(describeRasdialExitCode(2333).includes('2333'));
-  });
-
-  test('patchPhonebookPsk:电话簿直写 L2TP PSK(应对 VpnClient cmdlet 静默丢参)', () => {
-    const pbk = [
-      '[Other Entry]',
-      'IpSecFlags=0',
-      'Server=x',
-      '',
-      '[BlueWing VPN abc]',
-      'Encoding=1',
-      'IpSecFlags=1',
-      'Server=1.2.3.4',
-      '',
-      '[Another]',
-      'IpSecFlags=0',
-    ].join('\r\n');
-    // 命中目标节:插到 IpSecFlags 之后并强制置 1,其他节不动
-    const patched = patchPhonebookPsk(pbk, 'BlueWing VPN abc', 'psk123')!;
-    assert.ok(patched.includes('IpSecFlags=1\r\nL2tpPsk=psk123'), 'PSK 紧随 IpSecFlags=1');
-    assert.ok(!patched.includes('[Other Entry]\r\nIpSecFlags=1'), '其他节不受影响');
-    assert.ok(patched.includes('[Another]'), '尾部节保留');
-    // 已有 L2tpPsk 时替换;无 IpSecFlags 时补两行
-    const rep = patchPhonebookPsk('[E]\r\nL2tpPsk=old\r\nX=1', 'E', 'new')!;
-    assert.ok(rep.includes('L2tpPsk=new') && !rep.includes('old'));
-    const noFlags = patchPhonebookPsk('[E]\r\nServer=1', 'E', 'p')!;
-    assert.ok(noFlags.includes('IpSecFlags=1\r\nL2tpPsk=p'));
-    // 条目不存在 → null
-    assert.equal(patchPhonebookPsk('[A]\r\nIpSecFlags=1', 'Missing', 'p'), null);
   });
 
   test('parseOpenVpnLine 识别推送/连接成功/错误', () => {

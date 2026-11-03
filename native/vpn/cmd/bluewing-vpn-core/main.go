@@ -36,7 +36,7 @@ import (
 const protocolVersion = 1
 const maxFrame = 4 * 1024 * 1024
 
-var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.9-network-audit"
+var buildRevision = "5d7f5b11fcf231f72a0ec0d888bf0f2eadcce1da+bluewing.10-publish-security"
 
 type target struct {
 	GuardOnly bool     `json:"guardOnly,omitempty"`

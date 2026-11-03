@@ -176,12 +176,12 @@ export const api = {
 
   // Backup & Restore
   backup: {
-    exportData: (categories?: any): Promise<string> => ipcRenderer.invoke('backup:export', categories),
+    exportData: (categories?: any, passphrase?: string): Promise<string> => ipcRenderer.invoke('backup:export', categories, passphrase),
     exportAndroid: (categories?: any): Promise<string> => ipcRenderer.invoke('backup:exportAndroid', categories),
-    previewImport: (content: string, categories?: any): Promise<any> =>
-      ipcRenderer.invoke('backup:previewImport', content, categories),
-    importWithTransaction: (content: string, categories?: any, mode?: 'merge' | 'replace'): Promise<any> =>
-      ipcRenderer.invoke('backup:importWithTransaction', content, categories, mode),
+    previewImport: (content: string, categories?: any, passphrase?: string): Promise<any> =>
+      ipcRenderer.invoke('backup:previewImport', content, categories, passphrase),
+    importWithTransaction: (content: string, categories?: any, mode?: 'merge' | 'replace', passphrase?: string): Promise<any> =>
+      ipcRenderer.invoke('backup:importWithTransaction', content, categories, mode, passphrase),
     createLocalBackup: (): Promise<{ success: boolean; filePath: string }> =>
       ipcRenderer.invoke('backup:createLocalBackup'),
     restoreLocalBackup: (): Promise<any> => ipcRenderer.invoke('backup:restoreLocalBackup'),
@@ -193,6 +193,7 @@ export const api = {
 
   // Settings
   settings: {
+    credentialStatus: () => ipcRenderer.invoke('settings:credentialStatus'),
     get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
     save: (settings: Partial<AppSettings>) => ipcRenderer.invoke('settings:save', settings),
     resetDefaults: (): Promise<AppSettings> => ipcRenderer.invoke('settings:resetDefaults'),

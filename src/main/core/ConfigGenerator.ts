@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { coreApiSecret } from '../security/CoreApiAuth';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings, VpnSplitConfig } from '../../types';
 import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
 import { VpnRuntime } from '../../types/corporateVpn';
@@ -20,6 +21,9 @@ export class ConfigGenerator {
     corporateRuntime?: VpnRuntime,
     vpn?: VpnSplitConfig | null
   ): Record<string, any> {
+    const selected = nodes.find(n => n.id === activeNodeId) || nodes[0];
+    if (settings.routingMode !== 'direct' && selected?.credentialsUnavailable) throw new Error('所选节点凭据暂时不可读取，请重新填写密码或添加节点');
+    nodes = nodes.filter(n => !n.credentialsUnavailable);
     const activeNode = nodes.find((n) => n.id === activeNodeId) || nodes[0];
 
     // 1. Inbounds
@@ -579,7 +583,9 @@ export class ConfigGenerator {
       rootConfig.experimental.clash_api = {
         external_controller: `127.0.0.1:${settings.clashApiPort || 9090}`,
         external_ui: '',
-        secret: settings.clashApiSecret || '',
+        secret: coreApiSecret(),
+        access_control_allow_origin: ['bluewing://app'],
+        access_control_allow_private_network: false,
       };
     }
 

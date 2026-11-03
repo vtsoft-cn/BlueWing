@@ -16,6 +16,7 @@ import {
 } from '../../../types';
 import { BackupFormatType } from './BackupValidator';
 import { VpnProfile } from '../../../types/corporateVpn';
+import { withoutSecrets } from '../../security/SecretFields';
 
 export interface RawParsedBackupData {
   corporateVpn?: VpnProfile[];
@@ -177,9 +178,7 @@ export class BackupPreview {
           type: 'setting',
           name: String(key),
           action: 'update',
-          detail: `修改设置 ${String(key)}: ${JSON.stringify(current.settings[key])} -> ${JSON.stringify(
-            incomingSettings[key]
-          )}`,
+          detail: `修改设置 ${String(key)}（敏感值不在预览中显示）`,
         });
       }
     }
