@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.VpnService;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 
 import java.net.InetAddress;
@@ -24,20 +26,26 @@ public final class CompanyVpnService extends VpnService {
     static final String CONNECT = "cn.vtsoft.bluewing.CONNECT";
     static final String CONNECT_PROXY = "cn.vtsoft.bluewing.CONNECT_PROXY";
     static final String DISCONNECT = "cn.vtsoft.bluewing.DISCONNECT";
+    static final String DISCONNECTING = "正在断开";
     static volatile String currentStatus = "未连接";
     static volatile Consumer<String> statusListener;
     private static final String CHANNEL = "company-vpn";
     private static final int NOTIFICATION_ID = 1;
     private volatile Session activeSession;
     private volatile Proxy activeProxy;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private Thread connectionThread;
+    private boolean closing;
+    private boolean destroyed;
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || DISCONNECT.equals(intent.getAction())) {
-            stopSelf();
+            disconnect();
             return START_NOT_STICKY;
         }
         boolean publicProxy = CONNECT_PROXY.equals(intent.getAction());
-        if ((!publicProxy && !CONNECT.equals(intent.getAction())) || activeSession != null || activeProxy != null) {
+        if (closing || (!publicProxy && !CONNECT.equals(intent.getAction()))
+                || activeSession != null || activeProxy != null) {
             return START_NOT_STICKY;
         }
         if (VpnService.prepare(this) != null) {
@@ -52,7 +60,8 @@ public final class CompanyVpnService extends VpnService {
             Proxy proxy = Proxymobile.newProxy();
             activeProxy = proxy;
             updateStatus("正在启动公网代理");
-            new Thread(() -> connectProxy(proxy, link), "bluewing-proxy").start();
+            connectionThread = new Thread(() -> connectProxy(proxy, link), "bluewing-proxy");
+            connectionThread.start();
             return START_NOT_STICKY;
         }
         String password = intent.getStringExtra("password");
@@ -60,7 +69,8 @@ public final class CompanyVpnService extends VpnService {
         Session session = Mobile.newSession();
         activeSession = session;
         updateStatus("正在连接");
-        new Thread(() -> connect(session, intent, password, startId), "bluewing-vpn").start();
+        connectionThread = new Thread(() -> connect(session, intent, password), "bluewing-vpn");
+        connectionThread.start();
         return START_NOT_STICKY;
     }
 
@@ -77,20 +87,25 @@ public final class CompanyVpnService extends VpnService {
                             .setMtu(1400).addAddress("172.19.0.1", 30).addAddress("fdfe:dcba:9876::1", 126)
                             .addRoute("0.0.0.0", 0).addRoute("::", 0).addDnsServer("172.19.0.2").establish()) {
                         if (tun == null) throw new IllegalStateException("系统未建立 VPN 接口");
+                        if (activeProxy != proxy) throw new IllegalStateException("连接已取消");
                         return tun.detachFd();
                     }
                 }
             });
-            if (activeProxy == proxy) updateStatus("公网代理已启动");
+            main.post(() -> {
+                if (activeProxy == proxy) updateStatus("公网代理已启动");
+            });
         } catch (Exception error) {
-            if (activeProxy == proxy) {
-                updateStatus("公网代理启动失败，请检查节点链接与系统授权");
-                stopSelf();
-            }
+            main.post(() -> {
+                if (activeProxy == proxy) {
+                    updateStatus("公网代理启动失败，请检查节点链接与系统授权");
+                    disconnect();
+                }
+            });
         }
     }
 
-    private void connect(Session session, Intent config, String password, int startId) {
+    private void connect(Session session, Intent config, String password) {
         try {
             String routes = Mobile.normalizeRoutes(config.getStringExtra("routes"));
             String suffixes = config.getStringExtra("suffixes");
@@ -117,14 +132,20 @@ public final class CompanyVpnService extends VpnService {
             try (ParcelFileDescriptor tun = builder.establish()) {
                 if (tun == null) throw new IllegalStateException("系统未建立 VPN 接口");
                 if (activeSession != session) return;
-                updateStatus("已连接 · 公司网段走 VPN");
+                main.post(() -> {
+                    if (activeSession == session) updateStatus("已连接 · 公司网段走 VPN");
+                });
                 session.forward(tun.detachFd(), suffixes, publicResolvers);
             }
         } catch (Exception error) {
-            if (activeSession == session) updateStatus("连接已停止，请检查网关、证书和接入配置");
+            main.post(() -> {
+                if (activeSession == session) updateStatus("连接已停止，请检查网关、证书和接入配置");
+            });
         } finally {
             session.close();
-            stopSelf(startId);
+            main.post(() -> {
+                if (activeSession == session) disconnect();
+            });
         }
     }
 
@@ -143,21 +164,48 @@ public final class CompanyVpnService extends VpnService {
     }
 
     @Override public void onRevoke() {
-        stopSelf();
+        main.post(this::disconnect);
     }
 
     @Override public void onDestroy() {
+        destroyed = true;
+        disconnect();
+        super.onDestroy();
+    }
+
+    private void disconnect() {
+        if (closing) return;
         Session session = activeSession;
         activeSession = null;
-        if (session != null) session.close();
         Proxy proxy = activeProxy;
         activeProxy = null;
-        if (proxy != null) new Thread(proxy::close, "bluewing-proxy-close").start();
-        if (currentStatus.startsWith("正在") || currentStatus.startsWith("已连接")
-                || currentStatus.equals("公网代理已启动")) {
-            updateStatus("未连接");
+        Thread worker = connectionThread;
+        connectionThread = null;
+        if (worker == null) {
+            if (!destroyed) stopSelf();
+            return;
         }
-        super.onDestroy();
+        closing = true;
+        boolean showDisconnected = currentStatus.startsWith("正在") || currentStatus.startsWith("已连接")
+            || currentStatus.equals("公网代理已启动");
+        if (showDisconnected) updateStatus(DISCONNECTING);
+        new Thread(() -> {
+            if (session != null) session.close();
+            if (proxy != null) proxy.close();
+            try {
+                worker.join();
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            main.post(() -> {
+                if (showDisconnected) updateStatus("未连接");
+                if (!destroyed) {
+                    stopForeground(STOP_FOREGROUND_REMOVE);
+                    stopSelf();
+                }
+            });
+        }, "bluewing-disconnect").start();
     }
 
     private void updateStatus(String status) {

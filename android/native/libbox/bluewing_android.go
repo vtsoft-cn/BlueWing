@@ -47,12 +47,18 @@ func (p *blueWingPlatform) OpenInterface(options *tun.Options, _ option.TunPlatf
 	if err != nil {
 		return nil, err
 	}
+	if err := syscall.SetNonblock(int(fd), true); err != nil {
+		_ = syscall.Close(int(fd))
+		return nil, err
+	}
 	options.Name, err = getTunnelName(fd)
 	if err != nil {
 		_ = syscall.Close(int(fd))
 		return nil, err
 	}
 	options.FileDescriptor = int(fd)
+	// Android's VpnService owns interface addresses, DNS and routes.
+	options.EXP_ExternalConfiguration = true
 	device, err := tun.New(*options)
 	if err != nil {
 		_ = syscall.Close(int(fd))

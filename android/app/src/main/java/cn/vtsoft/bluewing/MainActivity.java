@@ -392,7 +392,7 @@ public final class MainActivity extends Activity {
     }
 
     private void disconnect() {
-        stopService(new Intent(this, CompanyVpnService.class));
+        startService(new Intent(this, CompanyVpnService.class).setAction(CompanyVpnService.DISCONNECT));
     }
 
     private void updateNodeSummary() {
@@ -420,12 +420,16 @@ public final class MainActivity extends Activity {
             : running ? color(0x047857, 0x34d399) : blue));
         powerIcon.setBackground(shape(connecting ? color(0xfffbeb, 0x38290e)
             : running ? color(0xecfdf5, 0x10352f) : blueTint, border, 36));
-        primary.setText(connecting ? "取消连接" : running ? "断开当前连接"
+        boolean disconnecting = CompanyVpnService.DISCONNECTING.equals(message);
+        primary.setText(disconnecting ? "正在断开…" : connecting ? "取消连接" : running ? "断开当前连接"
             : selectedLink.isEmpty() ? "添加代理节点" : "立即连接代理");
+        primary.setEnabled(!disconnecting);
         styleAction(primary, true, running);
         companyConnect.setVisibility(running ? View.GONE : View.VISIBLE);
         companyConnect.setEnabled(!running);
         companyDisconnect.setVisibility(running ? View.VISIBLE : View.GONE);
+        companyDisconnect.setEnabled(!disconnecting);
+        companyDisconnect.setText(disconnecting ? "正在断开…" : "断开当前连接");
     }
 
     private void showMessage(String message) {
