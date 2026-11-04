@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { modalOverlayClass, modalPopClass, useMaskDrag } from './ModalShell';
 
 export interface ConfirmOptions {
@@ -30,6 +30,9 @@ export const ConfirmDialogHost: React.FC = () => {
   // 收场动画:resolve 立即放行调用方,蒙版/面板播完 overlay-exit/pop-exit 再卸载
   const [exiting, setExiting] = useState(false);
   const closingRef = React.useRef(false);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const messageId = useId();
   const maskDrag = useMaskDrag();
 
   useEffect(() => {
@@ -38,12 +41,20 @@ export const ConfirmDialogHost: React.FC = () => {
         // Host 常驻不卸载,closingRef 在上一次收场后残留 true;新弹窗即新生命周期,必须复位,
         // 否则第二次起所有按钮点击都被 close() 的关闭锁吞掉(确认框永久死锁)
         closingRef.current = false;
+        setExiting(false);
         setPending({ options, resolve });
       });
     return () => {
       askFn = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!pending) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    return () => previous?.focus();
+  }, [pending]);
 
   if (!pending) return null;
   const { options, resolve } = pending;
@@ -61,18 +72,41 @@ export const ConfirmDialogHost: React.FC = () => {
     <div
       {...maskDrag}
       className={`no-drag fixed inset-0 z-[210] bg-black/60 flex items-center justify-center p-4 ${modalOverlayClass(exiting)}`}
-      {...maskDrag}
     >
       <div
-        className={`bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl ${modalPopClass(exiting)}`}
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={options.title ? titleId : undefined}
+        aria-label={options.title ? undefined : '确认操作'}
+        aria-describedby={messageId}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            close(false);
+          }
+          if (event.key === 'Tab') {
+            const buttons = dialogRef.current?.querySelectorAll<HTMLButtonElement>('button');
+            const first = buttons?.[0], last = buttons?.[buttons.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }
+        }}
+        className={`bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full max-h-[calc(100dvh-2rem)] flex flex-col p-5 border border-slate-200 dark:border-slate-800 shadow-2xl ${modalPopClass(exiting)}`}
       >
         {options.title && (
-          <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100 mb-1.5">{options.title}</h4>
+          <h4 id={titleId} className="font-semibold text-sm text-slate-900 dark:text-slate-100 mb-1.5">{options.title}</h4>
         )}
-        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed break-words whitespace-pre-line">
+        <p id={messageId} className="min-h-0 overflow-y-auto text-xs text-slate-500 dark:text-slate-400 leading-relaxed break-words whitespace-pre-line">
           {options.message}
         </p>
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex shrink-0 justify-end gap-2 mt-4">
           <button
             onClick={() => close(false)}
             className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"

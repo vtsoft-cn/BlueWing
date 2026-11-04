@@ -214,7 +214,8 @@ export const VpnAccess: React.FC<{
   });
   const state = stateFor(selectedId);
   const connectedCount = Object.values(snapshot.states || { legacy: snapshot.state }).filter(s => s.state === 'connected').length;
-  const runningCount = Object.values(snapshot.states || { legacy: snapshot.state }).filter(s => !['idle', 'failed'].includes(s.state)).length;
+  const runningStates = Object.values(snapshot.states || { legacy: snapshot.state }).filter(s => !['idle', 'failed'].includes(s.state));
+  const runningCount = runningStates.length;
   const defaultProfile = snapshot.profiles.find(p => p.id === snapshot.defaultProfileId);
   const active = !['idle', 'failed'].includes(state.state);
   const engineItems = engineProfiles.map((p) => ({
@@ -292,6 +293,22 @@ export const VpnAccess: React.FC<{
       setBusy(false);
     }
   };
+  const disconnectAll = () => run(async () => {
+    if (!runningStates.length) return;
+    const connections = runningStates.map(state => {
+      const profile = snapshot.profiles.find(profile => profile.id === state.profileId);
+      return `• ${profile?.name || '未命名接入'}（${labels[state.state]}）`;
+    });
+    if (!(await confirmDialog({
+      title: '断开全部 VPN 接入？',
+      message: `将断开以下 ${connections.length} 个接入，相关内网访问会中断。\n\n${connections.join('\n')}`,
+      confirmText: '确认断开全部',
+      cancelText: '保持连接',
+      danger: true,
+    }))) return;
+    await window.electronAPI.corporateVpn.disconnect();
+    await refresh();
+  });
   const resources =
     selected && state.profileId === selected.id ? state.resources : undefined;
   const resourceRows: Array<{ target: VpnTarget; source: string }> =
@@ -411,7 +428,7 @@ export const VpnAccess: React.FC<{
       {snapshot.states && <div className="vpn-multi-summary" role="status" aria-label="多 VPN 连接状态">
         <span><Network size={15} />已连接 <strong>{connectedCount}</strong> 个接入
           {defaultProfile && <small>默认策略：{defaultProfile.name} · 优先级 {defaultProfile.routingPriority ?? 100}</small>}</span>
-        {runningCount > 0 && <button className="vpn-text-button" disabled={busy} onClick={() => run(async () => { await window.electronAPI.corporateVpn.disconnect(); await refresh(); })}>断开全部</button>}
+        {runningCount > 0 && <button className="vpn-text-button" disabled={busy} onClick={disconnectAll}>断开全部</button>}
       </div>}
       {!!snapshot.warnings?.length && <div className="vpn-notice warning" role="status">
         <ShieldCheck size={18} />
