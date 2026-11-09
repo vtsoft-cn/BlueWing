@@ -1264,7 +1264,9 @@ func (r *Router) Lookup(ctx context.Context, domain string, options adapter.DNSQ
 			err = E.New("empty result")
 		}
 		if err != nil {
-			if errors.Is(err, ErrResponseRejectedCached) {
+			if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+				r.logger.DebugContext(ctx, "lookup canceled for ", domain)
+			} else if errors.Is(err, ErrResponseRejectedCached) {
 				r.logger.DebugContext(ctx, "response rejected for ", domain, " (cached)")
 			} else if errors.Is(err, ErrResponseRejected) {
 				r.logger.DebugContext(ctx, "response rejected for ", domain)

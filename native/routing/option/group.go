@@ -8,6 +8,12 @@ type SelectorOutboundOptions struct {
 	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
 }
 
+type AdaptivePublicOutboundOptions struct {
+	Proxy        string `json:"proxy" reference:"outbound"`
+	Direct       string `json:"direct" reference:"outbound"`
+	AlternateDNS string `json:"alternate_dns" reference:"dns_server"`
+}
+
 type URLTestOutboundOptions struct {
 	Outbounds                 []string           `json:"outbounds" reference:"outbound"`
 	URL                       string             `json:"url,omitempty"`

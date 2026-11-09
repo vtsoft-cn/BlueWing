@@ -8,6 +8,7 @@ import { ConfigGenerator } from '../main/core/ConfigGenerator';
 import { SpeedTestRunner } from '../main/net/SpeedTestRunner';
 import { ProcessScanner } from '../main/system/ProcessScanner';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings } from '../types';
+import { VpnRuntime } from '../types/corporateVpn';
 
 const execFileAsync = promisify(execFile);
 
@@ -204,6 +205,40 @@ describe('Routing and App Rules in ConfigGenerator', () => {
     assert.equal(config.outbounds.find((o: any) => o.tag === 'proxy').default, 'node-node-test');
   });
 
+  test('Adaptive HTTPS runs after explicit and managed routes, and stays out of global and TUN modes', () => {
+    const dns: DnsConfig = {
+      mode: 'standard', remoteDns: 'https://1.1.1.1/dns-query', directDns: '223.5.5.5',
+      fakeIpRange: '198.18.0.0/15', enableDnsRouting: true, servers: [],
+    };
+    const explicit: RouteRule = {
+      id: 'pinned', name: 'Pinned', enabled: true, domains: ['full:pinned.example.com'], outbound: 'proxy',
+    };
+    const settings: AppSettings = { ...defaultSettings, routingMode: 'rule' };
+    const runtime = (trafficMode: 'split' | 'custom') => ({
+      coreProcessName: 'bluewing-vpn-core.exe',
+      profiles: [{
+        profile: { id: 'company', trafficMode, gateway: { host: 'vpn.example.com' }, socksPort: 22101, dnsPort: 22102 },
+        socksUser: 'fixture', socksPassword: 'fixture', routePath: 'route.json',
+        guardPath: 'guard.json', dnsPath: 'dns.json', internetPath: 'internet.json',
+      }],
+    } as VpnRuntime);
+    const generate = (overrides: Partial<AppSettings>, company?: VpnRuntime) =>
+      ConfigGenerator.generate(sampleNode.id, [sampleNode], [explicit], [], dns, { ...settings, ...overrides }, false, company);
+    const split = generate({}, runtime('split')).route.rules;
+    const firstAdaptive = split.findIndex((rule: any) => rule.outbound === 'adaptive-public');
+    assert.ok(firstAdaptive > split.findIndex((rule: any) => rule.domain?.includes('pinned.example.com')));
+    assert.ok(firstAdaptive > split.findIndex((rule: any) => rule.rule_set?.includes('corp-guard-company')));
+    assert.ok(split[firstAdaptive].rules.some((rule: any) => rule.rule_set?.includes('corp-internet-company')));
+    assert.equal(split[firstAdaptive + 1].outbound, 'proxy');
+    const custom = generate({}, runtime('custom')).route.rules;
+    assert.equal(custom.filter((rule: any) => rule.outbound === 'adaptive-public').length, 1);
+    assert.equal(custom.at(-1).outbound, 'adaptive-public');
+    for (const override of [{ routingMode: 'global' }, { routingMode: 'direct' }, { tunEnabled: true }] as const) {
+      const config = generate(override);
+      assert.ok(!config.outbounds.some((outbound: any) => outbound.tag === 'adaptive-public'));
+    }
+  });
+
   test('Configures custom DNS servers and cache capacity in Sing-box', () => {
     const dns: DnsConfig = {
       mode: 'fakeip',
@@ -268,7 +303,7 @@ describe('Routing and App Rules in ConfigGenerator', () => {
     }
   });
 
-  test('App process rules are generated after all domain/IP routing rules', () => {
+  test('App process rules follow domain/IP rules and take precedence over automatic fallback', () => {
     // 修复回归:进程规则(chrome.exe→proxy)此前排在分流规则之前,导致国内站也被送进代理
     const dns: DnsConfig = {
       mode: 'standard',
@@ -300,8 +335,8 @@ describe('Routing and App Rules in ConfigGenerator', () => {
       `app rule (index ${appIdx}) must come after the last routing rule (index ${lastRuleSetIdx})`
     );
 
-    // 进程规则是路由表最后一条,其后仅剩 final 出站
-    assert.equal(appIdx, gen.length - 1, 'app rule must be the final rule');
+    const adaptiveIdx = gen.findIndex((rule) => rule.outbound === 'adaptive-public');
+    assert.ok(adaptiveIdx > appIdx, 'the explicit app rule must win over automatic fallback');
   });
   test('Remote rule-set fallback never mixes download_detour with http_client', () => {
     // 回归:本地规则文件缺失时回退远程规则集,旧代码同时写 http_client + 已废弃的

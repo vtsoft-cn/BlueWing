@@ -1,5 +1,5 @@
 const fs = require('node:fs'), path = require('node:path'), { execFileSync } = require('node:child_process'), { createHash } = require('node:crypto');
-const root = path.resolve(__dirname, '..'), source = path.join(root, 'native', 'routing'), tool = path.join(root, 'work', 'corporate-vpn-tools');
+const root = path.resolve(__dirname, '..'), source = path.join(root, 'native', 'routing'), tool = process.env.ROUTING_BUILD_CACHE || path.join(root, 'work', 'corporate-vpn-tools');
 const localGo = path.join(tool, 'toolchain', 'go', 'bin', 'go.exe');
 const go = process.env.ROUTING_GO_BINARY || (fs.existsSync(localGo) ? localGo : 'go');
 const env = { ...process.env, CGO_ENABLED: '0', GOTOOLCHAIN: 'go1.26.10', GOPATH: path.join(tool, 'gopath'), GOCACHE: path.join(tool, 'gocache'), GOPROXY: process.env.GOPROXY || 'https://goproxy.cn,https://proxy.golang.org,direct' };
@@ -8,14 +8,16 @@ const version = run(['version'], { encoding: 'utf8' }).trim();
 if (!version.includes('go1.26.10 ')) throw new Error('Routing core requires pinned Go 1.26.10');
 const tags = 'with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,with_cloudflared,with_naive_outbound,with_purego,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0';
 const binary = path.join(root, 'bin', 'sing-box.exe');
+const revision = '1.14.3-bluewing.3';
 run(['test', '-buildvcs=false', 'github.com/sagernet/gvisor/pkg/tcpip/network/ipv4'], { stdio: 'inherit' });
-run(['build', '-buildvcs=false', '-trimpath', '-tags=' + tags, '-ldflags=-s -w -H=windowsgui -checklinkname=0 -X github.com/sagernet/sing-box/constant.Version=1.14.3-bluewing.2 -X runtime.godebugDefault=multipathtcp=0,tlssha1=1', '-o', binary, './cmd/sing-box'], { stdio: 'inherit' });
+run(['test', '-buildvcs=false', './protocol/group', '-run', 'AdaptivePublic'], { stdio: 'inherit' });
+run(['build', '-buildvcs=false', '-trimpath', '-tags=' + tags, '-ldflags=-s -w -H=windowsgui -checklinkname=0 -X github.com/sagernet/sing-box/constant.Version=' + revision + ' -X runtime.godebugDefault=multipathtcp=0,tlssha1=1', '-o', binary, './cmd/sing-box'], { stdio: 'inherit' });
 const hash = data => createHash('sha256').update(data).digest('hex');
 const files = [];
 function walk(dir) { for (const name of fs.readdirSync(dir).sort()) { const file = path.join(dir, name); if (name.endsWith('.exe') || name === '.cache') continue; if (fs.statSync(file).isDirectory()) walk(file); else files.push([path.relative(source, file).replaceAll('\\', '/'), hash(fs.readFileSync(file))]); } }
 walk(source);
 const archive = path.join(root, 'bin', 'routing-core-sources.zip');
 execFileSync('tar.exe', ['-a', '-cf', archive, '--exclude=*.exe', '--exclude=.cache', '-C', root, 'native/routing', 'scripts/build-routing-core.cjs'], { windowsHide: true, stdio: 'inherit' });
-const manifest = { schemaVersion: 1, upstream: 'github.com/sagernet/sing-box@v1.14.3', revision: '1.14.3-bluewing.2', toolchain: version, tags, sourceSha256: hash(JSON.stringify(files)), sourceArchiveSha256: hash(fs.readFileSync(archive)), sha256: hash(fs.readFileSync(binary)) };
+const manifest = { schemaVersion: 1, upstream: 'github.com/sagernet/sing-box@v1.14.3', revision, toolchain: version, tags, sourceSha256: hash(JSON.stringify(files)), sourceArchiveSha256: hash(fs.readFileSync(archive)), sha256: hash(fs.readFileSync(binary)) };
 fs.writeFileSync(path.join(root, 'bin', 'routing-core-manifest.json'), JSON.stringify(manifest, null, 2));
 console.log(JSON.stringify({ binary, ...manifest }, null, 2));

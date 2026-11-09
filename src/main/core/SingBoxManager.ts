@@ -5,12 +5,14 @@ import { privateDirectory } from '../security/PrivateFiles';
 import os from 'os';
 import net from 'net';
 import http from 'http';
+import { createInterface } from 'readline';
 import { EventEmitter } from 'events';
 import { CoreState } from '../../types';
 import { LogManager } from '../log/LogManager';
 import { Database } from '../db/Database';
 import { isRunningAsAdmin } from '../system/Elevation';
 import { TunAdapter } from '../system/TunAdapter';
+import { WindowsNetQuery } from '../system/vpn/WindowsNetQuery';
 
 export class SingBoxManager extends EventEmitter {
   private static instance: SingBoxManager;
@@ -340,38 +342,32 @@ export class SingBoxManager extends EventEmitter {
           },
         });
 
-        this.process.stdout?.on('data', (data) => {
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            if (line.trim()) {
-              this.noteCoreOutputLine(line);
-              this.log(
-                line.toLowerCase().includes('error') ? 'error' : 'info',
-                line.trim(),
-                'core'
-              );
-            }
-          }
-        });
-
-        this.process.stderr?.on('data', (data) => {
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed) {
-              this.noteCoreOutputLine(trimmed);
-              let level: 'error' | 'warn' | 'info' = 'info';
-              if (/\b(fatal|panic)\b/i.test(trimmed) || (/\berror\b/i.test(trimmed) && !/\bnoerror\b/i.test(trimmed))) {
-                level = 'error';
-              } else if (/\b(warn|warning)\b/i.test(trimmed)) {
-                level = 'warn';
-              }
-              this.log(level, trimmed, 'core');
-            }
-          }
-        });
-
         const child = this.process;
+        const systemRouting = config.route?.auto_detect_interface !== true &&
+          !config.inbounds?.some((inbound: any) => inbound.type === 'tun');
+        let lastRouteLookup = 0;
+        let routeLookupPending = false;
+        for (const stream of [child.stdout, child.stderr]) {
+          if (!stream) continue;
+          createInterface({ input: stream, crlfDelay: Infinity }).on('line', line => {
+            if (this.process !== child || !line.trim()) return;
+            this.noteCoreOutputLine(line);
+            const level = /\b(fatal|panic|error)\b/i.test(line) ? 'error'
+              : /\b(warn|warning)\b/i.test(line) ? 'warn' : 'info';
+            this.log(level, line.trim(), 'core');
+            if (!systemRouting || routeLookupPending || Date.now() - lastRouteLookup < 15_000) return;
+            const timeout = /open connection to (\S+) using outbound\/direct\[direct\]: .*?dial tcp (\[[\da-f:]+\]|[\d.]+):(\d+): (?:i\/o timeout|connectex:.*(?:timed out|failed to respond))/i.exec(line);
+            if (!timeout) return;
+            const [, target, ip, port] = timeout;
+            lastRouteLookup = Date.now();
+            routeLookupPending = true;
+            void WindowsNetQuery.bestRoute(ip.replace(/^\[|\]$/g, '')).then(route => {
+              if (route && this.process === child) {
+                this.log('warn', `直连 TCP 超时：${target} → ${ip}:${port}，Windows 当前路由 ${route.prefix} 经 ${route.adapter}`, 'net');
+              }
+            }).catch(() => {}).finally(() => { routeLookupPending = false; });
+          });
+        }
         this.process.on('error', (err) => {
           if (this.process !== child) return;
           this.log('error', `内核进程异常: ${err.message}`, 'core');

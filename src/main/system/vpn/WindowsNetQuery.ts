@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { isIP } from 'net';
 import { LogManager } from '../../log/LogManager';
 
 /**
@@ -194,7 +195,7 @@ export class WindowsNetQuery {
           } catch {}
           resolve('');
         }, timeoutMs);
-        proc.stdout?.on('data', (d) => (out += d.toString()));
+        proc.stdout?.setEncoding('utf8').on('data', (d) => (out += d));
         // PS 版本告警等可能走 stderr,不视为失败
         proc.on('close', () => {
           clearTimeout(timer);
@@ -214,6 +215,23 @@ export class WindowsNetQuery {
   private static async runPowerShellJson(script: string, timeoutMs: number): Promise<any[]> {
     const out = await WindowsNetQuery.runPowerShell(script, timeoutMs);
     return parseJsonList(out);
+  }
+
+  /** Read the route Windows would use right now for a destination address. */
+  public static async bestRoute(address: string): Promise<{ adapter: string; prefix: string } | undefined> {
+    if (process.platform !== 'win32' || !isIP(address) || !/^[\da-f:.]+$/i.test(address)) return;
+    const script =
+      `[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); ` +
+      `$r=Find-NetRoute -RemoteIPAddress '${psEscape(address)}' -ErrorAction SilentlyContinue | ` +
+      `Where-Object DestinationPrefix | Select-Object -First 1; ` +
+      `if ($r) { $a=Get-NetAdapter -IncludeHidden | Where-Object ifIndex -eq $r.InterfaceIndex | Select-Object -First 1; ` +
+      `@{alias=$r.InterfaceAlias;description=$a.InterfaceDescription;prefix=$r.DestinationPrefix} | ConvertTo-Json -Compress }`;
+    const [route] = await WindowsNetQuery.runPowerShellJson(script, 20_000);
+    if (typeof route?.prefix !== 'string' || typeof route?.alias !== 'string') return;
+    const adapter = typeof route.description === 'string' && route.description
+      ? `${route.alias}（${route.description}）`
+      : route.alias;
+    return { adapter, prefix: route.prefix };
   }
 
   /** 枚举当前 Up 状态的物理/虚拟网卡 */

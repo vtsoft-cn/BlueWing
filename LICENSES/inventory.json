@@ -4639,8 +4639,8 @@
     },
     {
       "file": "bin/sing-box.exe",
-      "sha256": "405d26db45de49096edf19c14071282ea57176cbe20b54288b6f0edab88a9ed6",
-      "bytes": 82101248
+      "sha256": "2ddd427de550472f785bcdce549ff95f829e9b29041bee7f026f4c0e06550ee6",
+      "bytes": 82149376
     },
     {
       "file": "bin/vpn/openconnect/iconv.dll",

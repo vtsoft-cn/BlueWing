@@ -4,11 +4,11 @@ import { coreApiSecret } from '../security/CoreApiAuth';
 import { ProxyNode, RouteRule, AppRule, DnsConfig, AppSettings, VpnSplitConfig } from '../../types';
 import { isValidDomain, isValidIpLiteral } from '../../utils/ip';
 import { VpnRuntime } from '../../types/corporateVpn';
-import { applyCorporateConfig } from '../vpn/CorporateConfig';
+import { ADAPTIVE_PUBLIC_OUTBOUND, applyCorporateConfig } from '../vpn/CorporateConfig';
 
 export class ConfigGenerator {
   /**
-   * Generates a complete, standard Sing-box JSON configuration strictly compliant with Sing-box 1.14
+   * Generates the configuration for BlueWing's maintained sing-box core.
    */
   public static generate(
     activeNodeId: string,
@@ -126,6 +126,15 @@ export class ConfigGenerator {
       outbounds: directOnly ? ['direct'] : nodeTags,
       default: directOnly ? 'direct' : validMainTag,
     });
+    if (!directOnly && !useTun && settings.routingMode === 'rule') {
+      outbounds.push({
+        type: 'bluewing-adaptive',
+        tag: ADAPTIVE_PUBLIC_OUTBOUND,
+        proxy: 'proxy',
+        direct: 'direct',
+        alternate_dns: 'remote-dns',
+      });
+    }
 
     // 2) Dedicated speedtest selector (isolated for speed testing, never touches 'proxy')
     outbounds.push({

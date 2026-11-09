@@ -34,3 +34,10 @@ locks include patched x/net and x/crypto versions; the routing core also updates
 gRPC, DHCP, Chi, go-jose and supporting modules. Exact versions are in go.mod/go.sum.
 Both produced binaries must pass govulncheck; no upstream identity or endorsement
 is implied. Runtime diagnostics no longer include submitted secrets or HTTP bodies.
+
+BlueWing's public HTTPS fallback compares the selected proxy with validated
+direct paths for local system-proxy traffic in rule mode. It checks OS DNS
+first and excludes private and special-use answers before trying the existing
+remote resolver. The probes are bounded and contain no business request data.
+The short-lived result applies to new connections only. Managed company routes,
+explicit rules and global proxy mode retain their normal routing behavior.

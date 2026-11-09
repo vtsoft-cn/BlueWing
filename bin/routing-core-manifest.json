@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "upstream": "github.com/sagernet/sing-box@v1.14.3",
-  "revision": "1.14.3-bluewing.2",
+  "revision": "1.14.3-bluewing.3",
   "toolchain": "go version go1.26.10 windows/amd64",
   "tags": "with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,with_cloudflared,with_naive_outbound,with_purego,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0",
-  "sourceSha256": "2d75b025664da43a1a42f9d92721aeefa25bd07cc56276861296bf4f52956793",
-  "sourceArchiveSha256": "e2af88f7c7ad64be924a4a08ef46b552d8f26d838373c8495dad94be2c18331c",
-  "sha256": "405d26db45de49096edf19c14071282ea57176cbe20b54288b6f0edab88a9ed6"
+  "sourceSha256": "b0383012c03639419ed945d6e2c2380ce10bc974bd34d90aed0b0052571fb327",
+  "sourceArchiveSha256": "0336f899ae84402bf19e35ed3706780f58e72f66e07d33a9f09efa6abbb227cd",
+  "sha256": "2ddd427de550472f785bcdce549ff95f829e9b29041bee7f026f4c0e06550ee6"
 }

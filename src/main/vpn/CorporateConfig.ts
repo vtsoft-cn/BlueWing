@@ -2,6 +2,14 @@ import { isIP } from 'net';
 import { VpnRuntime } from '../../types/corporateVpn';
 import { vpnRouting } from '../../utils/vpnRouting';
 
+export const ADAPTIVE_PUBLIC_OUTBOUND = 'adaptive-public';
+const adaptivePublicMatch = {
+  inbound: ['mixed-in'],
+  source_ip_cidr: ['127.0.0.0/8', '::1/128'],
+  network: ['tcp'],
+  port: [443],
+};
+
 function managedRule(rule: any): boolean {
   return (
     (rule.action === 'reject' && rule.domain_suffix?.length === 1 && rule.domain_suffix[0] === 'bluewing.invalid') ||
@@ -26,6 +34,7 @@ export function applyCorporateConfig(
   );
   config.route.rules = (config.route.rules || []).filter(
     (r: any) =>
+      r.outbound !== ADAPTIVE_PUBLIC_OUTBOUND &&
       !managedRule(r) &&
       !(
         r.process_name?.length === 1 &&
@@ -38,7 +47,13 @@ export function applyCorporateConfig(
   config.dns.rules = (config.dns.rules || []).filter(
     (r: any) => !r.server?.startsWith('corp-dns-') && !managedRule(r),
   );
-  if (!runtime?.profiles.length) return;
+  const adaptivePublic = config.outbounds.some((outbound: any) => outbound.tag === ADAPTIVE_PUBLIC_OUTBOUND)
+    ? [{ ...adaptivePublicMatch, outbound: ADAPTIVE_PUBLIC_OUTBOUND }]
+    : [];
+  if (!runtime?.profiles.length) {
+    config.route.rules.push(...adaptivePublic);
+    return;
+  }
   const managedRules: any[] = [], probes: any[] = [], packetDiscovery: any[] = [], companyDNS: any[] = [],
     dnsRules: any[] = [], internetRules: any[] = [], internetFallback: any[] = [], internetDNS: any[] = [], discoveryRules: any[] = [], discoveryGuards: any[] = [];
   const publicProxy = config.outbounds.find((o: any) => o.tag === 'proxy');
@@ -156,6 +171,10 @@ export function applyCorporateConfig(
           { ...active(condition), action: 'reject' },
         );
         else {
+          if (fallback && outlet === 'proxy' && adaptivePublic.length && (r.profile.trafficMode || 'split') === 'split') {
+            const scoped = active(condition);
+            rules.push({ ...scoped, rules: [...scoped.rules, adaptivePublicMatch], outbound: ADAPTIVE_PUBLIC_OUTBOUND });
+          }
           // Apply one network policy to all TCP services, including public
           // company targets absent from DHCP routes. The native dispatcher
           // retains a successful local socket or retries the VPN before relay.
@@ -248,6 +267,7 @@ export function applyCorporateConfig(
     ...domestic,
     ...apps,
     ...internetFallback,
+    ...adaptivePublic,
   ];
   const predefined = config.dns.rules.filter((r: any) => r.action === 'predefined');
   config.dns.rules = [...dnsRules, ...predefined, ...internetDNS,
