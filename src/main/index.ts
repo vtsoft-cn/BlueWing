@@ -261,8 +261,7 @@ function createWindow(): void {
   mainWindow.on('close', (e) => {
     // 退出流程中必须放行窗口关闭,否则 app.quit() 会被此处中止,
     // 界面隐藏进托盘但所有进程残留(用户表现为"退出了但进程还在")
-    const settings = Database.getInstance().getSettings();
-    if (settings.closeToTray && !isAppQuitting) {
+    if (quitState === 'running' && Database.getInstance().getSettings().closeToTray) {
       e.preventDefault();
       // Windows 下在 close 事件里同步 hide(),shell 会为这个"正在关闭"的窗口在
       // 任务栏残留一个点击无响应的死按钮(窗口已隐藏但按钮不消失):
@@ -275,7 +274,7 @@ function createWindow(): void {
   TrayManager.getInstance().init(mainWindow);
 }
 
-let isAppQuitting = false;
+let quitState: 'running' | 'cleaning' | 'ready' = 'running';
 
 app.whenReady().then(async () => {
   // 锁未落定前不得做任何初始化(重试期间 app 可能已 ready,必须在此等待)
@@ -300,6 +299,7 @@ app.whenReady().then(async () => {
       app.quit();
       return;
     }
+    if (quitState !== 'running') return;
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       // 窗口可能处于关闭进托盘的隐藏状态(任务栏按钮已摘除),显示前挂回
@@ -310,6 +310,7 @@ app.whenReady().then(async () => {
   });
 
   await warnAndExitIfForeignInstance();
+  if (quitState !== 'running') return;
   bootLog('foreign-instance check passed');
 
   initializeCoreLifecycle();
@@ -394,6 +395,7 @@ app.whenReady().then(async () => {
 
   // 清理上次异常退出残留的核心进程,避免占用端口导致本次启动失败
   await SingBoxManager.getInstance().cleanupOrphanCores();
+  if (quitState !== 'running') return;
 
   // 订阅自动更新调度(此前 UI 的"自动更新"开关没有任何后端实现)
   const autoUpdateInitial = setTimeout(() => {
@@ -406,6 +408,7 @@ app.whenReady().then(async () => {
   // Check and clean residual system proxy if core is not active
   const settings = Database.getInstance().getSettings();
   await SystemProxy.initializeRecovery();
+  if (quitState !== 'running') return;
   if (!settings.autoConnectOnLaunch || Database.getInstance().credentialStatus().mode !== 'normal') {
     SystemProxy.checkAndCleanResidual(settings.mixedPort || 2080);
   } else {
@@ -418,28 +421,39 @@ app.whenReady().then(async () => {
   app.quit();
 });
 
-app.on('before-quit', async (e) => {
-  if (isSecondaryInstance) {
-    return;
+app.on('before-quit', async (event) => {
+  if (isSecondaryInstance || quitState === 'ready') return;
+  event.preventDefault();
+  if (quitState === 'cleaning') return;
+  quitState = 'cleaning';
+  coreConnectionIntent.cancel();
+  proxyLifecycle.invalidate();
+  cancelTunAutoRecovery('应用退出');
+  if (trafficTimer) {
+    clearInterval(trafficTimer);
+    trafficTimer = null;
   }
-  if (!isAppQuitting) {
-    e.preventDefault();
-    isAppQuitting = true;
-    if (trafficTimer) {
-      clearInterval(trafficTimer);
-      trafficTimer = null;
-    }
-    try {
-      Database.getInstance().flushPending();
-    } catch (err) { console.error('Configuration save failed during quit; continuing network cleanup'); }
-    try {
-      await Promise.allSettled([existingCorporateVpn()?.dispose(), VpnEngineManager.getInstance().shutdown()]);
-      for (const cleanup of [() => handleCoreStop(), () => SystemProxy.restoreOriginal(), () => LogManager.getInstance().destroy(), () => TrayManager.getInstance().destroy()]) {
-        try { await cleanup(); } catch { console.error('A shutdown step failed; continuing remaining cleanup'); }
-      }
-    } catch (err) {
-      console.error('Error during cleanup on quit:', err);
-    }
+
+  const cleanupFailed = () => console.error('A shutdown step failed; continuing remaining cleanup');
+  try {
+    try { TrayManager.getInstance().destroy(); } catch { cleanupFailed(); }
+    try { Database.getInstance().flushPending(); } catch { cleanupFailed(); }
+
+    // Release WinINet while the local proxy still serves requests.
+    const restored = await SystemProxy.restoreOnShutdown().catch(() => {
+      cleanupFailed();
+      return false;
+    });
+    const vpnResults = await Promise.allSettled([
+      Promise.resolve().then(() => existingCorporateVpn()?.dispose()),
+      Promise.resolve().then(() => VpnEngineManager.getInstance().shutdown()),
+    ]);
+    if (vpnResults.some(result => result.status === 'rejected')) cleanupFailed();
+    try { await SingBoxManager.getInstance().stop(); } catch { cleanupFailed(); }
+    if (!restored) await SystemProxy.restoreOriginal().catch(cleanupFailed);
+  } finally {
+    try { LogManager.getInstance().destroy(); } catch { cleanupFailed(); }
+    quitState = 'ready';
     app.quit();
   }
 });
@@ -647,7 +661,7 @@ function scheduleTunFatalRetry(): void {
 }
 
 async function handleCoreStart(options?: { userInitiated?: boolean; shouldContinue?: () => boolean }): Promise<boolean> {
-  if (coreConnectionIntent.isStopping) return false;
+  if (quitState !== 'running' || coreConnectionIntent.isStopping) return false;
   if (options?.shouldContinue && !options.shouldContinue()) return false;
   const isCurrent = coreConnectionIntent.begin(options?.shouldContinue);
   const db = Database.getInstance();
@@ -1083,10 +1097,12 @@ SingBoxManager.getInstance().setConfigEnricher(async config=>{
   applyCorporateConfig(config,runtime);
 });
 SingBoxManager.getInstance().on('configured', config => {
+  if (quitState !== 'running') return;
   getCorporateVpn().publicCoreStarted(getCorporateVpn().policy.runtime());
   proxyLifecycle.configured(config).catch(() => {});
 });
 SingBoxManager.getInstance().on('stateChange', (state) => {
+  if (quitState !== 'running') return;
   if (['stopped','crashed','error'].includes(state)) {
     // Explicit stops already disconnected above; every other terminal state
     // must retain company guards, including an unexpected exit with code 0.

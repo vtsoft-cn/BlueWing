@@ -29,6 +29,7 @@ export class SystemProxy {
   private static stateFile: string = '';
   private static corporateRouting = false;
   private static recoveryReady = false;
+  private static shuttingDown = false;
   private static mutation: Promise<unknown> = Promise.resolve();
   private static exclusive<T>(job: () => Promise<T>): Promise<T> {
     const next = this.mutation.then(job, job);
@@ -171,7 +172,7 @@ export class SystemProxy {
     return this.exclusive(async () => {
       let transition: OwnershipState | undefined, previous: OwnershipState | null = null;
       try {
-        if (!isCurrent()) return false;
+        if (this.shuttingDown || !isCurrent()) return false;
         const recoveryReady = await this.initializeRecovery();
         if ((process.platform === 'win32' || WinInetProxy.available()) && !recoveryReady) {
           throw new Error('网络恢复守护启动失败，未启用系统代理');
@@ -212,7 +213,7 @@ export class SystemProxy {
         // Company domains, including single-label hosts and private IPs, must enter sing-box.
         // Non-company LAN still uses its DIRECT rules there.
         if (this.corporateRouting) bypassList = this.corporateBypassList();
-        if (!isCurrent()) return false;
+        if (this.shuttingDown || !isCurrent()) return false;
 
         // Persist intent before touching WinINet. A crash between these steps
         // must still leave enough information for the independent recovery helper.
@@ -270,6 +271,13 @@ export class SystemProxy {
   public static async restoreOriginal(): Promise<boolean> {
     return this.exclusive(() => this.restoreOwned());
   }
+
+  /** Block new takeovers and restore after any in-flight WinINet write. */
+  public static restoreOnShutdown(): Promise<boolean> {
+    this.shuttingDown = true;
+    return this.restoreOriginal();
+  }
+
   private static async restoreOwned(): Promise<boolean> {
     const state = this.loadOwnership();
     if (!state?.managedByBlueWing || !state.managedServer) return true;

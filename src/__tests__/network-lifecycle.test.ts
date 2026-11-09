@@ -14,6 +14,7 @@ import { CredentialVault } from '../main/vpn/CredentialVault';
 import { credentialKey, legacyCredentialKey, profileIdentity } from '../main/vpn/ProfileIdentity';
 import { VpnEngineManager } from '../main/system/vpn/VpnEngineManager';
 import { RasVpnEngine } from '../main/system/vpn/RasVpnEngine';
+import { RasCredentials } from '../main/system/vpn/RasCredentials';
 import { WindowsNetQuery } from '../main/system/vpn/WindowsNetQuery';
 import { Database } from '../main/db/Database';
 import { LogManager } from '../main/log/LogManager';
@@ -144,7 +145,7 @@ test('regression: manual public-core stop must cancel the in-flight two-second s
   const settings = { tunEnabled: false, systemProxyEnabled: true };
   const db = { credentialStatus:()=>({mode:'normal',lockedSettings:[]}), getSettings: () => settings, getNodes: () => [], getActiveNodeId: () => '', getRules: () => [], getAppRules: () => [], getDns: () => ({}) };
   const vpn = { prepareRuntime: async () => ({ profiles: [] }), publicCoreStarted() {}, disconnect: async () => {} };
-  const context: any = { coreConnectionIntent: new ConnectionIntent(),
+  const context: any = { quitState: 'running', coreConnectionIntent: new ConnectionIntent(),
     cancelTunAutoRecovery() {},
     Database: { getInstance: () => db }, SingBoxManager: { getInstance: () => core }, getCorporateVpn: () => vpn, existingCorporateVpn: () => vpn,
     LogManager: { getInstance: () => ({ addLog() {} }) }, TrayManager: { getInstance: () => ({ updateMenu() {} }) },
@@ -171,6 +172,7 @@ test('regression: RAS network-info completion must not resurrect a disconnected 
   t.mock.method(LogManager, 'getInstance', () => ({ addLog() {} }) as any);
   t.mock.method(WindowsNetQuery, 'runPowerShell', async () => 'ok');
   t.mock.method(WindowsNetQuery, 'findAdapterByDescription', async () => ({ name: 'fixture-adapter', interfaceIndex: 123 }) as any);
+  t.mock.method(RasCredentials, 'run', async () => ({ ok: true }));
   t.mock.method(RasVpnEngine.prototype as any, 'rasdial', async () => 0);
   let release!: (info: any) => void, entered!: () => void;
   const waiting = new Promise<void>(r => entered = r);

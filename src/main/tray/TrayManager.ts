@@ -76,6 +76,8 @@ export class TrayManager {
   public updateMenu(): void {
     if (!this.tray) return;
 
+    const tray = this.tray;
+    const canStart = () => this.tray === tray;
     const db = Database.getInstance();
     const core = SingBoxManager.getInstance();
     const nodes = db.getNodes();
@@ -144,7 +146,7 @@ export class TrayManager {
               db.getDns(),
               settings
             );
-            const started = await core.start(config);
+            const started = await core.start(config, canStart);
             if (started && settings.systemProxyEnabled) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
             }
@@ -211,7 +213,7 @@ export class TrayManager {
                 db.getDns(),
                 db.getSettings()
               );
-              await core.start(config);
+              await core.start(config, canStart);
             }
           } else if (newState) {
             // 核心未运行时勾选系统代理:自动连接,确保开关真实生效而不是只改设置
@@ -223,7 +225,7 @@ export class TrayManager {
               db.getDns(),
               db.getSettings()
             );
-            const started = await core.start(config);
+            const started = await core.start(config, canStart);
             if (started) {
               await SystemProxy.enable('127.0.0.1', settings.mixedPort, settings.systemProxyBypassLan, settings.customBypassList);
             }
@@ -268,7 +270,7 @@ export class TrayManager {
               db.getDns(),
               db.getSettings()
             );
-            await core.start(config);
+            await core.start(config, canStart);
           }
           this.updateMenu();
           this.mainWindow?.webContents.send('settings:changed', db.getSettings());
@@ -283,11 +285,7 @@ export class TrayManager {
       },
       {
         label: '退出 青翼连接',
-        click: async () => {
-          await core.stop();
-          await SystemProxy.disable();
-          app.quit();
-        },
+        click: () => app.quit(),
       },
     ]);
 

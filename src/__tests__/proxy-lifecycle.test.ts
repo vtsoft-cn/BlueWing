@@ -86,6 +86,40 @@ test('crash cleanup is serialized behind a pending enable and rechecks native li
   assert.deepEqual(requests, ['enable', 'recover']);
 });
 
+test('quit restores after an active WinINet write and blocks later takeovers', async t => {
+  const requests: string[] = [];
+  let state: any = null;
+  let entered!: () => void, release!: () => void;
+  const activeWrite = new Promise<void>(resolve => { entered = resolve; });
+  const writeGate = new Promise<void>(resolve => { release = resolve; });
+  const proxyState = SystemProxy as unknown as { shuttingDown: boolean };
+  t.after(() => { proxyState.shuttingDown = false; });
+  t.mock.method(SystemProxy, 'initializeRecovery', async () => true);
+  t.mock.method(SystemProxy, 'captureOriginalSnapshot', async () => ({ enabled: false }));
+  t.mock.method(SystemProxy as any, 'loadOwnership', () => state);
+  t.mock.method(SystemProxy as any, 'saveOwnership', (next: any) => { state = next; return true; });
+  t.mock.method(LogManager, 'getInstance', () => ({ addLog() {} }));
+  t.mock.method(WinInetProxy, 'available', () => true);
+  t.mock.method(WinInetProxy, 'run', async (request: any) => {
+    requests.push(request.action);
+    if (request.action === 'enable') { entered(); await writeGate; }
+    return [];
+  });
+
+  const enabling = SystemProxy.enable();
+  await activeWrite;
+  const queued = SystemProxy.enable('127.0.0.1', 2081);
+  const quitting = SystemProxy.restoreOnShutdown();
+  const late = SystemProxy.enable('127.0.0.1', 2082);
+  release();
+  assert.equal(await enabling, true);
+  assert.equal(await queued, false);
+  assert.equal(await quitting, true);
+  assert.equal(await late, false);
+  assert.deepEqual(requests, ['enable', 'restore']);
+  assert.equal(state, null);
+});
+
 test('renewed takeover captures external proxy changes and newly created RAS settings', async t => {
   const original = { enabled: false, connections: [{ name: '', flags: 1, server: '', bypass: '', pac: '' }] };
   const lan = { name: '', flags: 3, server: 'user-proxy:8080', bypass: '<local>', pac: '' };
