@@ -1,11 +1,22 @@
 import React, { useState } from 'react';
 import { ModalCloseX, ModalShell } from '../components/ModalShell';
 import { Portal } from '../components/Portal';
-import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, ArrowDown, ArrowUpToLine} from 'lucide-react';
+import {Plus, Trash2, Pencil, RefreshCw, GitFork, Globe, Slash, X, ArrowUp, ArrowDown, ArrowUpToLine, GripVertical} from 'lucide-react';
 import { RouteRule, AppSettings, ProxyNode } from '../../types';
 import { toast } from '../components/Toast';
 import { Select } from '../components/Select';
 import { FieldLabel, inputCls, Input } from '../components/ui';
+
+const ruleDragType = 'application/x-bluewing-route-rule';
+
+function getDropSlot(event: React.DragEvent<HTMLDivElement>): number {
+  const rows = event.currentTarget.children;
+  for (let index = 0; index < rows.length; index++) {
+    const { top, height } = rows[index].getBoundingClientRect();
+    if (event.clientY < top + height / 2) return index;
+  }
+  return rows.length;
+}
 
 interface RoutingProps {
   rules: RouteRule[];
@@ -40,6 +51,8 @@ export const Routing: React.FC<RoutingProps> = ({
   });
   const [domainInput, setDomainInput] = useState('');
   const [ipInput, setIpInput] = useState('');
+  const [draggedRuleId, setDraggedRuleId] = useState<string | null>(null);
+  const [dropSlot, setDropSlot] = useState<number | null>(null);
 
   // 内置默认规则:可勾选启停,不可删除/编辑
   const DEFAULT_RULE_IDS = ['rule-lan', 'rule-cn-domains', 'rule-cn-ips', 'rule-adblock'];
@@ -61,6 +74,31 @@ export const Routing: React.FC<RoutingProps> = ({
     const [rule] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, rule);
     onSaveRules(updated);
+  };
+
+  const clearRuleDrag = () => {
+    setDraggedRuleId(null);
+    setDropSlot(null);
+  };
+
+  const handleRuleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (draggedRuleId === null || !event.dataTransfer.types.includes(ruleDragType)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const slot = getDropSlot(event);
+    const samePosition = rules[slot]?.id === draggedRuleId || rules[slot - 1]?.id === draggedRuleId;
+    setDropSlot(samePosition ? null : slot);
+  };
+
+  const handleRuleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (draggedRuleId === null || !event.dataTransfer.types.includes(ruleDragType)) return;
+    event.preventDefault();
+    const ruleId = event.dataTransfer.getData(ruleDragType);
+    const slot = getDropSlot(event);
+    clearRuleDrag();
+    if (ruleId !== draggedRuleId) return;
+    const fromIndex = rules.findIndex(rule => rule.id === ruleId);
+    if (fromIndex >= 0) handleMoveRule(fromIndex, slot > fromIndex ? slot - 1 : slot);
   };
 
   const handleUpdateRuleSets = async () => {
@@ -220,7 +258,7 @@ export const Routing: React.FC<RoutingProps> = ({
               分流规则列表
             </h4>
             <p className="text-xs text-slate-400">
-              按列表从上到下匹配，可用右侧按钮调整顺序；公司网络等例外规则应放在国内直连之前。内置规则也可排序、停用
+              规则从上到下匹配。可拖动左侧把手或点击右侧按钮调整顺序。公司网络等例外规则应放在国内直连之前，内置规则也可排序和停用。
             </p>
           </div>
 
@@ -244,19 +282,47 @@ export const Routing: React.FC<RoutingProps> = ({
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          onDragOver={handleRuleDragOver}
+          onDragLeave={(event) => {
+            const next = event.relatedTarget;
+            if (!(next instanceof Node) || !event.currentTarget.contains(next)) setDropSlot(null);
+          }}
+          onDrop={handleRuleDrop}
+        >
           {rules.map((rule, index) => {
             const isProxy = rule.outbound === 'proxy';
             const isDirect = rule.outbound === 'direct';
             const isBlock = rule.outbound === 'block';
             const isDefault = isDefaultRule(rule.id);
 
-  return (
+            return (
               <div
                 key={rule.id}
-                className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between gap-3"
+                className={`relative p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/30 flex items-center justify-between gap-3 ${draggedRuleId === rule.id ? 'opacity-50' : ''}`}
               >
+                {dropSlot === index && (
+                  <span aria-hidden="true" className="pointer-events-none absolute -top-[5px] inset-x-0 h-0.5 rounded-full bg-blue-500" />
+                )}
+                {index === rules.length - 1 && dropSlot === rules.length && (
+                  <span aria-hidden="true" className="pointer-events-none absolute -bottom-[5px] inset-x-0 h-0.5 rounded-full bg-blue-500" />
+                )}
                 <div className="flex items-center space-x-3 min-w-0 flex-1">
+                  <span
+                    draggable={rules.length > 1}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData(ruleDragType, rule.id);
+                      setDraggedRuleId(rule.id);
+                    }}
+                    onDragEnd={clearRuleDrag}
+                    title="拖动调整规则顺序"
+                    aria-hidden="true"
+                    className="flex-shrink-0 cursor-grab rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-600 active:cursor-grabbing dark:hover:bg-slate-800"
+                  >
+                    <GripVertical className="pointer-events-none w-4 h-4" />
+                  </span>
                   <input
                     type="checkbox"
                     checked={rule.enabled}
